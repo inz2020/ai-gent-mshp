@@ -95,12 +95,12 @@ async function processAudioVaccination(mediaId, userPhone) {
     console.log('[4/6] Réponse Claude:', hausaReply);
 
     // D. Synthèse Vocale (OpenAI TTS)
-    const ttsResponse = await openai.audio.speech.create({
-        model: "tts-1",
-        voice: "nova",
-        input: hausaReply
-    });
-    const ttsBuffer = Buffer.from(await ttsResponse.arrayBuffer());
+    const ttsResponse = await axios.post(
+        'https://api.openai.com/v1/audio/speech',
+        { model: 'tts-1', voice: 'nova', input: hausaReply },
+        { headers: { Authorization: `Bearer ${process.env.OPENAI_KEY}` }, responseType: 'arraybuffer' }
+    );
+    const ttsBuffer = Buffer.from(ttsResponse.data);
     console.log('[5/6] Audio OpenAI TTS généré:', ttsBuffer.byteLength, 'bytes');
 
     // E. Upload sur Cloudinary
