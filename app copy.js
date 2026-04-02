@@ -4,14 +4,7 @@ const fs = require('fs');
 const FormData = require('form-data');
 const OpenAI = require('openai');
 const Anthropic = require('@anthropic-ai/sdk');
-const cloudinary = require('cloudinary').v2;
 require('dotenv').config();
-
-cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_NAME,
-    api_key: process.env.CLOUDINARY_KEY,
-    api_secret: process.env.CLOUDINARY_SECRET
-});
 
 const app = express();
 app.use(express.json());
@@ -49,8 +42,6 @@ app.post('/webhook', async (req, res) => {
 
             if (message.type === 'audio') {
                 await processAudioVaccination(message.audio.id, from);
-            } else if (message.type === 'text') {
-                await sendWhatsAppText(from, "Ina jin saƙonku. Don Allah aiko da saƙon murya domin mu taimaka muku.");
             }
         }
         res.sendStatus(200);
@@ -64,7 +55,7 @@ async function processAudioVaccination(mediaId, userPhone) {
     const metaHeaders = { Authorization: `Bearer ${process.env.META_TOKEN}` };
 console.log('mediaId:', mediaId)
     // A. Récupérer l'URL et télécharger l'audio (.ogg)
-    const mediaRes = await axios.get(`https://graph.facebook.com/v22.0/${mediaId}`, { headers: metaHeaders });
+    const mediaRes = await axios.get(`https://facebook.com{mediaId}`, { headers: metaHeaders });
     const audioRes = await axios.get(mediaRes.data.url, { headers: metaHeaders, responseType: 'arraybuffer' });
     fs.writeFileSync('input.ogg', Buffer.from(audioRes.data));
 
@@ -84,52 +75,20 @@ console.log('mediaId:', mediaId)
     });
     const hausaReply = response.content[0].text;
 
-    // D. Synthèse Vocale (ElevenLabs)
+    // D. Synthèse Vocale (ElevenLabs V3 - Voix naturelle)
     const ttsResponse = await axios.post(
-        `https://api.elevenlabs.io/v1/text-to-speech/${process.env.VOICE_ID.trim()}`,
+        `https://elevenlabs.io{process.env.VOICE_ID}`,
         {
             text: `[warm] ${hausaReply}`,
             model_id: "eleven_multilingual_v2",
             voice_settings: { stability: 0.4, similarity_boost: 0.8 }
         },
-        { headers: { "xi-api-key": process.env.ELEVEN_KEY }, responseType: 'arraybuffer' }
+        { headers: { "xi-api-key": process.env.ELEVEN_KEY } }
     );
 
-    // E. Upload sur Cloudinary
-    fs.writeFileSync('output.mp3', Buffer.from(ttsResponse.data));
-    const uploadResult = await new Promise((resolve, reject) => {
-        cloudinary.uploader.upload_stream(
-            { resource_type: 'video', format: 'mp3', folder: 'chatbot_audio' },
-            (error, result) => error ? reject(error) : resolve(result)
-        ).end(Buffer.from(ttsResponse.data));
-    });
-
-    // F. Envoi de l'audio via WhatsApp
-    await axios.post(
-        `https://graph.facebook.com/v18.0/${process.env.PHONE_ID}/messages`,
-        {
-            messaging_product: "whatsapp",
-            to: userPhone,
-            type: "audio",
-            audio: { link: uploadResult.secure_url }
-        },
-        { headers: { Authorization: `Bearer ${process.env.META_TOKEN}`, 'Content-Type': 'application/json' } }
-    );
-
-    console.log(`Réponse Haoussa envoyée à ${userPhone} : ${hausaReply}`);
-}
-
-async function sendWhatsAppText(to, text) {
-    await axios.post(
-        `https://graph.facebook.com/v18.0/${process.env.PHONE_ID}/messages`,
-        {
-            messaging_product: "whatsapp",
-            to,
-            type: "text",
-            text: { body: text }
-        },
-        { headers: { Authorization: `Bearer ${process.env.META_TOKEN}`, 'Content-Type': 'application/json' } }
-    );
+    // E. Envoi via WhatsApp (Note: nécessite un stockage S3/Cloudinary pour l'URL finale)
+    console.log(`Réponse Haoussa : ${hausaReply}`);
+    // Ici, vous uploaderiez l'audio et utiliseriez axios.post pour envoyer le message final à Meta.
 }
 
 const PORT = process.env.PORT || 40000;
