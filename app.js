@@ -5,6 +5,7 @@ const FormData = require('form-data');
 const OpenAI = require('openai');
 const cloudinary = require('cloudinary').v2;
 require('dotenv').config();
+const SYSTEM_PROMPT = require('./prompt');
 
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_NAME,
@@ -87,7 +88,7 @@ async function processAudioVaccination(mediaId, userPhone) {
         model: "gpt-4o-mini",
         max_tokens: 300,
         messages: [
-            { role: "system", content: "Ke ma'aikaciyar lafiya ce a Nijar. Ba da amsa cikin harshen Hausa game da rigakafi. Yi amfani da kalmomi masu dadi." },
+            { role: "system", content: SYSTEM_PROMPT },
             { role: "user", content: transcription.text }
         ]
     });
