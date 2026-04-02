@@ -8,7 +8,11 @@ require('dotenv').config();
 
 const app = express();
 app.use(express.json());
-
+app.get('/', (req, res) => {
+  const date = new Date();
+  const formattedDate = date.toLocaleString();
+  res.send(`<h1>La date et l'heure actuelles sont : ${formattedDate}</h1>`);
+});
 // Configuration des clients API
 const openai = new OpenAI({ apiKey: process.env.OPENAI_KEY });
 const anthropic = new Anthropic({ apiKey: process.env.CLAUDE_KEY });
