@@ -94,25 +94,22 @@ async function processAudioVaccination(mediaId, userPhone) {
     const hausaReply = response.choices[0].message.content;
     console.log('[4/6] Réponse Claude:', hausaReply);
 
-    // D. Synthèse Vocale (ElevenLabs)
-    const ttsResponse = await axios.post(
-        `https://api.elevenlabs.io/v1/text-to-speech/${(process.env.VOICE_ID || '21m00Tcm4TlvDq8ikWAM').trim()}`,
-        {
-            text: hausaReply,
-            model_id: "eleven_multilingual_v2",
-            voice_settings: { stability: 0.4, similarity_boost: 0.8 }
-        },
-        { headers: { "xi-api-key": process.env.ELEVEN_KEY }, responseType: 'arraybuffer' }
-    );
-    console.log('[5/6] Audio ElevenLabs généré:', ttsResponse.data.byteLength, 'bytes');
+    // D. Synthèse Vocale (OpenAI TTS)
+    const ttsResponse = await openai.audio.speech.create({
+        model: "tts-1",
+        voice: "nova",
+        input: hausaReply
+    });
+    const ttsBuffer = Buffer.from(await ttsResponse.arrayBuffer());
+    console.log('[5/6] Audio OpenAI TTS généré:', ttsBuffer.byteLength, 'bytes');
 
     // E. Upload sur Cloudinary
-    fs.writeFileSync('output.mp3', Buffer.from(ttsResponse.data));
+    fs.writeFileSync('output.mp3', ttsBuffer);
     const uploadResult = await new Promise((resolve, reject) => {
         cloudinary.uploader.upload_stream(
             { resource_type: 'video', format: 'mp3', folder: 'chatbot_audio' },
             (error, result) => error ? reject(error) : resolve(result)
-        ).end(Buffer.from(ttsResponse.data));
+        ).end(ttsBuffer);
     });
     console.log('[6/6] Cloudinary URL:', uploadResult.secure_url);
 
