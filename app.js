@@ -58,8 +58,8 @@ app.post('/webhook', (req, res) => {
             console.error("Erreur traitement audio:", err.message)
         );
     } else if (message.type === 'text') {
-        sendWhatsAppText(from, "Ina jin saƙonku. Don Allah aiko da saƙon murya domin mu taimaka muku.").catch(err =>
-            console.error("Erreur envoi texte:", err.message)
+        processTextMessage(message.text.body, from).catch(err =>
+            console.error("Erreur traitement texte:", err.message)
         );
     } else {
         console.log(`Type de message non géré: ${message.type}`);
@@ -144,6 +144,21 @@ async function processAudioVaccination(mediaId, userPhone) {
     // Nettoyage des fichiers temporaires
     fs.unlink('input.ogg', () => {});
     fs.unlink('output.mp3', () => {});
+}
+
+async function processTextMessage(userText, userPhone) {
+    console.log(`[TEXT] Message reçu: ${userText}`);
+    const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        max_tokens: 150,
+        messages: [
+            { role: "system", content: SYSTEM_PROMPT + "\n\nIMPORTANT: Réponds en maximum 3 phrases courtes et directes. Sois concise et précise." },
+            { role: "user", content: userText }
+        ]
+    });
+    const reply = response.choices[0].message.content;
+    console.log(`[TEXT] Réponse: ${reply}`);
+    await sendWhatsAppText(userPhone, reply);
 }
 
 async function sendWhatsAppText(to, text) {
