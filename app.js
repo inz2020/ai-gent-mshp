@@ -96,7 +96,7 @@ async function processAudioVaccination(mediaId, userPhone) {
 
     // D. Synthèse Vocale (ElevenLabs)
     const ttsResponse = await axios.post(
-        `https://api.elevenlabs.io/v1/text-to-speech/${process.env.VOICE_ID.trim()}`,
+        `https://api.elevenlabs.io/v1/text-to-speech/${(process.env.VOICE_ID || '21m00Tcm4TlvDq8ikWAM').trim()}`,
         {
             text: hausaReply,
             model_id: "eleven_multilingual_v2",
