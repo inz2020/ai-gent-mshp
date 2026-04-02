@@ -66,6 +66,17 @@ app.post('/webhook', (req, res) => {
     }
 });
 
+function prepareVoiceText(text) {
+    return text
+        .replace(/\n\n+/g, '. ')         // Paragraphes → pause naturelle
+        .replace(/\n/g, ', ')            // Sauts de ligne → légère pause
+        .replace(/\s*-\s+/g, ', ')       // Listes → pauses
+        .replace(/\s{2,}/g, ' ')         // Espaces multiples
+        .replace(/\*\*/g, '')            // Supprimer le markdown gras
+        .replace(/\*/g, '')              // Supprimer italique
+        .trim();
+}
+
 async function processAudioVaccination(mediaId, userPhone) {
     const metaHeaders = { Authorization: `Bearer ${process.env.META_TOKEN}` };
     console.log('[1/6] Téléchargement audio, mediaId:', mediaId);
@@ -95,10 +106,11 @@ async function processAudioVaccination(mediaId, userPhone) {
     const hausaReply = response.choices[0].message.content;
     console.log('[4/6] Réponse Claude:', hausaReply);
 
-    // D. Synthèse Vocale (OpenAI TTS)
+    // D. Synthèse Vocale (OpenAI TTS HD)
+    const ttsInput = prepareVoiceText(hausaReply);
     const ttsResponse = await axios.post(
         'https://api.openai.com/v1/audio/speech',
-        { model: 'tts-1', voice: 'nova', input: hausaReply },
+        { model: 'tts-1-hd', voice: 'shimmer', input: ttsInput, speed: 0.92 },
         { headers: { Authorization: `Bearer ${process.env.OPENAI_KEY}` }, responseType: 'arraybuffer' }
     );
     const ttsBuffer = Buffer.from(ttsResponse.data);
