@@ -3,7 +3,6 @@ const axios = require('axios');
 const fs = require('fs');
 const FormData = require('form-data');
 const OpenAI = require('openai');
-const Anthropic = require('@anthropic-ai/sdk');
 const cloudinary = require('cloudinary').v2;
 require('dotenv').config();
 
@@ -22,7 +21,7 @@ app.get('/', (req, res) => {
 });
 // Configuration des clients API
 const openai = new OpenAI({ apiKey: process.env.OPENAI_KEY });
-const anthropic = new Anthropic({ apiKey: process.env.CLAUDE_KEY });
+
 
 const VERIFY_TOKEN = "MON_SECRET_NIGER_2024";
 
@@ -83,14 +82,16 @@ async function processAudioVaccination(mediaId, userPhone) {
     });
     console.log('[3/6] Transcription:', transcription.text);
 
-    // C. Analyse Claude 3.5 Sonnet
-    const response = await anthropic.messages.create({
-        model: "claude-3-5-sonnet-20240620",
+    // C. Analyse GPT-4o-mini
+    const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
         max_tokens: 300,
-        system: "Ke ma'aikaciyar lafiya ce a Nijar. Ba da amsa cikin harshen Hausa game da rigakafi. Yi amfani da kalmomi masu dadi.",
-        messages: [{ role: "user", content: transcription.text }]
+        messages: [
+            { role: "system", content: "Ke ma'aikaciyar lafiya ce a Nijar. Ba da amsa cikin harshen Hausa game da rigakafi. Yi amfani da kalmomi masu dadi." },
+            { role: "user", content: transcription.text }
+        ]
     });
-    const hausaReply = response.content[0].text;
+    const hausaReply = response.choices[0].message.content;
     console.log('[4/6] Réponse Claude:', hausaReply);
 
     // D. Synthèse Vocale (ElevenLabs)
