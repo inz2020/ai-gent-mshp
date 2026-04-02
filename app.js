@@ -77,8 +77,7 @@ console.log('mediaId:', mediaId)
     // B. Transcription (Whisper) en Haoussa
     const transcription = await openai.audio.transcriptions.create({
         file: fs.createReadStream('input.ogg'),
-        model: "whisper-1",
-        language: "ha"
+        model: "whisper-1"
     });
 
     // C. Analyse Claude 3.5 Sonnet
