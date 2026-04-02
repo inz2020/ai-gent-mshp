@@ -79,8 +79,7 @@ async function processAudioVaccination(mediaId, userPhone) {
     // B. Transcription (Whisper) en Haoussa
     const transcription = await openai.audio.transcriptions.create({
         file: fs.createReadStream('input.ogg'),
-        model: "whisper-1",
-        language: "ha"
+        model: "whisper-1"
     });
     console.log('[3/6] Transcription:', transcription.text);
 
