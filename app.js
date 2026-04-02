@@ -77,7 +77,8 @@ console.log('mediaId:', mediaId)
     // B. Transcription (Whisper) en Haoussa
     const transcription = await openai.audio.transcriptions.create({
         file: fs.createReadStream('input.ogg'),
-        model: "whisper-1"
+        model: "whisper-1",
+        language: "ha"
     });
 
     // C. Analyse Claude 3.5 Sonnet
@@ -93,7 +94,7 @@ console.log('mediaId:', mediaId)
     const ttsResponse = await axios.post(
         `https://api.elevenlabs.io/v1/text-to-speech/${process.env.VOICE_ID.trim()}`,
         {
-            text: `[warm] ${hausaReply}`,
+            text: hausaReply,
             model_id: "eleven_multilingual_v2",
             voice_settings: { stability: 0.4, similarity_boost: 0.8 }
         },
@@ -122,6 +123,10 @@ console.log('mediaId:', mediaId)
     );
 
     console.log(`Réponse Haoussa envoyée à ${userPhone} : ${hausaReply}`);
+
+    // Nettoyage des fichiers temporaires
+    fs.unlink('input.ogg', () => {});
+    fs.unlink('output.mp3', () => {});
 }
 
 async function sendWhatsAppText(to, text) {
