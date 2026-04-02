@@ -68,11 +68,13 @@ app.post('/webhook', (req, res) => {
 
 async function processAudioVaccination(mediaId, userPhone) {
     const metaHeaders = { Authorization: `Bearer ${process.env.META_TOKEN}` };
-console.log('mediaId:', mediaId)
+    console.log('[1/6] Téléchargement audio, mediaId:', mediaId);
+
     // A. Récupérer l'URL et télécharger l'audio (.ogg)
     const mediaRes = await axios.get(`https://graph.facebook.com/v22.0/${mediaId}`, { headers: metaHeaders });
     const audioRes = await axios.get(mediaRes.data.url, { headers: metaHeaders, responseType: 'arraybuffer' });
     fs.writeFileSync('input.ogg', Buffer.from(audioRes.data));
+    console.log('[2/6] Audio téléchargé:', audioRes.data.byteLength, 'bytes');
 
     // B. Transcription (Whisper) en Haoussa
     const transcription = await openai.audio.transcriptions.create({
@@ -80,6 +82,7 @@ console.log('mediaId:', mediaId)
         model: "whisper-1",
         language: "ha"
     });
+    console.log('[3/6] Transcription:', transcription.text);
 
     // C. Analyse Claude 3.5 Sonnet
     const response = await anthropic.messages.create({
@@ -89,6 +92,7 @@ console.log('mediaId:', mediaId)
         messages: [{ role: "user", content: transcription.text }]
     });
     const hausaReply = response.content[0].text;
+    console.log('[4/6] Réponse Claude:', hausaReply);
 
     // D. Synthèse Vocale (ElevenLabs)
     const ttsResponse = await axios.post(
@@ -100,6 +104,7 @@ console.log('mediaId:', mediaId)
         },
         { headers: { "xi-api-key": process.env.ELEVEN_KEY }, responseType: 'arraybuffer' }
     );
+    console.log('[5/6] Audio ElevenLabs généré:', ttsResponse.data.byteLength, 'bytes');
 
     // E. Upload sur Cloudinary
     fs.writeFileSync('output.mp3', Buffer.from(ttsResponse.data));
@@ -109,9 +114,10 @@ console.log('mediaId:', mediaId)
             (error, result) => error ? reject(error) : resolve(result)
         ).end(Buffer.from(ttsResponse.data));
     });
+    console.log('[6/6] Cloudinary URL:', uploadResult.secure_url);
 
     // F. Envoi de l'audio via WhatsApp
-    await axios.post(
+    const sendRes = await axios.post(
         `https://graph.facebook.com/v22.0/${process.env.PHONE_ID}/messages`,
         {
             messaging_product: "whatsapp",
@@ -122,7 +128,8 @@ console.log('mediaId:', mediaId)
         { headers: { Authorization: `Bearer ${process.env.META_TOKEN}`, 'Content-Type': 'application/json' } }
     );
 
-    console.log(`Réponse Haoussa envoyée à ${userPhone} : ${hausaReply}`);
+    console.log(`[OK] Réponse envoyée à ${userPhone}`);
+    console.log('Meta response:', JSON.stringify(sendRes.data));
 
     // Nettoyage des fichiers temporaires
     fs.unlink('input.ogg', () => {});
