@@ -40,23 +40,29 @@ app.get('/webhook', (req, res) => {
 });
 
 // 2. Réception et traitement du message
-app.post('/webhook', async (req, res) => {
-    try {
-        const body = req.body;
-        if (body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]) {
-            const message = body.entry[0].changes[0].value.messages[0];
-            const from = message.from;
+app.post('/webhook', (req, res) => {
+    // Répondre immédiatement à Meta (obligatoire < 20s)
+    res.sendStatus(200);
 
-            if (message.type === 'audio') {
-                await processAudioVaccination(message.audio.id, from);
-            } else if (message.type === 'text') {
-                await sendWhatsAppText(from, "Ina jin saƙonku. Don Allah aiko da saƙon murya domin mu taimaka muku.");
-            }
-        }
-        res.sendStatus(200);
-    } catch (error) {
-        console.error("Erreur Webhook:", error);
-        res.sendStatus(500);
+    const body = req.body;
+    console.log("Webhook reçu:", JSON.stringify(body));
+
+    if (!body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]) return;
+
+    const message = body.entry[0].changes[0].value.messages[0];
+    const from = message.from;
+    console.log(`Message de ${from}, type: ${message.type}`);
+
+    if (message.type === 'audio') {
+        processAudioVaccination(message.audio.id, from).catch(err =>
+            console.error("Erreur traitement audio:", err.message)
+        );
+    } else if (message.type === 'text') {
+        sendWhatsAppText(from, "Ina jin saƙonku. Don Allah aiko da saƙon murya domin mu taimaka muku.").catch(err =>
+            console.error("Erreur envoi texte:", err.message)
+        );
+    } else {
+        console.log(`Type de message non géré: ${message.type}`);
     }
 });
 
@@ -106,7 +112,7 @@ console.log('mediaId:', mediaId)
 
     // F. Envoi de l'audio via WhatsApp
     await axios.post(
-        `https://graph.facebook.com/v18.0/${process.env.PHONE_ID}/messages`,
+        `https://graph.facebook.com/v22.0/${process.env.PHONE_ID}/messages`,
         {
             messaging_product: "whatsapp",
             to: userPhone,
@@ -121,7 +127,7 @@ console.log('mediaId:', mediaId)
 
 async function sendWhatsAppText(to, text) {
     await axios.post(
-        `https://graph.facebook.com/v18.0/${process.env.PHONE_ID}/messages`,
+        `https://graph.facebook.com/v22.0/${process.env.PHONE_ID}/messages`,
         {
             messaging_product: "whatsapp",
             to,
