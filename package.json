@@ -20,7 +20,8 @@
     "start": "node app.js",
     "dev": "nodemon app.js",
     "seed": "node db/seed.js",
-    "seed:geo": "node db/seeders/regions_districts.js"
+    "seed:geo": "node db/seeders/regions_districts.js",
+    "seed:structures": "node db/seeders/structures.js"
   },
   "keywords": [],
   "author": "",

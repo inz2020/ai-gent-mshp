@@ -54,3 +54,21 @@ export function deleteUser(id) {
         headers: authHeaders()
     });
 }
+
+// ── Contacts ──────────────────────────────────────────────────
+export function getContacts() {
+    return request('/api/contacts', { headers: authHeaders() });
+}
+
+export function getContactConversations(id) {
+    return request(`/api/contacts/${id}/conversations`, { headers: authHeaders() });
+}
+
+// ── Conversations ─────────────────────────────────────────────
+export function getConversations() {
+    return request('/api/conversations', { headers: authHeaders() });
+}
+
+export function getConversationMessages(id) {
+    return request(`/api/conversations/${id}/messages`, { headers: authHeaders() });
+}

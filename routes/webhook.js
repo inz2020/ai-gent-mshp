@@ -5,6 +5,10 @@ import OpenAI from 'openai';
 import { v2 as cloudinary } from 'cloudinary';
 import SYSTEM_PROMPT from '../prompt.js';
 import {HAUSA_PHRASES,HAUSA_WORDS,FRENCH_WORDS, VERIFY_TOKEN, DEFAULT_MESSAGES, GREETING_CONFIG } from '../constants/config.js';
+import Contact from '../db/models/Contact.js';
+import Conversation from '../db/models/Conversations.js';
+import Message from '../db/models/Message.js';
+import Structure from '../db/models/Structure.js';
 
 const router = express.Router();
 
@@ -103,6 +107,52 @@ function checkAudioQuality(transcription) {
     return { ok: true };
 }
 
+// ─── Persistance DB ──────────────────────────────────────────
+
+async function getOrCreateContact(whatsappId) {
+    let contact = await Contact.findOne({ whatsappId });
+    if (!contact) {
+        contact = await Contact.create({ whatsappId });
+    }
+    return contact;
+}
+
+async function getOrCreateConversation(contactId, langue) {
+    let conv = await Conversation.findOne({ contactId, statut: 'ouvert' });
+    if (!conv) {
+        conv = await Conversation.create({ contactId, langue });
+    }
+    return conv;
+}
+
+async function saveMessages(contactId, langue, { humanText, aiText, audioUrl = '', cloudinaryId = '' }) {
+    const conv = await getOrCreateConversation(contactId, langue);
+
+    const isAudio = !!audioUrl;
+
+    await Message.create({
+        conversationId: conv._id,
+        emetteurType: 'humain',
+        typeContenu: isAudio ? 'audio' : 'text',
+        texteBrut: humanText,
+        langue
+    });
+
+    await Message.create({
+        conversationId: conv._id,
+        emetteurType: 'agent_ia',
+        typeContenu: isAudio ? 'audio' : 'text',
+        texteBrut: aiText,
+        audioUrl,
+        cloudinaryId,
+        langue
+    });
+
+    conv.nbMessages += 2;
+    conv.derniereMiseAJour = new Date();
+    await conv.save();
+}
+
 // ─── Routes ─────────────────────────────────────────────────
 
 // GET /webhook — Validation Meta
@@ -138,6 +188,10 @@ router.post('/', (req, res) => {
     } else if (message.type === 'text') {
         processText(message.text.body, from).catch(err =>
             console.error("Erreur traitement texte:", err.message)
+        );
+    } else if (message.type === 'location') {
+        processLocation(message.location.latitude, message.location.longitude, from).catch(err =>
+            console.error("Erreur traitement localisation:", err.message)
         );
     } else {
         console.log(`Type de message non géré: ${message.type}`);
@@ -226,6 +280,13 @@ async function processText(userText, userPhone) {
     const reply = response.choices[0].message.content;
     console.log(`[TEXT] Réponse (${lang}): ${reply}`);
     await sendWhatsAppText(userPhone, reply);
+
+    try {
+        const contact = await getOrCreateContact(userPhone);
+        await saveMessages(contact._id, lang, { humanText: userText, aiText: reply });
+    } catch (dbErr) {
+        console.error('[DB] Erreur persistance text:', dbErr.message);
+    }
 }
 
 // ─── Traitement audio ────────────────────────────────────────
@@ -331,6 +392,98 @@ async function processAudio(mediaId, userPhone) {
 
     fs.unlink(inputFile, () => {});
     fs.unlink(outputFile, () => {});
+
+    try {
+        const contact = await getOrCreateContact(userPhone);
+        await saveMessages(contact._id, finalLang, {
+            humanText: transcription.text,
+            aiText: replyText,
+            audioUrl: uploadResult.secure_url,
+            cloudinaryId: uploadResult.public_id
+        });
+    } catch (dbErr) {
+        console.error('[DB] Erreur persistance audio:', dbErr.message);
+    }
+}
+
+// ─── Localisation ────────────────────────────────────────────
+
+/**
+ * Formule de Haversine — retourne la distance en km entre deux points GPS.
+ */
+function haversine(lat1, lng1, lat2, lng2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+async function processLocation(lat, lng, userPhone) {
+    console.log(`[LOC] Position reçue de ${userPhone}: lat=${lat}, lng=${lng}`);
+
+    // Récupère toutes les structures actives
+    const structures = await Structure.find({ statutVaccination: true })
+        .populate({ path: 'districtId', populate: { path: 'regionId' } });
+
+    if (!structures.length) {
+        await sendWhatsAppText(userPhone,
+            'Aucune structure sanitaire trouvée dans notre base. / Babu cibiyar kiwon lafiya a cikin bayananmu.');
+        return;
+    }
+
+    // Calcule la distance pour chaque structure et trie par proximité
+    const withDistance = structures.map(s => ({
+        ...s.toObject(),
+        distance: haversine(lat, lng, s.coordonnees.latitude, s.coordonnees.longitude)
+    }));
+    withDistance.sort((a, b) => a.distance - b.distance);
+
+    // Retourne les 3 plus proches
+    const nearest = withDistance.slice(0, 3);
+
+    const lines = nearest.map((s, i) => {
+        const district = s.districtId?.nom ?? '';
+        const region   = s.districtId?.regionId?.nom ?? '';
+        const km       = s.distance.toFixed(1);
+        const contact  = s.contactUrgence ? `📞 ${s.contactUrgence}` : '';
+        return `${i + 1}. *${s.nom}* (${s.type})\n   📍 ${district}, ${region} — ${km} km\n   ${contact}`;
+    });
+
+    const message =
+        `🏥 *Centres de vaccination les plus proches :*\n\n${lines.join('\n\n')}\n\n` +
+        `_Envoyez votre position pour actualiser. / Aika wurin ka don sabuntawa._`;
+
+    await sendWhatsAppText(userPhone, message);
+    console.log(`[LOC] ${nearest.length} structures envoyées à ${userPhone}`);
+
+    // Persistance
+    try {
+        const contact = await getOrCreateContact(userPhone);
+        const conv = await getOrCreateConversation(contact._id, 'unknown');
+        await Message.create({
+            conversationId: conv._id,
+            emetteurType: 'humain',
+            typeContenu: 'text',
+            texteBrut: `[LOCALISATION] lat:${lat}, lng:${lng}`,
+            langue: 'unknown'
+        });
+        await Message.create({
+            conversationId: conv._id,
+            emetteurType: 'agent_ia',
+            typeContenu: 'text',
+            texteBrut: message,
+            langue: 'fr'
+        });
+        conv.nbMessages += 2;
+        conv.derniereMiseAJour = new Date();
+        await conv.save();
+    } catch (dbErr) {
+        console.error('[DB] Erreur persistance localisation:', dbErr.message);
+    }
 }
 
 export default router;
