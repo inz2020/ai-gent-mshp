@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, Link } from 'react-router-dom';
 
 export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -25,7 +25,7 @@ export default function Navbar() {
           <li><NavLink to="/contact" onClick={() => setMenuOpen(false)}>Nous contacter</NavLink></li>
         </ul>
 
-        <a href="/connexion" className="btn-connexion">Connexion</a>
+        <Link to="/connexion" className="btn-connexion">Connexion</Link>
       </div>
     </nav>
   );

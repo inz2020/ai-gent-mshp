@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s http://localhost:40000/api/users -H \"Authorization: Bearer test\")",
+      "Bash(node --input-type=module)",
+      "Bash(node app.js)",
+      "Bash(curl -s http://localhost:50000/api/users -H \"Authorization: Bearer test\")"
+    ]
+  }
+}
