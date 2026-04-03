@@ -4,7 +4,9 @@
       "Bash(curl -s http://localhost:40000/api/users -H \"Authorization: Bearer test\")",
       "Bash(node --input-type=module)",
       "Bash(node app.js)",
-      "Bash(curl -s http://localhost:50000/api/users -H \"Authorization: Bearer test\")"
+      "Bash(curl -s http://localhost:50000/api/users -H \"Authorization: Bearer test\")",
+      "Bash(rm -rf node_modules package-lock.json)",
+      "Bash(npm install:*)"
     ]
   }
 }
