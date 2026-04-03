@@ -123,4 +123,4 @@ Idan ana tambaya da Hausa, amsa da Hausa cikin sauƙi:
 - Rigakafin kyanda dole ne a yi lokuta 2: wata 9 da wata 15
 `;
 
-module.exports = SYSTEM_PROMPT;
+export default SYSTEM_PROMPT;
