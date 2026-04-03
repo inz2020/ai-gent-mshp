@@ -24,6 +24,5 @@ app.use('/api/conversations', conversationsRouter);
 app.use('/webhook', webhookRouter);
 
 const PORT = process.env.PORT || 50000;
-connectDB().then(() =>
-    app.listen(PORT, () => console.log(`Serveur actif sur port ${PORT}`))
-);
+app.listen(PORT, () => console.log(`Serveur actif sur port ${PORT}`));
+connectDB();
