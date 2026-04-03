@@ -2,23 +2,21 @@ import mongoose from 'mongoose';
 
 const MessageSchema = new mongoose.Schema({
     conversationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Conversation', required: true },
-    emetteurType: { 
-        type: String, 
-        enum: ['humain', 'agent_ia', 'operateur_sante'], 
-        required: true 
+    emetteurType: {
+        type: String,
+        enum: ['humain', 'agent_ia', 'operateur_sante'],
+        required: true
     },
-    typeContenu: { type: String, enum: ['text', 'audio'], default: 'audio' },
-    texteBrut: String,        // La transcription (si audio) ou le texte direct
-    audioUrl: String,         // URL Cloudinary
-    cloudinaryId: String,     // Pour la gestion du stockage
+    typeContenu:  { type: String, enum: ['text', 'audio'], default: 'text' },
+    texteBrut:    { type: String, default: '' },   // transcription audio ou texte direct
+    audioUrl:     { type: String, default: '' },   // URL Cloudinary mp3 réponse TTS
+    cloudinaryId: { type: String, default: '' },   // public_id Cloudinary pour suppression
+    langue:       { type: String, enum: ['fr', 'ha', 'unknown'], default: 'unknown' },
     metadata: {
-        intent: String,       // ex: "demande_lieu_vax"
-        scoreConfiance: Number
+        intent:         { type: String, default: '' },
+        scoreConfiance: { type: Number, default: 0 }
     },
     dateEnvoi: { type: Date, default: Date.now }
 });
 
-
-
-
-export default mongoose.model('Message', messageSchema);
+export default mongoose.model('Message', MessageSchema);

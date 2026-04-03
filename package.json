@@ -19,7 +19,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node app.js",
     "dev": "nodemon app.js",
-    "seed": "node db/seed.js"
+    "seed": "node db/seed.js",
+    "seed:geo": "node db/seeders/regions_districts.js"
   },
   "keywords": [],
   "author": "",
