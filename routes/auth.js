@@ -18,23 +18,28 @@ router.post('/login', async (req, res) => {
         return res.status(400).json({ message: erreurs[0] });
     }
 
-    const user = await User.findOne({ email, actif: true });
-    if (!user) {
-        return res.status(401).json({ message: 'Identifiants incorrects.' });
+    try {
+        const user = await User.findOne({ email, actif: true });
+        if (!user) {
+            return res.status(401).json({ message: 'Identifiants incorrects.' });
+        }
+
+        const motDePassevalide = await user.verifierPassword(password);
+        if (!motDePassevalide) {
+            return res.status(401).json({ message: 'Identifiants incorrects.' });
+        }
+
+        const token = jwt.sign(
+            { id: user._id, email: user.email, role: user.role },
+            process.env.JWT_SECRET,
+            { expiresIn: '8h' }
+        );
+
+        res.json({ token, nom: user.nom, role: user.role });
+    } catch (err) {
+        console.error('[Login error]', err.message);
+        res.status(500).json({ message: 'Erreur serveur, réessayez.' });
     }
-
-    const motDePassevalide = await user.verifierPassword(password);
-    if (!motDePassevalide) {
-        return res.status(401).json({ message: 'Identifiants incorrects.' });
-    }
-
-    const token = jwt.sign(
-        { id: user._id, email: user.email, role: user.role },
-        process.env.JWT_SECRET,
-        { expiresIn: '8h' }
-    );
-
-    res.json({ token, nom: user.nom, role: user.role });
 });
 
 // GET /api/me — vérifie si le token est valide
