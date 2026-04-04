@@ -794,6 +794,141 @@ main { flex: 1; }
 .bstat-label { display: block; font-size: 0.82rem; color: var(--gray-400); margin-top: 4px; }
 .broadcast-warning { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; padding: 10px 14px; border-radius: 8px; font-size: 0.85rem; }
 
+/* ── Sélecteur de type de média ──────────────────────────── */
+.bc-media-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+.bc-media-tab {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 8px 14px; border-radius: 8px; border: 1.5px solid #e5e7eb;
+  background: var(--white); cursor: pointer; font-size: 0.78rem;
+  font-weight: 600; color: var(--gray-600); transition: all var(--transition);
+  font-family: inherit;
+}
+.bc-media-tab span:first-child { font-size: 1.2rem; }
+.bc-media-tab:hover { border-color: var(--green); color: var(--green); }
+.bc-media-tab.active { border-color: var(--green); background: var(--green-light); color: var(--green); }
+
+/* ── Zone d'upload ───────────────────────────────────────── */
+.bc-upload-zone {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; padding: 28px 16px; border: 2px dashed #d1d5db; border-radius: 10px;
+  cursor: pointer; color: var(--gray-400); font-size: 0.88rem;
+  transition: all var(--transition); text-align: center;
+}
+.bc-upload-zone:hover, .bc-upload-zone.drag-over {
+  border-color: var(--green); color: var(--green); background: var(--green-light);
+}
+
+/* ── Prévisualisation fichier ────────────────────────────── */
+.bc-file-preview {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 12px; border: 1.5px solid #e5e7eb; border-radius: 10px; background: var(--gray-50);
+}
+.bc-preview-img { max-height: 160px; object-fit: contain; border-radius: 6px; align-self: center; }
+.bc-preview-audio { width: 100%; }
+.bc-preview-doc {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 0.88rem; color: var(--gray-600);
+}
+.bc-preview-doc a { color: var(--green); word-break: break-all; }
+.bc-remove-file {
+  align-self: flex-end; background: none; border: 1px solid #fca5a5;
+  color: #dc2626; border-radius: 6px; padding: 4px 10px;
+  font-size: 0.8rem; cursor: pointer; font-family: inherit;
+}
+.bc-remove-file:hover { background: #fef2f2; }
+
+/* ── Toggle traduction ───────────────────────────────────── */
+.bc-translate-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.bc-toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+.bc-toggle input { display: none; }
+.bc-toggle-track {
+  width: 34px; height: 18px; background: #d1d5db; border-radius: 99px;
+  position: relative; transition: background var(--transition); flex-shrink: 0;
+}
+.bc-toggle-track::after {
+  content: ''; position: absolute; top: 2px; left: 2px;
+  width: 14px; height: 14px; background: #fff; border-radius: 50%;
+  transition: transform var(--transition); box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.bc-toggle input:checked ~ .bc-toggle-track { background: var(--green); }
+.bc-toggle input:checked ~ .bc-toggle-track::after { transform: translateX(16px); }
+.bc-toggle-label { font-size: 0.85rem; font-weight: 600; color: var(--gray-600); }
+
+/* ── Spinner upload ──────────────────────────────────────── */
+.bc-spinner {
+  display: inline-block; width: 20px; height: 20px;
+  border: 2px solid #e5e7eb; border-top-color: var(--green);
+  border-radius: 50%; animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Badge check sur onglet media actif ──────────────────── */
+.bc-media-tab { position: relative; }
+.bc-check {
+  position: absolute; top: 4px; right: 4px;
+  font-size: 0.6rem; background: var(--green); color: #fff;
+  border-radius: 50%; width: 13px; height: 13px;
+  display: flex; align-items: center; justify-content: center; line-height: 1;
+}
+
+/* ── Sélecteur de contacts ───────────────────────────────── */
+.bc-contacts-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+.bc-contacts-header label { flex: 1; display: flex; align-items: center; gap: 8px; }
+.bc-contacts-count {
+  background: var(--green); color: #fff;
+  font-size: 0.72rem; font-weight: 700; padding: 2px 8px;
+  border-radius: 99px; letter-spacing: 0.02em;
+}
+.bc-contacts-btn { font-size: 0.82rem; padding: 6px 12px; white-space: nowrap; }
+
+.bc-contact-panel {
+  margin-top: 8px; border: 1.5px solid #e5e7eb; border-radius: 10px;
+  background: var(--white); overflow: hidden;
+}
+.bc-contact-search-row {
+  display: flex; gap: 6px; align-items: center;
+  padding: 10px 12px; border-bottom: 1px solid #f3f4f6;
+}
+.bc-contact-search {
+  flex: 1; padding: 7px 11px; border: 1.5px solid #e5e7eb;
+  border-radius: 8px; font-size: 0.85rem; font-family: inherit; outline: none;
+}
+.bc-contact-search:focus { border-color: var(--green); }
+.bc-sel-btn {
+  padding: 5px 10px; border: 1.5px solid #e5e7eb; border-radius: 7px;
+  background: var(--white); font-size: 0.78rem; font-weight: 600;
+  color: var(--gray-600); cursor: pointer; font-family: inherit;
+  white-space: nowrap; transition: all var(--transition);
+}
+.bc-sel-btn:hover { border-color: var(--green); color: var(--green); }
+
+.bc-contact-list { max-height: 220px; overflow-y: auto; }
+.bc-contact-loading, .bc-contact-empty {
+  display: flex; align-items: center; justify-content: center;
+  gap: 8px; padding: 20px; color: var(--gray-400); font-size: 0.88rem;
+}
+.bc-contact-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; cursor: pointer; border-bottom: 1px solid #f9fafb;
+  transition: background var(--transition);
+}
+.bc-contact-row:hover  { background: var(--gray-50); }
+.bc-contact-row.checked { background: var(--green-light); }
+.bc-contact-row input[type="checkbox"] { accent-color: var(--green); width: 15px; height: 15px; flex-shrink: 0; }
+.bc-contact-info { flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.bc-contact-name  { font-size: 0.88rem; font-weight: 600; color: var(--gray-800); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bc-contact-phone { font-size: 0.78rem; color: var(--gray-400); }
+.bc-contact-lang  { font-size: 0.7rem; font-weight: 700; padding: 2px 7px; border-radius: 99px; }
+.bc-lang-fr { background: #dbeafe; color: #1d4ed8; }
+.bc-lang-ha { background: #fef3c7; color: #92400e; }
+
+.bc-contact-footer {
+  padding: 8px 12px; background: var(--gray-50); border-top: 1px solid #f3f4f6;
+  font-size: 0.8rem; color: var(--gray-400); text-align: right;
+}
+
 .dt-footer {
   margin-top: 12px; font-size: 0.85rem; color: var(--gray-400);
   display: flex; align-items: center; justify-content: space-between; gap: 12px;

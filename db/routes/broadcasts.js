@@ -79,15 +79,16 @@ router.get('/:id', requireAuth, requireRole('admin', 'staff'), async (req, res) 
 router.post('/', requireAuth, requireRole('admin'), async (req, res) => {
     const {
         templateName,
-        type = 'texte',          // texte | tts | audio | image | document
+        type = 'texte',
         langue,
+        contactIds   = [],       // liste explicite d'IDs de contacts (prioritaire sur langue)
         parametres = [],
         langueTemplate = 'fr',
-        messageAudio   = '',     // texte pour TTS
-        mediaUrl       = '',     // URL Cloudinary pour audio/image/document uploadé
-        mediaFileName  = '',     // nom du fichier (document)
-        traduire       = false,  // traduire le texte TTS avant génération
-        langueTraduction = 'ha', // langue cible de traduction
+        messageAudio   = '',
+        mediaUrl       = '',
+        mediaFileName  = '',
+        traduire       = false,
+        langueTraduction = 'ha',
         dateEnvoi,
     } = req.body;
 
@@ -101,11 +102,17 @@ router.post('/', requireAuth, requireRole('admin'), async (req, res) => {
         return res.status(400).json({ message: 'Aucun fichier charge. Veuillez uploader un fichier.' });
     }
 
-    const filter = {};
-    if (langue === 'fr') filter.langue = 'fr';
-    if (langue === 'ha') filter.langue = { $in: ['hausa', 'ha'] };
+    // Priorité : liste explicite de contacts > filtre par langue
+    let contacts;
+    if (contactIds.length > 0) {
+        contacts = await Contact.find({ _id: { $in: contactIds } }).lean();
+    } else {
+        const filter = {};
+        if (langue === 'fr') filter.langue = 'fr';
+        if (langue === 'ha') filter.langue = { $in: ['hausa', 'ha'] };
+        contacts = await Contact.find(filter).lean();
+    }
 
-    const contacts = await Contact.find(filter).lean();
     if (contacts.length === 0) {
         return res.status(400).json({ message: 'Aucun contact trouve pour cette selection.' });
     }
