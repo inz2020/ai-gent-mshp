@@ -12,6 +12,7 @@ const NAV_ITEMS = [
             { to: '/dashboard/utilisateurs/roles',   label: 'Rôles & permissions' },
         ]
     },
+    { to: '/dashboard/diffusions',    icon: '📣', label: 'Diffusions' },
     { to: '/dashboard/parametres',   icon: '⚙️', label: 'Paramètres' },
 ];
 

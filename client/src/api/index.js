@@ -72,3 +72,16 @@ export function getConversations() {
 export function getConversationMessages(id) {
     return request(`/api/conversations/${id}/messages`, { headers: authHeaders() });
 }
+
+// ── Broadcasts ────────────────────────────────────────────────
+export function getBroadcasts() {
+    return request('/api/broadcasts', { headers: authHeaders() });
+}
+
+export function sendBroadcast(data) {
+    return request('/api/broadcasts', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify(data)
+    });
+}

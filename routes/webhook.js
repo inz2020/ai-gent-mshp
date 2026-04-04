@@ -405,7 +405,7 @@ async function processAudio(mediaId, userPhone) {
         model: 'whisper-1',
         response_format: 'verbose_json',
         timestamp_granularities: ['segment'],
-        ...(knownLang === 'ha' && { language: 'ha' }),
+        // Whisper ne supporte pas 'ha' (Hausa) comme hint — laisser l'auto-détection pour Hausa
         ...(knownLang === 'fr' && { language: 'fr' })
     };
     const transcription = await openai.audio.transcriptions.create(whisperParams);

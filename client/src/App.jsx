@@ -1,4 +1,3 @@
-import React from 'react';
 import { Routes, Route, Outlet } from 'react-router-dom';
 import Navbar from './components/Navbar.jsx';
 import Footer from './components/Footer.jsx';
@@ -11,6 +10,7 @@ import Contacts from './pages/dashboard/Contacts.jsx';
 import Utilisateurs from './pages/dashboard/Utilisateurs.jsx';
 import Parametres from './pages/dashboard/Parametres.jsx';
 import RolesPermissions from './pages/dashboard/RolesPermissions.jsx';
+import Diffusions from './pages/dashboard/Diffusions.jsx';
 import PrivateRoute from './components/PrivateRoute.jsx';
 
 function PublicLayout() {
@@ -40,6 +40,7 @@ export default function App() {
           <Route path="contacts"           element={<Contacts />} />
           <Route path="utilisateurs"       element={<Utilisateurs />} />
           <Route path="utilisateurs/roles" element={<RolesPermissions />} />
+          <Route path="diffusions"         element={<Diffusions />} />
           <Route path="parametres"         element={<Parametres />} />
         </Route>
       </Route>
