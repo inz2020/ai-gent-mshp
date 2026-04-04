@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import mongoose from 'mongoose';
-import User from './models/User.js';
+import User, { genererLogin } from './models/User.js';
 
 const users = [
     {
@@ -21,8 +21,9 @@ async function seed() {
             console.log(`[SEED] Utilisateur déjà existant : ${data.email}`);
             continue;
         }
-        const user = await User.create(data);
-        console.log(`[SEED] Utilisateur créé : ${user.email} (${user.role})`);
+        const login = genererLogin(data.nom);
+        const user = await User.create({ ...data, login });
+        console.log(`[SEED] Utilisateur créé : ${user.email} | login: ${user.login} (${user.role})`);
     }
 
     await mongoose.disconnect();

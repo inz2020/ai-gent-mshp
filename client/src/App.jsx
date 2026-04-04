@@ -11,7 +11,14 @@ import Utilisateurs from './pages/dashboard/Utilisateurs.jsx';
 import Parametres from './pages/dashboard/Parametres.jsx';
 import RolesPermissions from './pages/dashboard/RolesPermissions.jsx';
 import Diffusions from './pages/dashboard/Diffusions.jsx';
+import Regions from './pages/dashboard/Regions.jsx';
+import Districts from './pages/dashboard/Districts.jsx';
+import Structures from './pages/dashboard/Structures.jsx';
+import Vaccins from './pages/dashboard/Vaccins.jsx';
+import CalendrierVaccinal from './pages/dashboard/CalendrierVaccinal.jsx';
 import PrivateRoute from './components/PrivateRoute.jsx';
+import NotFound from './pages/NotFound.jsx';
+import ErrorPage from './pages/ErrorPage.jsx';
 
 function PublicLayout() {
   return (
@@ -40,10 +47,18 @@ export default function App() {
           <Route path="contacts"           element={<Contacts />} />
           <Route path="utilisateurs"       element={<Utilisateurs />} />
           <Route path="utilisateurs/roles" element={<RolesPermissions />} />
-          <Route path="diffusions"         element={<Diffusions />} />
-          <Route path="parametres"         element={<Parametres />} />
+          <Route path="diffusions"                    element={<Diffusions />} />
+          <Route path="metadonnees/regions"          element={<Regions />} />
+          <Route path="metadonnees/districts"        element={<Districts />} />
+          <Route path="metadonnees/structures"       element={<Structures />} />
+          <Route path="metadonnees/vaccins"          element={<Vaccins />} />
+          <Route path="metadonnees/calendrier"       element={<CalendrierVaccinal />} />
+          <Route path="parametres"                   element={<Parametres />} />
         </Route>
       </Route>
+      {/* Pages d'erreur */}
+      <Route path="/erreur" element={<ErrorPage />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }

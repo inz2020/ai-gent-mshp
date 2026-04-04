@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { getConversations, getConversationMessages } from '../../api/index.js';
+import { usePagination } from '../../hooks/usePagination.js';
+import Pagination from '../../components/Pagination.jsx';
 
 const LANG_LABEL   = { fr: 'Français', ha: 'Hausa', unknown: 'Inconnu' };
 const STATUT_COLOR = { ouvert: 'dt-badge-actif', ferme: 'dt-badge-inactif', escalade_humain: 'dt-badge-danger' };
@@ -47,6 +49,7 @@ export default function Discussions() {
         const q = search.toLowerCase();
         return phone.includes(q) || nom.toLowerCase().includes(q) || c.statut.includes(q);
     });
+    const { paged, page, setPage, totalPages } = usePagination(filtered);
 
     return (
         <div className="dash-page">
@@ -84,7 +87,7 @@ export default function Discussions() {
                             <tr><td colSpan="8" className="dt-center">Chargement...</td></tr>
                         ) : filtered.length === 0 ? (
                             <tr><td colSpan="8" className="dt-center">Aucune discussion trouvée.</td></tr>
-                        ) : filtered.map(c => (
+                        ) : paged.map(c => (
                             <tr key={c._id}>
                                 <td>
                                     <span className="dt-avatar">
@@ -113,7 +116,10 @@ export default function Discussions() {
                 </table>
             </div>
 
-            <div className="dt-footer">{filtered.length} conversation{filtered.length !== 1 ? 's' : ''}</div>
+            <div className="dt-footer">
+                <span>{filtered.length} conversation{filtered.length !== 1 ? 's' : ''}</span>
+                <Pagination page={page} totalPages={totalPages} onChange={setPage} />
+            </div>
 
             {/* Panneau fil de messages */}
             {selected && (

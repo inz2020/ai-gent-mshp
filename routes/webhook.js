@@ -2,21 +2,17 @@ import express from 'express';
 import axios from 'axios';
 import fs from 'fs';
 import OpenAI from 'openai';
-import { v2 as cloudinary } from 'cloudinary';
 import SYSTEM_PROMPT from '../prompt.js';
 import {HAUSA_PHRASES,HAUSA_WORDS,FRENCH_WORDS, VERIFY_TOKEN, DEFAULT_MESSAGES, GREETING_CONFIG } from '../constants/config.js';
 import Contact from '../db/models/Contact.js';
 import Conversation from '../db/models/Conversations.js';
 import Message from '../db/models/Message.js';
 import Structure from '../db/models/Structure.js';
+import BroadcastMessage from '../db/models/BroadcastMessage.js';
+import Broadcast from '../db/models/Broadcast.js';
+import { generateTTS, prepareVoiceText, uploadAudio } from '../lib/audio.js';
 
 const router = express.Router();
-
-cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_NAME,
-    api_key: process.env.CLOUDINARY_KEY,
-    api_secret: process.env.CLOUDINARY_SECRET
-});
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_KEY });
 
@@ -119,16 +115,23 @@ async function getOrCreateContact(whatsappId) {
     return contact;
 }
 
-async function getOrCreateConversation(contactId, langue) {
+async function getOrCreateConversation(contactId) {
     let conv = await Conversation.findOne({ contactId, statut: 'ouvert' });
     if (!conv) {
-        conv = await Conversation.create({ contactId, langue });
+        conv = await Conversation.create({ contactId });
     }
     return conv;
 }
 
+async function isFirstConversation(userPhone) {
+    const contact = await Contact.findOne({ whatsappId: userPhone });
+    if (!contact) return true;
+    const convCount = await Conversation.countDocuments({ contactId: contact._id });
+    return convCount === 0;
+}
+
 async function saveMessages(contactId, langue, { humanText, aiText, audioUrl = '', cloudinaryId = '' }) {
-    const conv = await getOrCreateConversation(contactId, langue);
+    const conv = await getOrCreateConversation(contactId);
 
     const isAudio = !!audioUrl;
 
@@ -170,17 +173,26 @@ router.get('/', (req, res) => {
     }
 });
 
-// POST /webhook — Réception des messages
+// POST /webhook — Réception des messages + statuts de livraison
 router.post('/', (req, res) => {
     res.sendStatus(200);
 
-    const body = req.body;
-    console.log("Webhook reçu:", JSON.stringify(body));
+    const body  = req.body;
+    const value = body.entry?.[0]?.changes?.[0]?.value;
+    if (!value) return;
 
-    if (!body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]) return;
+    // ── Suivi de livraison des diffusions (Étape 5) ──────────
+    if (value.statuses?.length) {
+        processStatuses(value.statuses).catch(err =>
+            console.error('[STATUS] Erreur traitement statuts:', err.message)
+        );
+    }
 
-    const message = body.entry[0].changes[0].value.messages[0];
-    const from = message.from;
+    // ── Messages entrants ─────────────────────────────────────
+    if (!value.messages?.[0]) return;
+
+    const message = value.messages[0];
+    const from    = message.from;
     console.log(`Message de ${from}, type: ${message.type}`);
 
     if (message.type === 'audio') {
@@ -199,6 +211,33 @@ router.post('/', (req, res) => {
         console.log(`Type de message non géré: ${message.type}`);
     }
 });
+
+// ─── Traitement des statuts de livraison ─────────────────────
+async function processStatuses(statuses) {
+    for (const s of statuses) {
+        const { id: messageId, status } = s;
+        if (!messageId || !['delivered', 'read', 'failed'].includes(status)) continue;
+
+        const bm = await BroadcastMessage.findOne({ messageId });
+        if (!bm) continue;
+
+        const newStatut = status === 'delivered' ? 'livre'
+                        : status === 'read'      ? 'lu'
+                        : 'echec';
+
+        if (bm.statut === newStatut) continue;
+        await bm.updateOne({ statut: newStatut });
+
+        // Incrémenter le compteur agrégé sur le Broadcast
+        const inc = {};
+        if (newStatut === 'livre') inc.livre = 1;
+        if (newStatut === 'lu')    { inc.lu = 1; inc.livre = 1; }
+        if (newStatut === 'echec') inc.echecs = 1;
+
+        await Broadcast.findByIdAndUpdate(bm.broadcastId, { $inc: inc });
+        console.log(`[STATUS] ${messageId} → ${newStatut}`);
+    }
+}
 
 // ─── Helpers communs ─────────────────────────────────────────
 
@@ -226,16 +265,7 @@ async function sendGreetingResponse(userPhone) {
     );
 }
 
-function prepareVoiceText(text) {
-    return text
-        .replace(/\n\n+/g, '. ')
-        .replace(/\n/g, ', ')
-        .replace(/\s*-\s+/g, ', ')
-        .replace(/\s{2,}/g, ' ')
-        .replace(/\*\*/g, '')
-        .replace(/\*/g, '')
-        .trim();
-}
+// prepareVoiceText importé depuis lib/audio.js
 
 async function sendWhatsAppText(to, text) {
     await axios.post(
@@ -245,22 +275,13 @@ async function sendWhatsAppText(to, text) {
     );
 }
 
-// Génère un TTS, upload sur Cloudinary et envoie en audio WhatsApp
 async function sendAudioReply(to, text, lang = 'fr') {
     try {
-        const ttsBuffer = await generateTTS(prepareVoiceText(text), lang);
-        const tmpFile = `reply_${Date.now()}.mp3`;
-        fs.writeFileSync(tmpFile, ttsBuffer);
-        const uploadResult = await new Promise((resolve, reject) => {
-            cloudinary.uploader.upload_stream(
-                { resource_type: 'video', format: 'mp3', folder: 'chatbot_audio' },
-                (err, result) => err ? reject(err) : resolve(result)
-            ).end(ttsBuffer);
-        });
-        fs.unlink(tmpFile, () => {});
+        const ttsBuffer  = await generateTTS(prepareVoiceText(text), lang);
+        const uploaded   = await uploadAudio(ttsBuffer, 'chatbot_audio');
         await axios.post(
             `https://graph.facebook.com/v22.0/${process.env.PHONE_ID}/messages`,
-            { messaging_product: 'whatsapp', to, type: 'audio', audio: { link: uploadResult.secure_url } },
+            { messaging_product: 'whatsapp', to, type: 'audio', audio: { link: uploaded.secure_url } },
             { headers: { Authorization: `Bearer ${process.env.META_TOKEN}`, 'Content-Type': 'application/json' } }
         );
         console.log(`[TTS] Réponse audio envoyée à ${to} (${lang})`);
@@ -294,39 +315,7 @@ function buildLangInstruction(lang, isAudio = false) {
         : `\n\nIMPORTANT: Message en français. Réponds UNIQUEMENT en français. Maximum 4 phrases courtes et directes.`;
 }
 
-async function ttsElevenLabs(text) {
-    const res = await axios.post(
-        `https://api.elevenlabs.io/v1/text-to-speech/${process.env.VOICE_ID}`,
-        {
-            text,
-            model_id: 'eleven_multilingual_v2',
-            voice_settings: { stability: 0.55, similarity_boost: 0.80, style: 0.20, use_speaker_boost: true }
-        },
-        {
-            headers: { 'xi-api-key': process.env.ELEVEN_KEY, 'Content-Type': 'application/json' },
-            responseType: 'arraybuffer'
-        }
-    );
-    return Buffer.from(res.data);
-}
-
-async function ttsOpenAI(text) {
-    const res = await axios.post(
-        'https://api.openai.com/v1/audio/speech',
-        { model: 'tts-1-hd', voice: 'shimmer', input: text, speed: 0.92 },
-        { headers: { Authorization: `Bearer ${process.env.OPENAI_KEY}` }, responseType: 'arraybuffer' }
-    );
-    return Buffer.from(res.data);
-}
-
-async function generateTTS(text, lang) {
-    // ElevenLabs pour le Hausa (meilleur support multilingue africain)
-    // OpenAI shimmer pour le français (voix plus naturelle)
-    if (lang === 'ha') {
-        return ttsElevenLabs(text);
-    }
-    return ttsOpenAI(text);
-}
+// generateTTS, prepareVoiceText et uploadAudio importés depuis lib/audio.js
 
 async function getRecentMessages(conversationId, limit = 6) {
     const msgs = await Message.find({ conversationId })
@@ -345,9 +334,14 @@ async function processText(userText, userPhone) {
     console.log(`[TEXT] Message reçu: "${userText}"`);
 
     if (isGreeting(userText)) {
-        console.log('[TEXT] Salutation → bienvenue');
-        await sendGreetingResponse(userPhone);
-        return;
+        const firstTime = await isFirstConversation(userPhone);
+        if (firstTime) {
+            console.log('[TEXT] Première salutation → bienvenue');
+            await getOrCreateContact(userPhone);
+            await sendGreetingResponse(userPhone);
+            return;
+        }
+        console.log('[TEXT] Salutation mais contact existant → traitement normal');
     }
 
     const lang = detectTextLanguage(userText);
@@ -426,10 +420,14 @@ async function processAudio(mediaId, userPhone) {
 
     // Salutation ?
     if (isGreeting(transcription.text)) {
-        console.log('[AUDIO] Salutation → bienvenue');
-        fs.unlink(inputFile, () => {});
-        await sendGreetingResponse(userPhone);
-        return;
+        const firstTime = await isFirstConversation(userPhone);
+        if (firstTime) {
+            console.log('[AUDIO] Première salutation → bienvenue');
+            fs.unlink(inputFile, () => {});
+            await sendGreetingResponse(userPhone);
+            return;
+        }
+        console.log('[AUDIO] Salutation mais contact existant → traitement normal');
     }
 
     // Détection de langue croisée : Whisper + analyse texte + langue connue du contact
@@ -446,7 +444,7 @@ async function processAudio(mediaId, userPhone) {
     }
 
     // Contexte conversationnel (6 derniers échanges)
-    const conv = await getOrCreateConversation(contact._id, finalLang);
+    const conv = await getOrCreateConversation(contact._id);
     const history = await getRecentMessages(conv._id);
 
     // Génération réponse GPT avec historique
@@ -462,21 +460,12 @@ async function processAudio(mediaId, userPhone) {
     const replyText = response.choices[0].message.content;
     console.log(`[4/6] Réponse GPT (${finalLang}): ${replyText}`);
 
-    // TTS : ElevenLabs pour Hausa, OpenAI pour français
-    const ttsBuffer = await generateTTS(prepareVoiceText(replyText), finalLang);
+    const ttsBuffer  = await generateTTS(prepareVoiceText(replyText), finalLang);
     console.log('[5/6] Audio TTS généré:', ttsBuffer.byteLength, 'bytes');
 
-    // Upload Cloudinary
-    fs.writeFileSync(outputFile, ttsBuffer);
-    const uploadResult = await new Promise((resolve, reject) => {
-        cloudinary.uploader.upload_stream(
-            { resource_type: 'video', format: 'mp3', folder: 'chatbot_audio' },
-            (error, result) => error ? reject(error) : resolve(result)
-        ).end(ttsBuffer);
-    });
+    const uploadResult = await uploadAudio(ttsBuffer, 'chatbot_audio');
     console.log('[6/6] Cloudinary URL:', uploadResult.secure_url);
 
-    // Envoi WhatsApp
     await axios.post(
         `https://graph.facebook.com/v22.0/${process.env.PHONE_ID}/messages`,
         { messaging_product: 'whatsapp', to: userPhone, type: 'audio', audio: { link: uploadResult.secure_url } },
@@ -561,7 +550,7 @@ async function processLocation(lat, lng, userPhone) {
         contact.dernierePosition = { latitude: lat, longitude: lng, updatedAt: new Date() };
         await contact.save();
 
-        const conv = await getOrCreateConversation(contact._id, 'unknown');
+        const conv = await getOrCreateConversation(contact._id);
         await Message.create({
             conversationId: conv._id,
             emetteurType: 'humain',

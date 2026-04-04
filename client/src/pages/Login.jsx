@@ -5,7 +5,7 @@ import { validerMotDePasse, PASSWORD_RULES } from '../utils/passwordPolicy.js';
 
 export default function Login() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ email: '', password: '' });
+  const [form, setForm] = useState({ login: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -21,7 +21,8 @@ export default function Login() {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!form.email || !form.password) {
+    console.log('user:', form)
+    if (!form.login || !form.password) {
       setError('Veuillez remplir tous les champs.');
       return;
     }
@@ -33,7 +34,7 @@ export default function Login() {
     setLoading(true);
     setError('');
     try {
-      const { token } = await loginUser(form.email, form.password);
+      const { token } = await loginUser(form.login, form.password);
       localStorage.setItem('token', token);
       navigate('/dashboard');
     } catch (err) {
@@ -76,13 +77,13 @@ export default function Login() {
             <div className="form-group">
               <label htmlFor="email">Adresse e-mail</label>
               <input
-                id="email"
-                name="email"
+                id="login"
+                name="login"
                 type="email"
                 placeholder="exemple@sante.gouv.ne"
-                value={form.email}
+                value={form.login}
                 onChange={handleChange}
-                autoComplete="email"
+                autoComplete="login"
               />
             </div>
 

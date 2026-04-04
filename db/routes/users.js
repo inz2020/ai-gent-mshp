@@ -1,5 +1,5 @@
 import express from 'express';
-import User from '../models/User.js';
+import User, { genererLogin } from '../models/User.js';
 import { requireAuth, requireAdmin } from '../../middlewares/auth.js';
 import { validerMotDePasse } from '../../constants/passwordPolicy.js';
 
@@ -25,12 +25,19 @@ router.post('/', async (req, res) => {
     const { valide, erreurs } = validerMotDePasse(password);
     if (!valide) return res.status(400).json({ message: erreurs[0] });
 
-    const existe = await User.findOne({ email });
-    if (existe) return res.status(409).json({ message: 'Cet email est déjà utilisé.' });
+    const login = genererLogin(nom);
 
-    const user = await User.create({ nom, email, password, role });
+    const [emailExiste, loginExiste] = await Promise.all([
+        User.findOne({ email }),
+        User.findOne({ login }),
+    ]);
+    if (emailExiste) return res.status(409).json({ message: 'Cet email est déjà utilisé.' });
+    if (loginExiste) return res.status(409).json({ message: `L'identifiant "${login}" est déjà utilisé. Choisissez un nom différent.` });
+
+    const user = await User.create({ nom, login, email, password, role });
+    
     res.status(201).json({
-        _id: user._id, nom: user.nom, email: user.email,
+        _id: user._id, nom: user.nom, login: user.login, email: user.email,
         role: user.role, actif: user.actif, createdAt: user.createdAt
     });
 });
@@ -62,7 +69,7 @@ router.put('/:id', async (req, res) => {
 
     await user.save();
     res.json({
-        _id: user._id, nom: user.nom, email: user.email,
+        _id: user._id, nom: user.nom, login: user.login, email: user.email,
         role: user.role, actif: user.actif, createdAt: user.createdAt
     });
 });

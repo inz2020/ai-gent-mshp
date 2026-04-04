@@ -7,10 +7,10 @@ const router = express.Router();
 
 // POST /api/login
 router.post('/login', async (req, res) => {
-    const { email, password } = req.body;
+    const { login, password } = req.body;
 
-    if (!email || !password) {
-        return res.status(400).json({ message: 'Email et mot de passe requis.' });
+    if (!login || !password) {
+        return res.status(400).json({ message: 'Identifiant et mot de passe requis.' });
     }
 
     const { valide, erreurs } = validerMotDePasse(password);
@@ -19,7 +19,7 @@ router.post('/login', async (req, res) => {
     }
 
     try {
-        const user = await User.findOne({ email, actif: true });
+        const user = await User.findOne({ login, actif: true });
         if (!user) {
             return res.status(401).json({ message: 'Identifiants incorrects.' });
         }
@@ -30,7 +30,7 @@ router.post('/login', async (req, res) => {
         }
 
         const token = jwt.sign(
-            { id: user._id, email: user.email, role: user.role },
+            { id: user._id, login: user.login, role: user.role },
             process.env.JWT_SECRET,
             { expiresIn: '8h' }
         );
@@ -50,7 +50,7 @@ router.get('/me', (req, res) => {
     }
     try {
         const payload = jwt.verify(auth.slice(7), process.env.JWT_SECRET);
-        res.json({ id: payload.id, email: payload.email, role: payload.role });
+        res.json({ id: payload.id, login: payload.login, role: payload.role });
     } catch {
         res.status(401).json({ message: 'Token invalide ou expiré.' });
     }

@@ -1,6 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { getUsers, createUser, updateUser, deleteUser } from '../../api/index.js';
 import { validerMotDePasse, PASSWORD_RULES } from '../../utils/passwordPolicy.js';
+import { usePagination } from '../../hooks/usePagination.js';
+import Pagination from '../../components/Pagination.jsx';
+
+function genLoginPreview(nom) {
+    return nom
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase().trim()
+        .replace(/[-\s]+/g, '.')
+        .replace(/[^a-z0-9.]/g, '')
+        + '@sante.gouv.ne';
+}
 
 const ROLES = [
     { value: 'admin',  label: 'Administrateur' },
@@ -103,6 +114,7 @@ export default function Utilisateurs() {
         u.nom.toLowerCase().includes(search.toLowerCase()) ||
         u.email.toLowerCase().includes(search.toLowerCase())
     );
+    const { paged, page, setPage, totalPages } = usePagination(filtered);
 
     return (
         <div className="dash-page">
@@ -130,6 +142,7 @@ export default function Utilisateurs() {
                     <thead>
                         <tr>
                             <th>Nom</th>
+                            <th>Identifiant</th>
                             <th>Email</th>
                             <th>Rôle</th>
                             <th>Statut</th>
@@ -142,9 +155,10 @@ export default function Utilisateurs() {
                             <tr><td colSpan="6" className="dt-center">Chargement...</td></tr>
                         ) : filtered.length === 0 ? (
                             <tr><td colSpan="6" className="dt-center">Aucun utilisateur trouvé.</td></tr>
-                        ) : filtered.map(u => (
+                        ) : paged.map(u => (
                             <tr key={u._id}>
                                 <td><span className="dt-avatar">{u.nom[0].toUpperCase()}</span>{u.nom}</td>
+                                <td><span className="dt-mono">{u.login ?? '—'}</span></td>
                                 <td>{u.email}</td>
                                 <td><span className={`dt-badge dt-badge-${u.role}`}>{u.role}</span></td>
                                 <td><span className={`dt-badge ${u.actif ? 'dt-badge-actif' : 'dt-badge-inactif'}`}>{u.actif ? 'Actif' : 'Inactif'}</span></td>
@@ -160,7 +174,8 @@ export default function Utilisateurs() {
             </div>
 
             <div className="dt-footer">
-                {filtered.length} utilisateur{filtered.length !== 1 ? 's' : ''}
+                <span>{filtered.length} utilisateur{filtered.length !== 1 ? 's' : ''}</span>
+                <Pagination page={page} totalPages={totalPages} onChange={setPage} />
             </div>
 
             {/* Modal Créer / Modifier */}
@@ -179,6 +194,11 @@ export default function Utilisateurs() {
                                 <div className="form-group">
                                     <label>Nom complet</label>
                                     <input name="nom" value={form.nom} onChange={handleFormChange} placeholder="Prénom Nom" required />
+                                    {modal === 'create' && form.nom.trim() && (
+                                        <small style={{ color: '#64748b', marginTop: 4, display: 'block' }}>
+                                            Identifiant : <strong>{genLoginPreview(form.nom)}</strong>
+                                        </small>
+                                    )}
                                 </div>
                                 <div className="form-group">
                                     <label>Email</label>

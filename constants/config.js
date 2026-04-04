@@ -17,7 +17,7 @@ export const GREETING_CONFIG = {
         // Français
         "bonjour", "bonsoir", "salut", "coucou", "allô", "allo", "hello", "bonne nuit",
         // Hausa
-        "sannu", "ina kwana", "ina wuni", "ina lafia", "barka", "assalamu alaikum", "salam"
+        "sannu", "san'nou", "sannu","sanu", "san'nu","ina kwana", "ina wuni", "ina lafia", "barka", "assalamu alaikum", "salam"
     ],
     message: "Bonjour ! Bienvenue sur le service de vaccination du Niger 🇳🇪\nSannu! Maraba da ku.\n\nPour toute question, contactez-nous au :\n📞 +227 XX XX XX XX",
     image_url: "https://res.cloudinary.com/dvdayaoa9/image/upload/q_auto/f_auto/v1775218374/logoMSP_bydyvk.png",

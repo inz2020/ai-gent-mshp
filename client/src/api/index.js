@@ -2,18 +2,19 @@ const BASE_URL = import.meta.env.VITE_API_URL || '';
 
 async function request(path, options = {}) {
     const res = await fetch(`${BASE_URL}${path}`, {
+        ...options,
         headers: { 'Content-Type': 'application/json', ...options.headers },
-        ...options
     });
+    console.log('res:',res)
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || 'Erreur serveur.');
     return data;
 }
 
-export function loginUser(email, password) {
+export function loginUser(login, password) {
     return request('/api/login', {
         method: 'POST',
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ login, password })
     });
 }
 
@@ -73,9 +74,60 @@ export function getConversationMessages(id) {
     return request(`/api/conversations/${id}/messages`, { headers: authHeaders() });
 }
 
+// ── Métadonnées ───────────────────────────────────────────────
+const META = '/api/metadata';
+
+export const getRegions    = ()       => request(`${META}/regions`,    { headers: authHeaders() });
+export const createRegion  = (data)   => request(`${META}/regions`,    { method: 'POST', headers: authHeaders(), body: JSON.stringify(data) });
+export const updateRegion  = (id, d)  => request(`${META}/regions/${id}`, { method: 'PUT',  headers: authHeaders(), body: JSON.stringify(d) });
+export const deleteRegion  = (id)     => request(`${META}/regions/${id}`, { method: 'DELETE', headers: authHeaders() });
+export const importRegions = (rows)   => request(`${META}/regions/import`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(rows) });
+
+export const getDistricts    = ()       => request(`${META}/districts`,    { headers: authHeaders() });
+export const createDistrict  = (data)   => request(`${META}/districts`,    { method: 'POST', headers: authHeaders(), body: JSON.stringify(data) });
+export const updateDistrict  = (id, d)  => request(`${META}/districts/${id}`, { method: 'PUT',  headers: authHeaders(), body: JSON.stringify(d) });
+export const deleteDistrict  = (id)     => request(`${META}/districts/${id}`, { method: 'DELETE', headers: authHeaders() });
+export const importDistricts = (rows)   => request(`${META}/districts/import`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(rows) });
+
+export const getStructures    = ()       => request(`${META}/structures`,    { headers: authHeaders() });
+export const createStructure  = (data)   => request(`${META}/structures`,    { method: 'POST', headers: authHeaders(), body: JSON.stringify(data) });
+export const updateStructure  = (id, d)  => request(`${META}/structures/${id}`, { method: 'PUT',  headers: authHeaders(), body: JSON.stringify(d) });
+export const deleteStructure  = (id)     => request(`${META}/structures/${id}`, { method: 'DELETE', headers: authHeaders() });
+export const importStructures = (rows)   => request(`${META}/structures/import`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(rows) });
+
+export const getVaccins    = ()       => request(`${META}/vaccins`,    { headers: authHeaders() });
+export const createVaccin  = (data)   => request(`${META}/vaccins`,    { method: 'POST', headers: authHeaders(), body: JSON.stringify(data) });
+export const updateVaccin  = (id, d)  => request(`${META}/vaccins/${id}`, { method: 'PUT',  headers: authHeaders(), body: JSON.stringify(d) });
+export const deleteVaccin  = (id)     => request(`${META}/vaccins/${id}`, { method: 'DELETE', headers: authHeaders() });
+export const importVaccins = (rows)   => request(`${META}/vaccins/import`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(rows) });
+
+export const getCalendrier    = ()       => request(`${META}/calendrier`,    { headers: authHeaders() });
+export const createCalendrier = (data)   => request(`${META}/calendrier`,    { method: 'POST', headers: authHeaders(), body: JSON.stringify(data) });
+export const updateCalendrier = (id, d)  => request(`${META}/calendrier/${id}`, { method: 'PUT',  headers: authHeaders(), body: JSON.stringify(d) });
+export const deleteCalendrier = (id)     => request(`${META}/calendrier/${id}`, { method: 'DELETE', headers: authHeaders() });
+export const importCalendrier = (rows)   => request(`${META}/calendrier/import`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(rows) });
+
 // ── Broadcasts ────────────────────────────────────────────────
 export function getBroadcasts() {
     return request('/api/broadcasts', { headers: authHeaders() });
+}
+
+export function getBroadcastById(id) {
+    return request(`/api/broadcasts/${id}`, { headers: authHeaders() });
+}
+
+export async function uploadBroadcastMedia(file, mediaType) {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('mediaType', mediaType);
+    const res = await fetch('/api/broadcasts/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        body: form,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Erreur upload.');
+    return data; // { url, publicId, mediaType }
 }
 
 export function sendBroadcast(data) {

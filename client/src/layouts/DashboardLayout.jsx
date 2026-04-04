@@ -1,19 +1,33 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { NavLink, useNavigate, useLocation, Outlet } from 'react-router-dom';
 
 const NAV_ITEMS = [
-    { to: '/dashboard',              icon: '🏠', label: 'Dashboard', end: true },
-    { to: '/dashboard/discussions',  icon: '💬', label: 'Discussions' },
-    { to: '/dashboard/contacts',     icon: '📋', label: 'Contacts' },
+    { to: '/dashboard',             icon: '🏠', label: 'Dashboard', end: true },
+    { to: '/dashboard/discussions', icon: '💬', label: 'Discussions' },
+    { to: '/dashboard/contacts',    icon: '📋', label: 'Contacts' },
     {
+        key: 'utilisateurs',
         icon: '👥', label: 'Utilisateurs',
+        prefix: '/dashboard/utilisateurs',
         children: [
-            { to: '/dashboard/utilisateurs',         label: 'Liste des utilisateurs' },
-            { to: '/dashboard/utilisateurs/roles',   label: 'Rôles & permissions' },
+            { to: '/dashboard/utilisateurs',        label: 'Liste des utilisateurs' },
+            { to: '/dashboard/utilisateurs/roles',  label: 'Rôles & permissions' },
         ]
     },
-    { to: '/dashboard/diffusions',    icon: '📣', label: 'Diffusions' },
-    { to: '/dashboard/parametres',   icon: '⚙️', label: 'Paramètres' },
+    { to: '/dashboard/diffusions',  icon: '📣', label: 'Diffusions' },
+    {
+        key: 'metadonnees',
+        icon: '🗂️', label: 'Métadonnées',
+        prefix: '/dashboard/metadonnees',
+        children: [
+            { to: '/dashboard/metadonnees/regions',    label: 'Régions' },
+            { to: '/dashboard/metadonnees/districts',  label: 'Districts' },
+            { to: '/dashboard/metadonnees/structures', label: 'Structures' },
+            { to: '/dashboard/metadonnees/vaccins',    label: 'Vaccins' },
+            { to: '/dashboard/metadonnees/calendrier', label: 'Calendrier vaccinal' },
+        ]
+    },
+    { to: '/dashboard/parametres', icon: '⚙️', label: 'Paramètres' },
 ];
 
 export default function DashboardLayout() {
@@ -21,8 +35,18 @@ export default function DashboardLayout() {
     const location  = useLocation();
     const [collapsed, setCollapsed] = useState(false);
 
-    const usersOpen = location.pathname.startsWith('/dashboard/utilisateurs');
-    const [submenuOpen, setSubmenuOpen] = useState(usersOpen);
+    // État des sous-menus : { utilisateurs: bool, metadonnees: bool }
+    const [openMenus, setOpenMenus] = useState(() => {
+        const init = {};
+        NAV_ITEMS.forEach(item => {
+            if (item.key) init[item.key] = location.pathname.startsWith(item.prefix);
+        });
+        return init;
+    });
+
+    function toggleMenu(key) {
+        setOpenMenus(m => ({ ...m, [key]: !m[key] }));
+    }
 
     function handleLogout() {
         localStorage.removeItem('token');
@@ -47,22 +71,23 @@ export default function DashboardLayout() {
                 <nav className="sidebar-nav">
                     {NAV_ITEMS.map(item => {
                         if (item.children) {
-                            const isGroupActive = location.pathname.startsWith('/dashboard/utilisateurs');
+                            const isActive = location.pathname.startsWith(item.prefix);
+                            const isOpen   = openMenus[item.key];
                             return (
-                                <div key={item.label} className="sidebar-group">
+                                <div key={item.key} className="sidebar-group">
                                     <button
-                                        className={`sidebar-link sidebar-group-btn ${isGroupActive ? 'active' : ''}`}
-                                        onClick={() => !collapsed && setSubmenuOpen(o => !o)}
+                                        className={`sidebar-link sidebar-group-btn ${isActive ? 'active' : ''}`}
+                                        onClick={() => !collapsed && toggleMenu(item.key)}
                                     >
                                         <span className="sidebar-icon">{item.icon}</span>
                                         {!collapsed && (
                                             <>
                                                 <span className="sidebar-label">{item.label}</span>
-                                                <span className="sidebar-chevron">{submenuOpen ? '▾' : '▸'}</span>
+                                                <span className="sidebar-chevron">{isOpen ? '▾' : '▸'}</span>
                                             </>
                                         )}
                                     </button>
-                                    {!collapsed && submenuOpen && (
+                                    {!collapsed && isOpen && (
                                         <div className="sidebar-submenu">
                                             {item.children.map(child => (
                                                 <NavLink

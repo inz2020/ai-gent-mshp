@@ -1,5 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import * as XLSX from 'xlsx';
 import { getContacts, getContactConversations } from '../../api/index.js';
+import { usePagination } from '../../hooks/usePagination.js';
+import Pagination from '../../components/Pagination.jsx';
 
 const LANG_LABEL = { fr: 'Français', ha: 'Hausa', hausa: 'Hausa', unknown: 'Inconnu' };
 const VAX_BADGE  = { 'A jour': 'dt-badge-actif', 'En retard': 'dt-badge-danger', 'Inconnu': 'dt-badge-inactif' };
@@ -37,6 +40,28 @@ export default function Contacts() {
         c.nom.toLowerCase().includes(search.toLowerCase()) ||
         (c.region?.nom ?? '').toLowerCase().includes(search.toLowerCase())
     );
+    const { paged, page, setPage, totalPages } = usePagination(filtered);
+
+    function exportExcel() {
+        const rows = filtered.map(c => ({
+            'N° WhatsApp':       `+${c.whatsappId}`,
+            'Nom':               c.nom,
+            'Région':            c.region?.nom ?? '',
+            'District':          c.district?.nom ?? '',
+            'Langue':            LANG_LABEL[c.langue] ?? c.langue,
+            'Statut vaccin':     c.statutVaxEnfants,
+            'Dernière position': c.dernierePosition?.latitude != null
+                                    ? `${c.dernierePosition.latitude}, ${c.dernierePosition.longitude}`
+                                    : '',
+            'Date inscription':  new Date(c.dateInscription).toLocaleDateString('fr-FR'),
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(rows);
+        ws['!cols'] = [18, 24, 16, 16, 12, 16, 24, 16].map(w => ({ wch: w }));
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Contacts');
+        XLSX.writeFile(wb, `contacts_esante_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    }
 
     return (
         <div className="dash-page">
@@ -53,6 +78,9 @@ export default function Contacts() {
                     onChange={e => setSearch(e.target.value)}
                 />
                 <button className="dt-btn" onClick={fetchContacts}>↻ Actualiser</button>
+                <button className="dt-btn dt-btn-export" onClick={exportExcel} disabled={filtered.length === 0}>
+                    ⬇ Exporter Excel ({filtered.length})
+                </button>
             </div>
 
             <div className="dt-wrapper">
@@ -74,7 +102,7 @@ export default function Contacts() {
                             <tr><td colSpan="8" className="dt-center">Chargement...</td></tr>
                         ) : filtered.length === 0 ? (
                             <tr><td colSpan="8" className="dt-center">Aucun contact trouvé.</td></tr>
-                        ) : filtered.map(c => (
+                        ) : paged.map(c => (
                             <tr key={c._id}>
                                 <td><span className="dt-mono">+{c.whatsappId}</span></td>
                                 <td>
@@ -105,7 +133,10 @@ export default function Contacts() {
                 </table>
             </div>
 
-            <div className="dt-footer">{filtered.length} contact{filtered.length !== 1 ? 's' : ''}</div>
+            <div className="dt-footer">
+                <span>{filtered.length} contact{filtered.length !== 1 ? 's' : ''}</span>
+                <Pagination page={page} totalPages={totalPages} onChange={setPage} />
+            </div>
 
             {/* Panneau détail contact */}
             {selected && (
