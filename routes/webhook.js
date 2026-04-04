@@ -463,12 +463,18 @@ async function processLocation(lat, lng, userPhone) {
     // Persistance
     try {
         const contact = await getOrCreateContact(userPhone);
+
+        // Sauvegarde de la dernière position connue du contact
+        contact.dernierePosition = { latitude: lat, longitude: lng, updatedAt: new Date() };
+        await contact.save();
+
         const conv = await getOrCreateConversation(contact._id, 'unknown');
         await Message.create({
             conversationId: conv._id,
             emetteurType: 'humain',
-            typeContenu: 'text',
+            typeContenu: 'location',
             texteBrut: `[LOCALISATION] lat:${lat}, lng:${lng}`,
+            coordonnees: { latitude: lat, longitude: lng },
             langue: 'unknown'
         });
         await Message.create({
@@ -481,6 +487,7 @@ async function processLocation(lat, lng, userPhone) {
         conv.nbMessages += 2;
         conv.derniereMiseAJour = new Date();
         await conv.save();
+        console.log(`[DB] Position sauvegardée pour ${userPhone} : lat=${lat}, lng=${lng}`);
     } catch (dbErr) {
         console.error('[DB] Erreur persistance localisation:', dbErr.message);
     }

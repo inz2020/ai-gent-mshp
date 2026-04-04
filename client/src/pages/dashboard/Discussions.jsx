@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getConversations, getConversationMessages } from '../../api/index.js';
 
 const LANG_LABEL   = { fr: 'Français', ha: 'Hausa', unknown: 'Inconnu' };
@@ -13,8 +13,15 @@ export default function Discussions() {
     const [selected, setSelected] = useState(null);
     const [messages, setMessages] = useState([]);
     const [msgLoad, setMsgLoad]   = useState(false);
+    const threadEndRef            = useRef(null);
 
     useEffect(() => { fetchConvs(); }, []);
+
+    useEffect(() => {
+        if (!msgLoad && messages.length > 0) {
+            threadEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [messages, msgLoad]);
 
     async function fetchConvs() {
         setLoading(true);
@@ -25,6 +32,7 @@ export default function Discussions() {
 
     async function openThread(conv) {
         setSelected(conv);
+        setMessages([]);
         setMsgLoad(true);
         try { setMessages(await getConversationMessages(conv._id)); }
         catch { setMessages([]); }
@@ -129,33 +137,47 @@ export default function Discussions() {
                                 <p className="dt-center">Chargement des messages...</p>
                             ) : messages.length === 0 ? (
                                 <p className="dt-muted">Aucun message enregistré.</p>
-                            ) : messages.map(m => (
-                                <div
-                                    key={m._id}
-                                    className={`thread-msg ${m.emetteurType === 'humain' ? 'thread-msg-user' : 'thread-msg-bot'}`}
-                                >
-                                    <div className="thread-msg-header">
-                                        <span className="thread-sender">
-                                            {m.emetteurType === 'humain' ? '👤 Utilisateur'
-                                                : m.emetteurType === 'agent_ia' ? '🤖 Hawa'
-                                                : '👨‍⚕️ Opérateur'}
-                                        </span>
-                                        <span className="thread-time">
-                                            {new Date(m.dateEnvoi).toLocaleString('fr-FR')}
-                                        </span>
-                                    </div>
-                                    <div className="thread-msg-body">
-                                        {m.typeContenu === 'audio' && m.audioUrl ? (
-                                            <>
-                                                {m.texteBrut && <p style={{ marginBottom: 6, fontStyle: 'italic', color: '#64748b' }}>"{m.texteBrut}"</p>}
-                                                <audio controls src={m.audioUrl} style={{ width: '100%' }} />
-                                            </>
-                                        ) : (
-                                            <p style={{ whiteSpace: 'pre-wrap' }}>{m.texteBrut || <em className="dt-muted">Message vide</em>}</p>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
+                            ) : (
+                                <>
+                                    {messages.map(m => (
+                                        <div
+                                            key={m._id}
+                                            className={`thread-msg ${m.emetteurType === 'humain' ? 'thread-msg-user' : 'thread-msg-bot'}`}
+                                        >
+                                            <div className="thread-msg-header">
+                                                <span className="thread-sender">
+                                                    {m.emetteurType === 'humain' ? '👤 Utilisateur'
+                                                        : m.emetteurType === 'agent_ia' ? '🤖 Hawa'
+                                                        : '👨‍⚕️ Opérateur'}
+                                                </span>
+                                                <span className="thread-time">
+                                                    {new Date(m.dateEnvoi).toLocaleString('fr-FR')}
+                                                </span>
+                                            </div>
+                                            <div className="thread-msg-body">
+                                                {m.typeContenu === 'location' && m.coordonnees?.latitude != null ? (
+                                                    <a
+                                                        href={`https://www.openstreetmap.org/?mlat=${m.coordonnees.latitude}&mlon=${m.coordonnees.longitude}&zoom=14`}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        style={{ color: '#0a7c4e', fontSize: '0.88rem' }}
+                                                    >
+                                                        📍 Position GPS — {m.coordonnees.latitude.toFixed(5)}, {m.coordonnees.longitude.toFixed(5)}
+                                                    </a>
+                                                ) : m.typeContenu === 'audio' && m.audioUrl ? (
+                                                    <>
+                                                        {m.texteBrut && <p style={{ marginBottom: 6, fontStyle: 'italic', color: '#64748b' }}>"{m.texteBrut}"</p>}
+                                                        <audio controls src={m.audioUrl} style={{ width: '100%' }} />
+                                                    </>
+                                                ) : (
+                                                    <p style={{ whiteSpace: 'pre-wrap' }}>{m.texteBrut || <em className="dt-muted">Message vide</em>}</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <div ref={threadEndRef} />
+                                </>
+                            )}
                         </div>
 
                         <div className="modal-footer">

@@ -11,6 +11,7 @@ import Contacts from './pages/dashboard/Contacts.jsx';
 import Utilisateurs from './pages/dashboard/Utilisateurs.jsx';
 import Parametres from './pages/dashboard/Parametres.jsx';
 import RolesPermissions from './pages/dashboard/RolesPermissions.jsx';
+import PrivateRoute from './components/PrivateRoute.jsx';
 
 function PublicLayout() {
   return (
@@ -31,14 +32,16 @@ export default function App() {
       </Route>
       <Route path="/connexion" element={<Login />} />
 
-      {/* Dashboard */}
-      <Route path="/dashboard" element={<DashboardLayout />}>
-        <Route index element={<DashHome />} />
-        <Route path="discussions"   element={<Discussions />} />
-        <Route path="contacts"      element={<Contacts />} />
-        <Route path="utilisateurs"  element={<Utilisateurs />} />
-        <Route path="utilisateurs/roles" element={<RolesPermissions />} />
-        <Route path="parametres"    element={<Parametres />} />
+      {/* Dashboard — protégé */}
+      <Route element={<PrivateRoute />}>
+        <Route path="/dashboard" element={<DashboardLayout />}>
+          <Route index element={<DashHome />} />
+          <Route path="discussions"        element={<Discussions />} />
+          <Route path="contacts"           element={<Contacts />} />
+          <Route path="utilisateurs"       element={<Utilisateurs />} />
+          <Route path="utilisateurs/roles" element={<RolesPermissions />} />
+          <Route path="parametres"         element={<Parametres />} />
+        </Route>
       </Route>
     </Routes>
   );

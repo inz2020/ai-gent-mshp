@@ -7,7 +7,12 @@ const ContactSchema = new mongoose.Schema({
     district: { type: mongoose.Schema.Types.ObjectId, ref: 'District' },
     langue: { type: String, default: 'hausa' },
     dateInscription: { type: Date, default: Date.now },
-    statutVaxEnfants: { type: String, enum: ['A jour', 'En retard', 'Inconnu'], default: 'Inconnu' }
+    statutVaxEnfants: { type: String, enum: ['A jour', 'En retard', 'Inconnu'], default: 'Inconnu' },
+    dernierePosition: {
+        latitude:  { type: Number, default: null },
+        longitude: { type: Number, default: null },
+        updatedAt: { type: Date,   default: null }
+    }
 });
 export default mongoose.model('Contact', ContactSchema);
 

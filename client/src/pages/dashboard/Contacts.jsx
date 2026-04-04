@@ -123,6 +123,26 @@ export default function Contacts() {
                                 <div><strong>District</strong><span>{selected.district?.nom ?? '—'}</span></div>
                                 <div><strong>Statut vaccin</strong><span>{selected.statutVaxEnfants}</span></div>
                                 <div><strong>Inscrit le</strong><span>{new Date(selected.dateInscription).toLocaleDateString('fr-FR')}</span></div>
+                                <div>
+                                    <strong>Dernière position</strong>
+                                    <span>
+                                        {selected.dernierePosition?.latitude != null ? (
+                                            <a
+                                                href={`https://www.openstreetmap.org/?mlat=${selected.dernierePosition.latitude}&mlon=${selected.dernierePosition.longitude}&zoom=14`}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                style={{ color: '#0a7c4e', fontFamily: 'monospace', fontSize: '0.85rem' }}
+                                            >
+                                                📍 {selected.dernierePosition.latitude.toFixed(4)}, {selected.dernierePosition.longitude.toFixed(4)}
+                                                {selected.dernierePosition.updatedAt && (
+                                                    <span style={{ color: '#94a3b8', marginLeft: 6, fontFamily: 'inherit' }}>
+                                                        ({new Date(selected.dernierePosition.updatedAt).toLocaleDateString('fr-FR')})
+                                                    </span>
+                                                )}
+                                            </a>
+                                        ) : <span className="dt-muted">Non partagée</span>}
+                                    </span>
+                                </div>
                             </div>
 
                             <h3 style={{ margin: '16px 0 8px', fontSize: 14, color: '#64748b' }}>
