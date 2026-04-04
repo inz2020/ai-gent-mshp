@@ -7,28 +7,40 @@ const ROLES = [
         description: 'Accès complet à toutes les fonctionnalités du tableau de bord.',
         color: '#7c3aed',
         bg: '#ede9fe',
-        permissions: [
-            'Voir le dashboard',
-            'Gérer les utilisateurs',
-            'Modifier les rôles et permissions',
-            'Voir les discussions',
-            'Voir les contacts',
-            'Configurer les paramètres',
-            'Accéder aux statistiques',
-        ]
+        locked: true,
     },
     {
         id: 'agent',
-        label: 'Agent',
-        description: 'Accès limité aux discussions et contacts. Pas de gestion des utilisateurs.',
+        label: 'Agent de santé',
+        description: 'Accès aux discussions et contacts. Pas de gestion des utilisateurs.',
         color: '#0369a1',
         bg: '#e0f2fe',
-        permissions: [
-            'Voir le dashboard',
-            'Voir les discussions',
-            'Voir les contacts',
-        ]
-    }
+        locked: false,
+    },
+    {
+        id: 'staff',
+        label: 'Staff',
+        description: 'Accès en lecture aux discussions, contacts et statistiques.',
+        color: '#0f766e',
+        bg: '#ccfbf1',
+        locked: false,
+    },
+    {
+        id: 'user',
+        label: 'Utilisateur',
+        description: 'Accès minimal : dashboard uniquement.',
+        color: '#b45309',
+        bg: '#fef3c7',
+        locked: false,
+    },
+    {
+        id: 'autre',
+        label: 'Autre',
+        description: 'Rôle personnalisé sans accès par défaut.',
+        color: '#6b7280',
+        bg: '#f3f4f6',
+        locked: false,
+    },
 ];
 
 // Toutes les permissions existantes
@@ -46,6 +58,9 @@ const ALL_PERMISSIONS = [
 const INITIAL_MATRIX = {
     admin: new Set(['dashboard', 'discussions', 'contacts', 'users_view', 'users_manage', 'roles_manage', 'stats', 'settings']),
     agent: new Set(['dashboard', 'discussions', 'contacts']),
+    staff: new Set(['dashboard', 'discussions', 'contacts', 'users_view', 'stats']),
+    user:  new Set(['dashboard']),
+    autre: new Set([]),
 };
 
 export default function RolesPermissions() {
@@ -53,7 +68,8 @@ export default function RolesPermissions() {
     const [saved, setSaved]   = useState(false);
 
     function toggle(roleId, permId) {
-        if (roleId === 'admin') return; // admin toujours tout
+        const role = ROLES.find(r => r.id === roleId);
+        if (role?.locked) return;
         setMatrix(prev => {
             const next = new Set(prev[roleId]);
             next.has(permId) ? next.delete(permId) : next.add(permId);
@@ -112,7 +128,7 @@ export default function RolesPermissions() {
                                     </td>
                                     {ROLES.map(role => {
                                         const checked = matrix[role.id].has(perm.id);
-                                        const locked  = role.id === 'admin';
+                                        const locked  = role.locked;
                                         return (
                                             <td key={role.id} className="perm-cell">
                                                 <label className={`perm-toggle ${locked ? 'locked' : ''}`}>

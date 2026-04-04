@@ -727,6 +727,9 @@ main { flex: 1; }
 }
 .dt-badge-admin   { background: #ede9fe; color: #7c3aed; }
 .dt-badge-agent   { background: #e0f2fe; color: #0369a1; }
+.dt-badge-staff   { background: #ccfbf1; color: #0f766e; }
+.dt-badge-user    { background: #fef3c7; color: #b45309; }
+.dt-badge-autre   { background: #f3f4f6; color: #6b7280; }
 .dt-badge-actif   { background: #dcfce7; color: #16a34a; }
 .dt-badge-inactif { background: #fee2e2; color: #dc2626; }
 .dt-badge-danger  { background: #fff7ed; color: #ea580c; }

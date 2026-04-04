@@ -2,7 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { getUsers, createUser, updateUser, deleteUser } from '../../api/index.js';
 import { validerMotDePasse, PASSWORD_RULES } from '../../utils/passwordPolicy.js';
 
-const ROLES = ['admin', 'agent'];
+const ROLES = [
+    { value: 'admin',  label: 'Administrateur' },
+    { value: 'agent',  label: 'Agent de santé'  },
+    { value: 'staff',  label: 'Staff'           },
+    { value: 'user',   label: 'Utilisateur'     },
+    { value: 'autre',  label: 'Autre'           },
+];
 const EMPTY_FORM = { nom: '', email: '', password: '', role: 'agent', actif: true };
 
 export default function Utilisateurs() {
@@ -184,7 +190,7 @@ export default function Utilisateurs() {
                                 <div className="form-group">
                                     <label>Rôle</label>
                                     <select name="role" value={form.role} onChange={handleFormChange}>
-                                        {ROLES.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
+                                        {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                                     </select>
                                 </div>
                                 <div className="form-group form-group-check">

@@ -77,6 +77,8 @@ function resolveFinalLanguage(whisperLang, textLang) {
 }
 
 // ─── Contrôle qualité audio (via segments Whisper) ──────────
+// Seuils assouplis pour les langues africaines (Hausa, etc.)
+// Whisper est moins confiant sur ces langues → log_prob plus bas, no_speech plus élevé
 
 function checkAudioQuality(transcription) {
     const text = transcription.text?.trim() ?? '';
@@ -94,13 +96,13 @@ function checkAudioQuality(transcription) {
 
     console.log(`[AUDIO QUALITY] no_speech: ${avgNoSpeech.toFixed(2)}, logprob: ${avgLogProb.toFixed(2)}, compression: ${avgCompRatio.toFixed(2)}`);
 
-    if (avgNoSpeech > 0.65) {
+    if (avgNoSpeech > 0.85) {
         return { ok: false, reason: 'Audio trop bruité ou silencieux. / Murya ba ta bayyana ba.' };
     }
-    if (avgLogProb < -1.1) {
+    if (avgLogProb < -1.5) {
         return { ok: false, reason: 'Audio peu clair, veuillez réessayer. / Murya ba ta fito sosai.' };
     }
-    if (avgCompRatio > 2.4) {
+    if (avgCompRatio > 3.0) {
         return { ok: false, reason: 'Audio non reconnu. Parlez distinctement. / Fadi a fili.' };
     }
 
@@ -244,10 +246,59 @@ async function sendWhatsAppText(to, text) {
 }
 
 function buildLangInstruction(lang, isAudio = false) {
-    const src = isAudio ? 'Message audio' : 'Message';
+    if (isAudio) {
+        return lang === 'ha'
+            ? `\n\nIMPORTANT: Message audio en Hausa. Réponds UNIQUEMENT en Hausa. 2 à 3 phrases simples. Pas de symboles, pas de listes, pas d'astérisques — texte brut uniquement car ta réponse sera lue à voix haute.`
+            : `\n\nIMPORTANT: Message audio en français. Réponds UNIQUEMENT en français. 2 à 3 phrases simples et naturelles. Pas de symboles, pas de listes, pas d'astérisques — texte brut uniquement car ta réponse sera lue à voix haute.`;
+    }
     return lang === 'ha'
-        ? `\n\nIMPORTANT: ${src} en Hausa. Réponds UNIQUEMENT en Hausa. Maximum 3 phrases.`
-        : `\n\nIMPORTANT: ${src} en français. Réponds UNIQUEMENT en français. Maximum 3 phrases courtes et directes.`;
+        ? `\n\nIMPORTANT: Message en Hausa. Réponds UNIQUEMENT en Hausa. Maximum 4 phrases.`
+        : `\n\nIMPORTANT: Message en français. Réponds UNIQUEMENT en français. Maximum 4 phrases courtes et directes.`;
+}
+
+async function ttsElevenLabs(text) {
+    const res = await axios.post(
+        `https://api.elevenlabs.io/v1/text-to-speech/${process.env.VOICE_ID}`,
+        {
+            text,
+            model_id: 'eleven_multilingual_v2',
+            voice_settings: { stability: 0.55, similarity_boost: 0.80, style: 0.20, use_speaker_boost: true }
+        },
+        {
+            headers: { 'xi-api-key': process.env.ELEVEN_KEY, 'Content-Type': 'application/json' },
+            responseType: 'arraybuffer'
+        }
+    );
+    return Buffer.from(res.data);
+}
+
+async function ttsOpenAI(text) {
+    const res = await axios.post(
+        'https://api.openai.com/v1/audio/speech',
+        { model: 'tts-1-hd', voice: 'shimmer', input: text, speed: 0.92 },
+        { headers: { Authorization: `Bearer ${process.env.OPENAI_KEY}` }, responseType: 'arraybuffer' }
+    );
+    return Buffer.from(res.data);
+}
+
+async function generateTTS(text, lang) {
+    // ElevenLabs pour le Hausa (meilleur support multilingue africain)
+    // OpenAI shimmer pour le français (voix plus naturelle)
+    if (lang === 'ha') {
+        return ttsElevenLabs(text);
+    }
+    return ttsOpenAI(text);
+}
+
+async function getRecentMessages(conversationId, limit = 6) {
+    const msgs = await Message.find({ conversationId })
+        .sort({ dateEnvoi: -1 })
+        .limit(limit)
+        .lean();
+    return msgs.reverse().map(m => ({
+        role: m.emetteurType === 'humain' ? 'user' : 'assistant',
+        content: m.texteBrut || ''
+    })).filter(m => m.content.length > 0);
 }
 
 // ─── Traitement texte ────────────────────────────────────────
@@ -295,6 +346,10 @@ async function processAudio(mediaId, userPhone) {
     const metaHeaders = { Authorization: `Bearer ${process.env.META_TOKEN}` };
     console.log('[1/6] Téléchargement audio, mediaId:', mediaId);
 
+    // Récupérer le contact en avance pour avoir la langue préférée connue
+    const contact = await getOrCreateContact(userPhone);
+    const knownLang = contact.langue === 'hausa' ? 'ha' : contact.langue === 'fr' ? 'fr' : null;
+
     const mediaRes = await axios.get(`https://graph.facebook.com/v22.0/${mediaId}`, { headers: metaHeaders });
     const audioRes = await axios.get(mediaRes.data.url, { headers: metaHeaders, responseType: 'arraybuffer' });
 
@@ -306,21 +361,23 @@ async function processAudio(mediaId, userPhone) {
     fs.writeFileSync(inputFile, audioBuffer);
     console.log('[2/6] Audio téléchargé:', audioBuffer.byteLength, 'bytes');
 
-    // Transcription Whisper avec métadonnées complètes
-    const transcription = await openai.audio.transcriptions.create({
+    // Transcription Whisper — hint de langue si connue (améliore la précision)
+    const whisperParams = {
         file: fs.createReadStream(inputFile),
-        model: "whisper-1",
-        response_format: "verbose_json",
-        timestamp_granularities: ["segment"]
-    });
+        model: 'whisper-1',
+        response_format: 'verbose_json',
+        timestamp_granularities: ['segment'],
+        ...(knownLang === 'ha' && { language: 'ha' }),
+        ...(knownLang === 'fr' && { language: 'fr' })
+    };
+    const transcription = await openai.audio.transcriptions.create(whisperParams);
     console.log('[3/6] Whisper lang:', transcription.language, '| Texte:', transcription.text);
 
-    // Filtre qualité audio
+    // Filtre qualité
     const quality = checkAudioQuality(transcription);
     if (!quality.ok) {
         console.log('[AUDIO] Qualité insuffisante:', quality.reason);
         fs.unlink(inputFile, () => {});
-        fs.unlink(outputFile, () => {});
         await sendWhatsAppText(userPhone, quality.reason);
         return;
     }
@@ -329,42 +386,41 @@ async function processAudio(mediaId, userPhone) {
     if (isGreeting(transcription.text)) {
         console.log('[AUDIO] Salutation → bienvenue');
         fs.unlink(inputFile, () => {});
-        fs.unlink(outputFile, () => {});
         await sendGreetingResponse(userPhone);
         return;
     }
 
-    // Détection de langue croisée : Whisper + analyse du texte transcrit
+    // Détection de langue croisée : Whisper + analyse texte + langue connue du contact
     const textLang = detectTextLanguage(transcription.text);
-    const finalLang = resolveFinalLanguage(transcription.language, textLang);
-    console.log(`[AUDIO] Whisper: ${transcription.language} | Analyse texte: ${textLang} | Langue finale: ${finalLang}`);
+    let finalLang = resolveFinalLanguage(transcription.language, textLang);
+    if (finalLang === 'unknown' && knownLang) finalLang = knownLang;
+    console.log(`[AUDIO] Whisper: ${transcription.language} | Texte: ${textLang} | Contact: ${knownLang} | Final: ${finalLang}`);
 
     if (finalLang === 'unknown') {
         fs.unlink(inputFile, () => {});
-        fs.unlink(outputFile, () => {});
         await sendWhatsAppText(userPhone, DEFAULT_MESSAGES.unknown);
         return;
     }
 
-    // Génération réponse GPT
+    // Contexte conversationnel (6 derniers échanges)
+    const conv = await getOrCreateConversation(contact._id, finalLang);
+    const history = await getRecentMessages(conv._id);
+
+    // Génération réponse GPT avec historique
     const response = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        max_tokens: 300,
+        model: 'gpt-4o-mini',
+        max_tokens: 200,
         messages: [
-            { role: "system", content: SYSTEM_PROMPT + buildLangInstruction(finalLang, true) },
-            { role: "user", content: transcription.text }
+            { role: 'system', content: SYSTEM_PROMPT + buildLangInstruction(finalLang, true) },
+            ...history,
+            { role: 'user', content: transcription.text }
         ]
     });
     const replyText = response.choices[0].message.content;
     console.log(`[4/6] Réponse GPT (${finalLang}): ${replyText}`);
 
-    // Synthèse vocale
-    const ttsResponse = await axios.post(
-        'https://api.openai.com/v1/audio/speech',
-        { model: 'tts-1-hd', voice: 'shimmer', input: prepareVoiceText(replyText), speed: 0.92 },
-        { headers: { Authorization: `Bearer ${process.env.OPENAI_KEY}` }, responseType: 'arraybuffer' }
-    );
-    const ttsBuffer = Buffer.from(ttsResponse.data);
+    // TTS : ElevenLabs pour Hausa, OpenAI pour français
+    const ttsBuffer = await generateTTS(prepareVoiceText(replyText), finalLang);
     console.log('[5/6] Audio TTS généré:', ttsBuffer.byteLength, 'bytes');
 
     // Upload Cloudinary
@@ -378,23 +434,17 @@ async function processAudio(mediaId, userPhone) {
     console.log('[6/6] Cloudinary URL:', uploadResult.secure_url);
 
     // Envoi WhatsApp
-    const sendRes = await axios.post(
+    await axios.post(
         `https://graph.facebook.com/v22.0/${process.env.PHONE_ID}/messages`,
-        {
-            messaging_product: "whatsapp",
-            to: userPhone,
-            type: "audio",
-            audio: { link: uploadResult.secure_url }
-        },
+        { messaging_product: 'whatsapp', to: userPhone, type: 'audio', audio: { link: uploadResult.secure_url } },
         { headers: { Authorization: `Bearer ${process.env.META_TOKEN}`, 'Content-Type': 'application/json' } }
     );
-    console.log(`[OK] Réponse envoyée à ${userPhone} | Meta:`, JSON.stringify(sendRes.data));
+    console.log(`[OK] Réponse audio envoyée à ${userPhone}`);
 
     fs.unlink(inputFile, () => {});
     fs.unlink(outputFile, () => {});
 
     try {
-        const contact = await getOrCreateContact(userPhone);
         await saveMessages(contact._id, finalLang, {
             humanText: transcription.text,
             aiText: replyText,
