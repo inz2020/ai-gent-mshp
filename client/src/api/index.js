@@ -61,6 +61,14 @@ export function getContacts() {
     return request('/api/contacts', { headers: authHeaders() });
 }
 
+export function createContact(data) {
+    return request('/api/contacts', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify(data),
+    });
+}
+
 export function getContactConversations(id) {
     return request(`/api/contacts/${id}/conversations`, { headers: authHeaders() });
 }

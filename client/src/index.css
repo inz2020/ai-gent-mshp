@@ -755,6 +755,52 @@ main { flex: 1; }
 .detail-grid strong { font-size: 0.75rem; color: var(--gray-400); text-transform: uppercase; letter-spacing: 0.04em; }
 .detail-grid span   { font-size: 0.9rem; color: var(--gray-800); font-weight: 500; }
 
+/* ── Sélecteur code pays ─────────────────────────────────── */
+.cc-phone-row { display: flex; gap: 8px; align-items: stretch; }
+
+.cc-wrapper {
+  position: relative; flex-shrink: 0;
+}
+.cc-wrapper:focus-within .cc-dropdown { display: flex; }
+
+.cc-selected {
+  display: flex; align-items: center; gap: 6px;
+  padding: 10px 11px; border: 1.5px solid #e5e7eb; border-radius: 8px;
+  cursor: pointer; background: var(--white); font-size: 0.88rem;
+  white-space: nowrap; transition: border-color var(--transition);
+  min-width: 90px;
+}
+.cc-selected:focus, .cc-wrapper:focus-within .cc-selected { border-color: var(--green); }
+.cc-code { font-weight: 700; color: var(--gray-800); }
+
+.cc-dropdown {
+  display: none; flex-direction: column;
+  position: absolute; top: calc(100% + 4px); left: 0; z-index: 300;
+  background: var(--white); border: 1.5px solid #e5e7eb; border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12); min-width: 230px; overflow: hidden;
+}
+.cc-search {
+  padding: 9px 12px; border: none; border-bottom: 1px solid #f3f4f6;
+  font-size: 0.85rem; font-family: inherit; outline: none; width: 100%;
+}
+.cc-list { max-height: 200px; overflow-y: auto; }
+.cc-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; cursor: pointer; transition: background var(--transition);
+  font-size: 0.85rem;
+}
+.cc-item:hover  { background: var(--gray-50); }
+.cc-item.active { background: var(--green-light); }
+.cc-item-name { flex: 1; color: var(--gray-800); }
+.cc-item-code { color: var(--gray-400); font-size: 0.78rem; font-weight: 600; white-space: nowrap; }
+
+.cc-number {
+  flex: 1; padding: 10px 13px; border: 1.5px solid #e5e7eb; border-radius: 8px;
+  font-size: 0.9rem; font-family: inherit; outline: none;
+  transition: border-color var(--transition);
+}
+.cc-number:focus { border-color: var(--green); }
+
 /* ─── Fil de messages (Discussions) ─────────────────────────── */
 .thread-body {
   display: flex; flex-direction: column; gap: 12px;
