@@ -245,6 +245,44 @@ async function sendWhatsAppText(to, text) {
     );
 }
 
+// Génère un TTS, upload sur Cloudinary et envoie en audio WhatsApp
+async function sendAudioReply(to, text, lang = 'fr') {
+    try {
+        const ttsBuffer = await generateTTS(prepareVoiceText(text), lang);
+        const tmpFile = `reply_${Date.now()}.mp3`;
+        fs.writeFileSync(tmpFile, ttsBuffer);
+        const uploadResult = await new Promise((resolve, reject) => {
+            cloudinary.uploader.upload_stream(
+                { resource_type: 'video', format: 'mp3', folder: 'chatbot_audio' },
+                (err, result) => err ? reject(err) : resolve(result)
+            ).end(ttsBuffer);
+        });
+        fs.unlink(tmpFile, () => {});
+        await axios.post(
+            `https://graph.facebook.com/v22.0/${process.env.PHONE_ID}/messages`,
+            { messaging_product: 'whatsapp', to, type: 'audio', audio: { link: uploadResult.secure_url } },
+            { headers: { Authorization: `Bearer ${process.env.META_TOKEN}`, 'Content-Type': 'application/json' } }
+        );
+        console.log(`[TTS] Réponse audio envoyée à ${to} (${lang})`);
+    } catch (err) {
+        console.error('[TTS] Échec envoi audio, fallback texte:', err.message);
+        await sendWhatsAppText(to, text);
+    }
+}
+
+// Messages d'erreur par langue — texte oral, sans mélange
+const AUDIO_ERRORS = {
+    quality: {
+        fr: 'Je n\'ai pas bien entendu votre message. Pouvez-vous rapprocher le téléphone et réessayer ?',
+        ha: 'Ban ji saƙon ku da kyau ba. Don Allah sake magana kusa da wayar ku.'
+    },
+    unclear: {
+        fr: 'L\'audio est peu clair. Parlez lentement et distinctement, puis réessayez.',
+        ha: 'Murya ba ta bayyana ba. Don Allah magana sannu sannu, a sake.'
+    },
+    unknown_lang: 'Je n\'ai pas compris la langue de votre message. Parlez en français ou en hausa. Ban gane harshen da aka yi amfani da shi ba. Don Allah yi amfani da Hausa ko Faransanci.'
+};
+
 function buildLangInstruction(lang, isAudio = false) {
     if (isAudio) {
         return lang === 'ha'
@@ -378,7 +416,11 @@ async function processAudio(mediaId, userPhone) {
     if (!quality.ok) {
         console.log('[AUDIO] Qualité insuffisante:', quality.reason);
         fs.unlink(inputFile, () => {});
-        await sendWhatsAppText(userPhone, quality.reason);
+        const errLang = knownLang || 'fr';
+        const errMsg  = quality.reason.includes('bruité') || quality.reason.includes('silencieux')
+            ? AUDIO_ERRORS.quality[errLang]
+            : AUDIO_ERRORS.unclear[errLang];
+        await sendAudioReply(userPhone, errMsg, errLang);
         return;
     }
 
@@ -398,7 +440,8 @@ async function processAudio(mediaId, userPhone) {
 
     if (finalLang === 'unknown') {
         fs.unlink(inputFile, () => {});
-        await sendWhatsAppText(userPhone, DEFAULT_MESSAGES.unknown);
+        // Langue inconnue → réponse bilingue FR + HA via ElevenLabs multilingual
+        await sendAudioReply(userPhone, AUDIO_ERRORS.unknown_lang, 'ha');
         return;
     }
 
