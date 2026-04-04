@@ -21,7 +21,10 @@
     "dev": "nodemon app.js",
     "seed": "node db/seed.js",
     "seed:geo": "node db/seeders/regions_districts.js",
-    "seed:structures": "node db/seeders/structures.js"
+    "seed:structures": "node db/seeders/structures.js",
+    "seed:prod": "node --env-file=.env.prod db/seed.js",
+    "seed:geo:prod": "node --env-file=.env.prod db/seeders/regions_districts.js",
+    "seed:structures:prod": "node --env-file=.env.prod db/seeders/structures.js"
   },
   "keywords": [],
   "author": "",
