@@ -82,6 +82,21 @@ export function getConversationMessages(id) {
     return request(`/api/conversations/${id}/messages`, { headers: authHeaders() });
 }
 
+export function toggleConversationMode(id) {
+    return request(`/api/conversations/${id}/mode`, {
+        method: 'PATCH',
+        headers: authHeaders(),
+    });
+}
+
+export function sendOperatorMessage(id, texte) {
+    return request(`/api/conversations/${id}/send`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ texte }),
+    });
+}
+
 // ── Métadonnées ───────────────────────────────────────────────
 const META = '/api/metadata';
 

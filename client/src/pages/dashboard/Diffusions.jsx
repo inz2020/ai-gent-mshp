@@ -1,45 +1,47 @@
 import { useEffect, useRef, useState } from 'react';
-import { getBroadcasts, getBroadcastById, getContacts, sendBroadcast, uploadBroadcastMedia } from '../../api/index.js';
+import {
+    getBroadcasts, getBroadcastById, getContacts,
+    sendBroadcast, uploadBroadcastMedia,
+} from '../../api/index.js';
 import { usePagination } from '../../hooks/usePagination.js';
 import Pagination from '../../components/Pagination.jsx';
 
-const TEMPLATES = [
-    { name: 'esante',          label: 'eSante — Message de sante',        parametres: 0 },
-    { name: 'rappel_vaccin',   label: 'Rappel de vaccination',             parametres: 2 },
-    { name: 'alerte_campagne', label: 'Alerte campagne de vaccination',    parametres: 1 },
-    { name: 'audio_sante',     label: 'Message audio sante (MP3)',         parametres: 0 },
-    { name: 'image_sante',     label: 'Visuel sante (image)',              parametres: 0 },
-    { name: 'document_guide',  label: 'Guide PDF (document)',              parametres: 0 },
+// ─── Types de variables ───────────────────────────────────────
+const VAR_TYPES = [
+    { value: 'text',      label: 'Texte',    icon: '💬' },
+    { value: 'image',     label: 'Image',    icon: '🖼️' },
+    { value: 'audio',     label: 'Audio',    icon: '🎵' },
+    { value: 'audio_tts', label: 'TTS',      icon: '🔊' },
+    { value: 'document',  label: 'Doc',      icon: '📄' },
+];
+const MEDIA_VAR_TYPES  = ['image','audio','document'];
+const ACCEPT_MAP = { image:'image/*', audio:'audio/*,.mp3,.ogg,.m4a', document:'.pdf,.doc,.docx' };
+
+// ─── Statut ───────────────────────────────────────────────────
+const STATUT_COLOR = { planifie:'dt-badge-inactif', en_cours:'dt-badge-warning', termine:'dt-badge-actif', erreur:'dt-badge-danger' };
+const STATUT_LABEL = { planifie:'Planifie', en_cours:'En cours', termine:'Termine', erreur:'Erreur' };
+
+const LANG_CODES = [
+    { code:'fr',    label:'Francais (fr)'    },
+    { code:'ha',    label:'Hausa (ha)'       },
+    { code:'fr_FR', label:'Francais (fr_FR)' },
+    { code:'en',    label:'Anglais (en)'     },
+    { code:'en_US', label:'Anglais (en_US)'  },
 ];
 
-// Types de media — les types "header" sont mutuellement exclusifs entre eux
-// "texte" (variables) peut se combiner avec n'importe quel header
-const MEDIA_OPTIONS = [
-    { value: 'texte',    label: 'Variables',    icon: '💬', isHeader: false },
-    { value: 'tts',      label: 'Audio TTS',    icon: '🔊', isHeader: true  },
-    { value: 'audio',    label: 'Fichier audio',icon: '🎵', isHeader: true  },
-    { value: 'image',    label: 'Image',        icon: '🖼️', isHeader: true  },
-    { value: 'document', label: 'Document',     icon: '📄', isHeader: true  },
-];
-
-const ACCEPT = { audio: 'audio/*,.ogg,.mp3,.m4a', image: 'image/*', document: '.pdf,.doc,.docx' };
-
-const STATUT_COLOR  = { planifie:'dt-badge-inactif', en_cours:'dt-badge-warning', termine:'dt-badge-actif', erreur:'dt-badge-danger' };
-const STATUT_LABEL  = { planifie:'Planifie', en_cours:'En cours', termine:'Termine', erreur:'Erreur' };
-const TYPE_ICON     = { texte:'💬', tts:'🔊', audio:'🎵', image:'🖼️', document:'📄' };
+// ─── Helpers ──────────────────────────────────────────────────
+let _varId = 0;
+function newVar(type = 'text') {
+    return { _id: ++_varId, type, value:'', ttsText:'', traduire:false, langueTraduction:'ha', mediaUrl:'', mediaFileName:'', uploading:false };
+}
 
 const DEFAULT_FORM = {
-    templateName:    'esante',
-    langueTemplate:  'fr',
-    parametres:      [],
-    mediaTypes:      [],       // tableau : ex. ['image', 'texte']
-    messageAudio:    '',
-    mediaUrl:        '',
-    mediaFileName:   '',
-    traduire:        false,
-    langueTraduction:'ha',
-    dateEnvoi:       '',
-    contactIds:      [],       // IDs des contacts selectionnes
+    templateName:   '',
+    langueTemplate: 'fr',
+    hasVariables:   false,
+    variables:      [],
+    dateEnvoi:      '',
+    contactIds:     [],
 };
 
 export default function Diffusions() {
@@ -47,54 +49,58 @@ export default function Diffusions() {
     const [loading, setLoading]           = useState(true);
     const [modal, setModal]               = useState(false);
     const [sending, setSending]           = useState(false);
-    const [uploading, setUploading]       = useState(false);
     const [success, setSuccess]           = useState('');
     const [error, setError]               = useState('');
     const [form, setForm]                 = useState(DEFAULT_FORM);
-    const [preview, setPreview]           = useState(null);
 
-    // Selecteur de contacts
+    // Contacts
     const [contacts, setContacts]         = useState([]);
     const [contactSearch, setContactSearch] = useState('');
     const [contactPanelOpen, setContactPanelOpen] = useState(false);
     const [loadingContacts, setLoadingContacts]   = useState(false);
 
-    const fileInputRef = useRef(null);
-    const pollingRef   = useRef(null);
+    // Detail broadcast
+    const [detail, setDetail]             = useState(null);
+    const [detailLoading, setDetailLoading] = useState(false);
 
-    const { paged: pagedBroadcasts, page, setPage, totalPages } = usePagination(broadcasts);
-    const selectedTemplate = TEMPLATES.find(t => t.name === form.templateName) ?? TEMPLATES[0];
-    const nbParams    = selectedTemplate.parametres ?? 0;
-    const headerType  = form.mediaTypes.find(t => MEDIA_OPTIONS.find(o => o.value === t)?.isHeader);
-    const hasTexte    = form.mediaTypes.includes('texte');
-    const needsFile   = ['audio', 'image', 'document'].includes(headerType);
-    const needsTTS    = headerType === 'tts';
+    const fileRefs = useRef({});
+    const pollingRef = useRef(null);
 
-    // Contacts filtres par la recherche
-    const filteredContacts = contacts.filter(c => {
-        const q = contactSearch.toLowerCase();
-        return !q || c.nom?.toLowerCase().includes(q) || c.whatsappId?.includes(q);
-    });
+    const { paged, page, setPage, totalPages } = usePagination(broadcasts, 10);
 
     useEffect(() => { fetchBroadcasts(); }, []);
 
+    // Polling "en_cours" — pas de stale closure : on lit l'état via setBroadcasts fonctionnel
     useEffect(() => {
         const hasActive = broadcasts.some(b => b.statut === 'en_cours');
+
         if (hasActive && !pollingRef.current) {
-            pollingRef.current = setInterval(async () => {
-                const active  = broadcasts.filter(b => b.statut === 'en_cours');
-                const updated = await Promise.all(active.map(b => getBroadcastById(b._id).catch(() => b)));
-                setBroadcasts(prev => prev.map(b => updated.find(u => u._id === b._id) ?? b));
-                if (!updated.some(u => u.statut === 'en_cours')) {
-                    clearInterval(pollingRef.current);
-                    pollingRef.current = null;
-                }
+            pollingRef.current = setInterval(() => {
+                setBroadcasts(prev => {
+                    const active = prev.filter(b => b.statut === 'en_cours');
+                    if (active.length === 0) {
+                        clearInterval(pollingRef.current); pollingRef.current = null;
+                        return prev;
+                    }
+                    Promise.all(active.map(b => getBroadcastById(b._id).catch(() => b)))
+                        .then(updated => {
+                            setBroadcasts(p => p.map(b => updated.find(u => u._id === b._id) ?? b));
+                            if (!updated.some(u => u.statut === 'en_cours')) {
+                                clearInterval(pollingRef.current); pollingRef.current = null;
+                            }
+                        });
+                    return prev;
+                });
             }, 4000);
         }
+
         if (!hasActive && pollingRef.current) {
-            clearInterval(pollingRef.current);
-            pollingRef.current = null;
+            clearInterval(pollingRef.current); pollingRef.current = null;
         }
+
+        return () => {
+            if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
+        };
     }, [broadcasts]);
 
     async function fetchBroadcasts() {
@@ -113,101 +119,71 @@ export default function Diffusions() {
         finally   { setLoadingContacts(false); }
     }
 
-    // ── Gestion multi-select media ──────────────────────────────
-    function toggleMediaType(value) {
-        const opt = MEDIA_OPTIONS.find(o => o.value === value);
-        setForm(f => {
-            let types = [...f.mediaTypes];
-            if (types.includes(value)) {
-                types = types.filter(t => t !== value);
-            } else {
-                if (opt.isHeader) {
-                    // Remplace tout autre header existant
-                    types = types.filter(t => !MEDIA_OPTIONS.find(o => o.value === t)?.isHeader);
-                }
-                types.push(value);
-            }
-            // Reset champs media si le header change
-            const prevHeader = f.mediaTypes.find(t => MEDIA_OPTIONS.find(o => o.value === t)?.isHeader);
-            const newHeader  = types.find(t => MEDIA_OPTIONS.find(o => o.value === t)?.isHeader);
-            return {
-                ...f,
-                mediaTypes:   types,
-                mediaUrl:     newHeader !== prevHeader ? '' : f.mediaUrl,
-                mediaFileName:newHeader !== prevHeader ? '' : f.mediaFileName,
-                messageAudio: newHeader !== prevHeader ? '' : f.messageAudio,
-            };
-        });
-        if (needsFile) setPreview(null);
+    async function openDetail(b) {
+        setDetailLoading(true);
+        setDetail(b);
+        try { setDetail(await getBroadcastById(b._id)); }
+        catch {}
+        finally { setDetailLoading(false); }
     }
 
-    // ── Upload fichier ──────────────────────────────────────────
-    async function handleFileChange(e) {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        setUploading(true);
-        setError('');
-        try {
-            const result = await uploadBroadcastMedia(file, headerType);
-            setForm(f => ({ ...f, mediaUrl: result.url, mediaFileName: file.name }));
-            setPreview({ type: headerType, url: result.url, name: file.name });
-        } catch (err) {
-            setError(err.message);
-        } finally {
-            setUploading(false);
-        }
+    // ── Variables ─────────────────────────────────────────────
+    function addVar() {
+        setForm(f => ({ ...f, variables: [...f.variables, newVar('text')] }));
     }
 
-    function clearFile() {
-        setForm(f => ({ ...f, mediaUrl: '', mediaFileName: '' }));
-        setPreview(null);
-        if (fileInputRef.current) fileInputRef.current.value = '';
+    function removeVar(id) {
+        setForm(f => ({ ...f, variables: f.variables.filter(v => v._id !== id) }));
     }
 
-    // ── Selection de contacts ───────────────────────────────────
-    function toggleContact(id) {
+    function updateVar(id, patch) {
         setForm(f => ({
             ...f,
-            contactIds: f.contactIds.includes(id)
-                ? f.contactIds.filter(c => c !== id)
-                : [...f.contactIds, id],
+            variables: f.variables.map(v => v._id === id ? { ...v, ...patch } : v),
         }));
     }
 
-    function selectAll() {
-        setForm(f => ({ ...f, contactIds: filteredContacts.map(c => c._id) }));
+    async function uploadVar(id, file, type) {
+        updateVar(id, { uploading: true });
+        try {
+            const result = await uploadBroadcastMedia(file, type);
+            updateVar(id, { mediaUrl: result.url, mediaFileName: file.name, uploading: false });
+        } catch (err) {
+            setError(err.message);
+            updateVar(id, { uploading: false });
+        }
     }
 
-    function deselectAll() {
-        setForm(f => ({ ...f, contactIds: [] }));
+    // ── Contacts ──────────────────────────────────────────────
+    const filteredContacts = contacts.filter(c => {
+        const q = contactSearch.toLowerCase();
+        return !q || c.nom?.toLowerCase().includes(q) || c.whatsappId?.includes(q);
+    });
+
+    function toggleContact(id) {
+        setForm(f => ({
+            ...f,
+            contactIds: f.contactIds.includes(id) ? f.contactIds.filter(x => x !== id) : [...f.contactIds, id],
+        }));
     }
 
-    // ── Envoi ───────────────────────────────────────────────────
+    // ── Envoi ─────────────────────────────────────────────────
     async function handleSend(e) {
         e.preventDefault();
-        if (form.contactIds.length === 0) { setError('Veuillez selectionner au moins un contact.'); return; }
-        if (needsFile && !form.mediaUrl)  { setError('Veuillez charger un fichier avant de lancer.'); return; }
-        if (needsTTS && !form.messageAudio.trim()) { setError('Saisissez le texte a convertir en audio.'); return; }
+        if (!form.templateName.trim()) { setError('Saisissez le nom du template.'); return; }
+        if (form.contactIds.length === 0) { setError('Selectionnez au moins un contact.'); return; }
         setSending(true); setError('');
         try {
             const res = await sendBroadcast({
-                templateName:     form.templateName,
-                type:             headerType ?? 'texte',
-                langue:           'tous',
-                contactIds:       form.contactIds,
-                langueTemplate:   form.langueTemplate,
-                parametres:       form.parametres,
-                messageAudio:     form.messageAudio,
-                mediaUrl:         form.mediaUrl,
-                mediaFileName:    form.mediaFileName,
-                traduire:         form.traduire,
-                langueTraduction: form.langueTraduction,
-                dateEnvoi:        form.dateEnvoi || undefined,
+                templateName:   form.templateName.trim(),
+                langueTemplate: form.langueTemplate,
+                variables:      form.hasVariables ? form.variables.map(({ _id, uploading, ...v }) => v) : [],
+                contactIds:     form.contactIds,
+                dateEnvoi:      form.dateEnvoi || undefined,
             });
             setSuccess(res.message);
             setModal(false);
             setForm(DEFAULT_FORM);
-            setPreview(null);
             setContactPanelOpen(false);
             setTimeout(() => { setSuccess(''); fetchBroadcasts(); }, 4000);
         } catch (err) {
@@ -219,13 +195,13 @@ export default function Diffusions() {
 
     function openModal() {
         setForm(DEFAULT_FORM);
-        setPreview(null);
         setContactPanelOpen(false);
         setContactSearch('');
         setError('');
         setModal(true);
     }
 
+    // ── Stats tableau ─────────────────────────────────────────
     const totalEnvoyes  = broadcasts.reduce((s,b) => s+(b.envoyes??0),0);
     const totalContacts = broadcasts.reduce((s,b) => s+(b.total??0),0);
     const totalLivre    = broadcasts.reduce((s,b) => s+(b.livre??0),0);
@@ -234,18 +210,19 @@ export default function Diffusions() {
     return (
         <div className="dash-page">
             <h1 className="dash-page-title">Diffusions WhatsApp</h1>
-            <p className="dash-page-sub">Envoyez des messages texte, audio, image ou document a vos contacts.</p>
+            <p className="dash-page-sub">Creez et suivez vos diffusions de templates vers vos contacts.</p>
 
             {success && <div className="dt-success">&#10003; {success}</div>}
-            {error   && !modal && <div className="dt-error">&#9888; {error}</div>}
+            {error && !modal && <div className="dt-error">&#9888; {error}</div>}
 
+            {/* Stats */}
             <div className="broadcast-stats">
                 {[
-                    { num: broadcasts.length, label: 'Diffusions' },
-                    { num: totalEnvoyes,       label: 'Envoyes' },
-                    { num: totalLivre,         label: 'Livres' },
-                    { num: totalLu,            label: 'Lus' },
-                    { num: totalContacts > 0 ? Math.round((totalEnvoyes/totalContacts)*100)+'%' : '0%', label: 'Taux envoi' },
+                    { num: broadcasts.length, label:'Diffusions' },
+                    { num: totalEnvoyes,       label:'Envoyes' },
+                    { num: totalLivre,         label:'Livres' },
+                    { num: totalLu,            label:'Lus' },
+                    { num: totalContacts>0 ? Math.round((totalEnvoyes/totalContacts)*100)+'%' : '0%', label:'Taux envoi' },
                 ].map(s => (
                     <div key={s.label} className="bstat-card">
                         <span className="bstat-num">{s.num}</span>
@@ -259,40 +236,65 @@ export default function Diffusions() {
                 <button className="dt-btn" onClick={fetchBroadcasts}>&#8635; Actualiser</button>
             </div>
 
+            {/* Tableau */}
             <div className="dt-wrapper">
                 <table className="dt-table">
                     <thead>
                         <tr>
-                            <th>Template</th><th>Type</th><th>Total</th>
-                            <th>Envoyes</th><th>Livres</th><th>Lus</th>
-                            <th>Echecs</th><th>Statut</th><th>Date</th>
+                            <th>Template</th>
+                            <th>Var.</th>
+                            <th>Total</th>
+                            <th>Envoyes</th>
+                            <th>Livres</th>
+                            <th>Lus</th>
+                            <th>Echecs</th>
+                            <th>Statut</th>
+                            <th>Date</th>
+                            <th>Detail</th>
                         </tr>
                     </thead>
                     <tbody>
                         {loading ? (
-                            <tr><td colSpan="9" className="dt-center">Chargement...</td></tr>
+                            <tr><td colSpan="10" className="dt-center">Chargement...</td></tr>
                         ) : broadcasts.length === 0 ? (
-                            <tr><td colSpan="9" className="dt-center">Aucune diffusion.</td></tr>
-                        ) : pagedBroadcasts.map(b => {
-                            const pct = b.total > 0 ? Math.round(((b.envoyes??0)/b.total)*100) : 0;
+                            <tr><td colSpan="10" className="dt-center">Aucune diffusion.</td></tr>
+                        ) : paged.map(b => {
+                            const pct  = b.total>0 ? Math.round(((b.envoyes??0)/b.total)*100) : 0;
+                            const vars = b.variables ?? [];
                             return (
                                 <tr key={b._id}>
                                     <td><span className="dt-mono">{b.templateName}</span></td>
-                                    <td style={{ textAlign:'center', fontSize:'1.1rem' }}>{TYPE_ICON[b.type]??'💬'}</td>
+                                    <td style={{ textAlign:'center' }}>
+                                        {vars.length > 0
+                                            ? <span title={vars.map(v=>v.type).join(', ')} style={{ fontSize:'0.78rem', color:'var(--gray-600)' }}>
+                                                {vars.map(v => VAR_TYPES.find(t=>t.value===v.type)?.icon ?? '?').join(' ')}
+                                              </span>
+                                            : <span className="dt-muted">—</span>
+                                        }
+                                    </td>
                                     <td style={{ textAlign:'center' }}>{b.total}</td>
                                     <td style={{ textAlign:'center' }}>
-                                        <strong style={{ color:'#16a34a' }}>{b.envoyes}</strong>
-                                        {b.statut==='en_cours' && <span style={{ fontSize:'0.75rem',color:'#9ca3af',marginLeft:4 }}>({pct}%)</span>}
+                                        <strong style={{ color:'#16a34a' }}>{b.envoyes??0}</strong>
+                                        {b.statut==='en_cours' && <span style={{ fontSize:'0.7rem',color:'#9ca3af',marginLeft:3 }}>({pct}%)</span>}
                                     </td>
-                                    <td style={{ textAlign:'center',color:'#2563eb' }}>{b.livre??0}</td>
-                                    <td style={{ textAlign:'center',color:'#7c3aed' }}>{b.lu??0}</td>
-                                    <td style={{ textAlign:'center',color:(b.echecs??0)>0?'#dc2626':'#9ca3af' }}>{b.echecs??0}</td>
-                                    <td><span className={`dt-badge ${STATUT_COLOR[b.statut]??'dt-badge-inactif'}`}>{STATUT_LABEL[b.statut]??b.statut}</span></td>
-                                    <td style={{ fontSize:'0.82rem',color:'#6b7280' }}>
+                                    <td style={{ textAlign:'center', color:'#2563eb' }}>{b.livre??0}</td>
+                                    <td style={{ textAlign:'center', color:'#7c3aed' }}>{b.lu??0}</td>
+                                    <td style={{ textAlign:'center', color:(b.echecs??0)>0?'#dc2626':'#9ca3af' }}>{b.echecs??0}</td>
+                                    <td>
+                                        <span className={`dt-badge ${STATUT_COLOR[b.statut]??'dt-badge-inactif'}`}>
+                                            {STATUT_LABEL[b.statut]??b.statut}
+                                        </span>
+                                    </td>
+                                    <td style={{ fontSize:'0.8rem', color:'#6b7280' }}>
                                         {b.dateEnvoi && b.statut==='planifie'
-                                            ? `Plan. : ${new Date(b.dateEnvoi).toLocaleString('fr-FR')}`
+                                            ? `Plan.: ${new Date(b.dateEnvoi).toLocaleString('fr-FR')}`
                                             : new Date(b.createdAt).toLocaleString('fr-FR')
                                         }
+                                    </td>
+                                    <td>
+                                        <button className="dt-btn dt-btn-edit" onClick={() => openDetail(b)}>
+                                            Detail
+                                        </button>
                                     </td>
                                 </tr>
                             );
@@ -306,10 +308,10 @@ export default function Diffusions() {
                 <Pagination page={page} totalPages={totalPages} onChange={setPage} />
             </div>
 
-            {/* ══════════════ MODAL ══════════════ */}
+            {/* ═══════════ MODAL CREATION ═══════════ */}
             {modal && (
                 <div className="modal-overlay" onClick={() => setModal(false)}>
-                    <div className="modal" style={{ maxWidth:560 }} onClick={e => e.stopPropagation()}>
+                    <div className="modal" style={{ maxWidth:580 }} onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2>Nouvelle diffusion</h2>
                             <button className="modal-close" onClick={() => setModal(false)}>&#10005;</button>
@@ -318,173 +320,106 @@ export default function Diffusions() {
                         <form onSubmit={handleSend} className="modal-form">
                             {error && <div className="modal-error">&#9888; {error}</div>}
 
-                            {/* ── Template ── */}
+                            {/* ── Nom du template (libre) ── */}
                             <div className="form-group">
-                                <label>Template WhatsApp</label>
-                                <select value={form.templateName} onChange={e => {
-                                    const tpl = TEMPLATES.find(t => t.name === e.target.value) ?? TEMPLATES[0];
-                                    setForm(f => ({ ...f, templateName: tpl.name, parametres: Array(tpl.parametres).fill('') }));
-                                }}>
-                                    {TEMPLATES.map(t => (
-                                        <option key={t.name} value={t.name}>
-                                            {t.label}{t.parametres > 0 ? ` — ${t.parametres} var.` : ''}
-                                        </option>
+                                <label>Nom du template WhatsApp</label>
+                                <input
+                                    placeholder="Ex: rappel_vaccin, esante_alerte..."
+                                    value={form.templateName}
+                                    onChange={e => setForm(f => ({ ...f, templateName: e.target.value }))}
+                                    required
+                                    list="template-suggestions"
+                                />
+                                <datalist id="template-suggestions">
+                                    {[...new Set(broadcasts.map(b => b.templateName))].map(n => (
+                                        <option key={n} value={n} />
                                     ))}
-                                </select>
+                                </datalist>
+                                <small style={{ color:'#94a3b8', fontSize:'0.78rem' }}>
+                                    Doit correspondre exactement au nom approuve dans Meta Business Manager.
+                                </small>
                             </div>
 
-                            {/* ── Types de media (multi-select) ── */}
+                            {/* ── Langue ── */}
                             <div className="form-group">
-                                <label>Contenu du message <span style={{ fontWeight:400, color:'var(--gray-400)', fontSize:'0.8rem' }}>(plusieurs possibles)</span></label>
-                                <div className="bc-media-tabs">
-                                    {MEDIA_OPTIONS.map(opt => {
-                                        const active = form.mediaTypes.includes(opt.value);
-                                        return (
-                                            <button key={opt.value} type="button"
-                                                className={`bc-media-tab${active ? ' active' : ''}`}
-                                                onClick={() => toggleMediaType(opt.value)}
-                                            >
-                                                <span>{opt.icon}</span>
-                                                <span>{opt.label}</span>
-                                                {active && <span className="bc-check">&#10003;</span>}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                                {headerType && <small style={{ color:'#94a3b8', fontSize:'0.78rem' }}>Header : {headerType}{hasTexte ? ' + variables corps' : ''}</small>}
-                            </div>
-
-                            {/* ── Variables texte ── */}
-                            {hasTexte && nbParams > 0 && (
-                                <div className="form-group">
-                                    <label>Variables du template</label>
-                                    {Array.from({ length: nbParams }).map((_, i) => (
-                                        <input key={i} style={{ marginBottom:6 }}
-                                            placeholder={`{{${i+1}}} — parametre ${i+1}`}
-                                            value={form.parametres[i]??''}
-                                            onChange={e => {
-                                                const p = [...form.parametres]; p[i] = e.target.value;
-                                                setForm(f => ({ ...f, parametres: p }));
-                                            }}
-                                            required
-                                        />
-                                    ))}
-                                </div>
-                            )}
-
-                            {/* ── TTS ── */}
-                            {needsTTS && (
-                                <div className="form-group">
-                                    <label>Texte a convertir en audio</label>
-                                    <textarea rows={3} style={{ resize:'vertical', minHeight:80 }}
-                                        placeholder="Ecrivez le message qui sera converti en voix..."
-                                        value={form.messageAudio}
-                                        onChange={e => setForm(f => ({ ...f, messageAudio: e.target.value }))}
-                                        required
-                                    />
-                                    <div className="bc-translate-row">
-                                        <label className="bc-toggle">
-                                            <input type="checkbox" checked={form.traduire}
-                                                onChange={e => setForm(f => ({ ...f, traduire: e.target.checked }))} />
-                                            <span className="bc-toggle-track" />
-                                            <span className="bc-toggle-label">Traduire avant envoi</span>
-                                        </label>
-                                        {form.traduire && (
-                                            <select value={form.langueTraduction}
-                                                onChange={e => setForm(f => ({ ...f, langueTraduction: e.target.value }))}
-                                                style={{ marginLeft:8, padding:'4px 10px', borderRadius:6, border:'1.5px solid #e5e7eb', fontSize:'0.85rem' }}>
-                                                <option value="ha">Vers Hausa</option>
-                                                <option value="fr">Vers Francais</option>
-                                            </select>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* ── Upload fichier ── */}
-                            {needsFile && (
-                                <div className="form-group">
-                                    <label>
-                                        {headerType==='audio' && 'Fichier audio (MP3, OGG, M4A)'}
-                                        {headerType==='image' && 'Image (JPG, PNG, WEBP)'}
-                                        {headerType==='document' && 'Document (PDF, DOC, DOCX)'}
-                                    </label>
-                                    {!preview ? (
-                                        <div className="bc-upload-zone"
-                                            onClick={() => fileInputRef.current?.click()}
-                                            onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }}
-                                            onDragLeave={e => e.currentTarget.classList.remove('drag-over')}
-                                            onDrop={e => {
-                                                e.preventDefault(); e.currentTarget.classList.remove('drag-over');
-                                                const f = e.dataTransfer.files?.[0];
-                                                if (f) handleFileChange({ target:{ files:[f] } });
-                                            }}>
-                                            {uploading
-                                                ? <><span className="bc-spinner"/><span>Upload en cours...</span></>
-                                                : <><span style={{ fontSize:'1.8rem' }}>{headerType==='audio'?'🎵':headerType==='image'?'🖼️':'📄'}</span><span>Cliquez ou glissez le fichier ici</span></>
-                                            }
-                                        </div>
-                                    ) : (
-                                        <div className="bc-file-preview">
-                                            {preview.type==='image'    && <img src={preview.url} alt="preview" className="bc-preview-img" />}
-                                            {preview.type==='audio'    && <audio controls src={preview.url} className="bc-preview-audio" />}
-                                            {preview.type==='document' && <div className="bc-preview-doc"><span>📄</span><a href={preview.url} target="_blank" rel="noreferrer">{preview.name}</a></div>}
-                                            <button type="button" className="bc-remove-file" onClick={clearFile}>&#10005; Supprimer</button>
-                                        </div>
-                                    )}
-                                    <input ref={fileInputRef} type="file" accept={ACCEPT[headerType]} style={{ display:'none' }} onChange={handleFileChange} />
-                                </div>
-                            )}
-
-                            {/* ── Langue template ── */}
-                            <div className="form-group">
-                                <label>Langue du template (code Meta)</label>
+                                <label>Langue du template</label>
                                 <select value={form.langueTemplate} onChange={e => setForm(f => ({ ...f, langueTemplate: e.target.value }))}>
-                                    <option value="fr">Francais (fr)</option>
-                                    <option value="ha">Hausa (ha)</option>
-                                    <option value="fr_FR">Francais FR (fr_FR)</option>
+                                    {LANG_CODES.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
                                 </select>
                             </div>
 
-                            {/* ── Selecteur de contacts ── */}
+                            {/* ── Variables ── */}
+                            <div className="form-group">
+                                <div className="var-section-header">
+                                    <label>Variables du template</label>
+                                    <label className="bc-toggle" style={{ fontWeight:400 }}>
+                                        <input type="checkbox" checked={form.hasVariables}
+                                            onChange={e => setForm(f => ({
+                                                ...f,
+                                                hasVariables: e.target.checked,
+                                                variables: e.target.checked && f.variables.length === 0 ? [newVar()] : f.variables,
+                                            }))} />
+                                        <span className="bc-toggle-track" />
+                                        <span className="bc-toggle-label">{form.hasVariables ? 'Actif' : 'Sans variable'}</span>
+                                    </label>
+                                </div>
+
+                                {form.hasVariables && (
+                                    <div className="var-list">
+                                        {form.variables.map((v, idx) => (
+                                            <VarRow key={v._id}
+                                                index={idx + 1}
+                                                v={v}
+                                                fileRef={el => fileRefs.current[v._id] = el}
+                                                onChange={patch => updateVar(v._id, patch)}
+                                                onUpload={(file, type) => uploadVar(v._id, file, type)}
+                                                onRemove={() => removeVar(v._id)}
+                                            />
+                                        ))}
+                                        <button type="button" className="var-add-btn" onClick={addVar}>
+                                            + Ajouter une variable
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* ── Contacts ── */}
                             <div className="form-group">
                                 <div className="bc-contacts-header">
                                     <label>
-                                        Contacts destinataires
+                                        Contacts
                                         {form.contactIds.length > 0 && (
                                             <span className="bc-contacts-count">{form.contactIds.length} selectionne{form.contactIds.length>1?'s':''}</span>
                                         )}
                                     </label>
                                     <button type="button" className="dt-btn dt-btn-primary bc-contacts-btn"
                                         onClick={openContactPanel}>
-                                        {contactPanelOpen ? 'Fermer la liste' : '+ Choisir les contacts'}
+                                        {contactPanelOpen ? 'Fermer' : '+ Choisir'}
                                     </button>
                                 </div>
 
                                 {contactPanelOpen && (
                                     <div className="bc-contact-panel">
                                         <div className="bc-contact-search-row">
-                                            <input
-                                                placeholder="Rechercher par nom ou numero..."
+                                            <input className="bc-contact-search"
+                                                placeholder="Rechercher..."
                                                 value={contactSearch}
-                                                onChange={e => setContactSearch(e.target.value)}
-                                                className="bc-contact-search"
-                                            />
-                                            <button type="button" className="bc-sel-btn" onClick={selectAll}>Tout</button>
-                                            <button type="button" className="bc-sel-btn" onClick={deselectAll}>Aucun</button>
+                                                onChange={e => setContactSearch(e.target.value)} />
+                                            <button type="button" className="bc-sel-btn"
+                                                onClick={() => setForm(f => ({ ...f, contactIds: filteredContacts.map(c => c._id) }))}>Tout</button>
+                                            <button type="button" className="bc-sel-btn"
+                                                onClick={() => setForm(f => ({ ...f, contactIds: [] }))}>Aucun</button>
                                         </div>
-
                                         <div className="bc-contact-list">
                                             {loadingContacts ? (
                                                 <div className="bc-contact-loading"><span className="bc-spinner"/><span>Chargement...</span></div>
                                             ) : filteredContacts.length === 0 ? (
-                                                <div className="bc-contact-empty">Aucun contact trouve.</div>
+                                                <div className="bc-contact-empty">Aucun contact.</div>
                                             ) : filteredContacts.map(c => {
                                                 const checked = form.contactIds.includes(c._id);
                                                 return (
                                                     <label key={c._id} className={`bc-contact-row${checked?' checked':''}`}>
-                                                        <input type="checkbox" checked={checked}
-                                                            onChange={() => toggleContact(c._id)} />
+                                                        <input type="checkbox" checked={checked} onChange={() => toggleContact(c._id)} />
                                                         <div className="bc-contact-info">
                                                             <span className="bc-contact-name">{c.nom}</span>
                                                             <span className="bc-contact-phone">+{c.whatsappId}</span>
@@ -496,9 +431,8 @@ export default function Diffusions() {
                                                 );
                                             })}
                                         </div>
-
                                         <div className="bc-contact-footer">
-                                            {form.contactIds.length} / {contacts.length} contact{contacts.length!==1?'s':''} selectionne{form.contactIds.length>1?'s':''}
+                                            {form.contactIds.length} / {contacts.length} selectionne{form.contactIds.length>1?'s':''}
                                         </div>
                                     </div>
                                 )}
@@ -509,24 +443,231 @@ export default function Diffusions() {
                                 <label>Planifier l'envoi (optionnel)</label>
                                 <input type="datetime-local" value={form.dateEnvoi}
                                     onChange={e => setForm(f => ({ ...f, dateEnvoi: e.target.value }))} />
-                                <small style={{ color:'#94a3b8', fontSize:'0.78rem' }}>Laissez vide pour envoyer immediatement.</small>
                             </div>
 
                             <div className="broadcast-warning">
-                                &#9888; Cette action enverra un message WhatsApp aux contacts selectionnes.
-                                Assurez-vous que le template est approuve par Meta.
+                                &#9888; Assurez-vous que le template est approuve par Meta avant de lancer.
                             </div>
 
                             <div className="modal-footer">
                                 <button type="button" className="dt-btn" onClick={() => setModal(false)}>Annuler</button>
-                                <button type="submit" className="dt-btn dt-btn-primary" disabled={sending || uploading}>
-                                    {sending ? 'Lancement...' : form.dateEnvoi ? 'Planifier' : `Envoyer a ${form.contactIds.length} contact${form.contactIds.length!==1?'s':''}`}
+                                <button type="submit" className="dt-btn dt-btn-primary" disabled={sending}>
+                                    {sending ? 'Lancement...' : form.dateEnvoi
+                                        ? 'Planifier'
+                                        : `Envoyer a ${form.contactIds.length} contact${form.contactIds.length!==1?'s':''}`
+                                    }
                                 </button>
                             </div>
                         </form>
                     </div>
                 </div>
             )}
+
+            {/* ═══════════ MODAL DETAIL ═══════════ */}
+            {detail && (
+                <div className="modal-overlay" onClick={() => setDetail(null)}>
+                    <div className="modal" style={{ maxWidth:520 }} onClick={e => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h2>Detail — <span className="dt-mono" style={{ fontSize:'0.95rem' }}>{detail.templateName}</span></h2>
+                            <button className="modal-close" onClick={() => setDetail(null)}>&#10005;</button>
+                        </div>
+                        <div className="modal-body" style={{ padding:'20px 24px' }}>
+                            {detailLoading ? <div className="dt-center">Chargement...</div> : (
+                                <>
+                                    {/* Statut */}
+                                    <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16 }}>
+                                        <span className={`dt-badge ${STATUT_COLOR[detail.statut]??'dt-badge-inactif'}`} style={{ fontSize:'0.9rem', padding:'5px 14px' }}>
+                                            {STATUT_LABEL[detail.statut]??detail.statut}
+                                        </span>
+                                        <span style={{ fontSize:'0.82rem', color:'#9ca3af' }}>
+                                            {new Date(detail.createdAt).toLocaleString('fr-FR')}
+                                        </span>
+                                    </div>
+
+                                    {/* Barre de progression */}
+                                    {detail.total > 0 && (
+                                        <div style={{ marginBottom:18 }}>
+                                            <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.78rem', color:'#6b7280', marginBottom:4 }}>
+                                                <span>Progression</span>
+                                                <span>{detail.envoyes??0} / {detail.total}</span>
+                                            </div>
+                                            <div style={{ background:'#f3f4f6', borderRadius:99, height:8, overflow:'hidden' }}>
+                                                <div style={{
+                                                    height:'100%', borderRadius:99, transition:'width 0.4s',
+                                                    background: detail.statut==='erreur' ? '#ef4444' : 'var(--green)',
+                                                    width: `${Math.round(((detail.envoyes??0)/detail.total)*100)}%`,
+                                                }} />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Stats cards */}
+                                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:8, marginBottom:18 }}>
+                                        {[
+                                            { label:'Envoyes',   value:detail.envoyes??0, color:'#16a34a' },
+                                            { label:'Livres',    value:detail.livre??0,   color:'#2563eb' },
+                                            { label:'Lus',       value:detail.lu??0,      color:'#7c3aed' },
+                                            { label:'Echecs',    value:detail.echecs??0,  color:(detail.echecs??0)>0?'#dc2626':'#9ca3af' },
+                                        ].map(s => (
+                                            <div key={s.label} style={{ textAlign:'center', background:'#f9fafb', borderRadius:8, padding:'10px 6px' }}>
+                                                <div style={{ fontWeight:700, fontSize:'1.3rem', color:s.color }}>{s.value}</div>
+                                                <div style={{ fontSize:'0.72rem', color:'#9ca3af' }}>{s.label}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Variables configurees */}
+                                    {(detail.variables?.length > 0) && (
+                                        <div style={{ marginBottom:16 }}>
+                                            <div style={{ fontSize:'0.78rem', fontWeight:700, color:'#6b7280', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:8 }}>
+                                                Variables
+                                            </div>
+                                            <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                                                {detail.variables.map((v, i) => {
+                                                    const vt = VAR_TYPES.find(t => t.value === v.type);
+                                                    return (
+                                                        <div key={i} style={{ display:'flex', alignItems:'center', gap:8, background:'#f9fafb', borderRadius:8, padding:'8px 12px', fontSize:'0.85rem' }}>
+                                                            <span style={{ fontSize:'1rem' }}>{vt?.icon}</span>
+                                                            <span style={{ fontWeight:600, color:'#374151' }}>Var {i+1} — {vt?.label}</span>
+                                                            {v.type==='text' && <span style={{ color:'#6b7280', marginLeft:'auto' }}>{v.value}</span>}
+                                                            {v.mediaUrl && v.type==='image' && (
+                                                                <img src={v.mediaUrl} alt="" style={{ height:32, width:32, objectFit:'cover', borderRadius:4, marginLeft:'auto' }} />
+                                                            )}
+                                                            {v.mediaUrl && v.type==='audio' && (
+                                                                <audio controls src={v.mediaUrl} style={{ height:28, marginLeft:'auto' }} />
+                                                            )}
+                                                            {v.mediaUrl && v.type==='audio_tts' && (
+                                                                <audio controls src={v.mediaUrl} style={{ height:28, marginLeft:'auto' }} />
+                                                            )}
+                                                            {v.mediaUrl && v.type==='document' && (
+                                                                <a href={v.mediaUrl} target="_blank" rel="noreferrer" style={{ color:'var(--green)', marginLeft:'auto', fontSize:'0.78rem' }}>{v.mediaFileName || 'Voir'}</a>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Message d'erreur */}
+                                    {detail.errorLog && (
+                                        <div style={{ background:'#fef2f2', border:'1px solid #fecaca', borderRadius:8, padding:'10px 14px', fontSize:'0.84rem', color:'#dc2626' }}>
+                                            <strong>Erreur :</strong> {detail.errorLog}
+                                            <div style={{ marginTop:6, color:'#ef4444', fontSize:'0.78rem' }}>
+                                                Cause probable : template non approuve par Meta, numero invalide, ou limite de taux atteinte.
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Guide statuts */}
+                                    {!detail.errorLog && (
+                                        <div style={{ marginTop:12, fontSize:'0.78rem', color:'#9ca3af', lineHeight:1.7 }}>
+                                            <strong style={{ color:'#6b7280' }}>Comprendre les statuts :</strong><br/>
+                                            <span style={{ color:'#16a34a' }}>Envoyes</span> = acceptes par l'API Meta •{' '}
+                                            <span style={{ color:'#2563eb' }}>Livres</span> = arrives sur le telephone •{' '}
+                                            <span style={{ color:'#7c3aed' }}>Lus</span> = ouverts par le contact •{' '}
+                                            <span style={{ color:'#dc2626' }}>Echecs</span> = rejetes (template non approuve, numero invalide, hors reseau)
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                        <div className="modal-footer">
+                            <button className="dt-btn" onClick={() => setDetail(null)}>Fermer</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ─── Composant ligne de variable ──────────────────────────────
+function VarRow({ index, v, onChange, onUpload, onRemove, fileRef }) {
+    const inputRef = useRef(null);
+    const isMedia  = MEDIA_VAR_TYPES.includes(v.type);
+    const isTTS    = v.type === 'audio_tts';
+
+    return (
+        <div className="var-row">
+            {/* Index */}
+            <span className="var-index">{index}</span>
+
+            {/* Type selector */}
+            <div className="var-type-tabs">
+                {VAR_TYPES.map(vt => (
+                    <button key={vt.value} type="button"
+                        title={vt.label}
+                        className={`var-type-btn${v.type === vt.value ? ' active' : ''}`}
+                        onClick={() => onChange({ type: vt.value, value:'', mediaUrl:'', mediaFileName:'', ttsText:'' })}>
+                        {vt.icon}
+                    </button>
+                ))}
+            </div>
+
+            {/* Contenu selon le type */}
+            <div className="var-content">
+                {v.type === 'text' && (
+                    <input placeholder={`Valeur variable {{${index}}}`}
+                        value={v.value}
+                        onChange={e => onChange({ value: e.target.value })} />
+                )}
+
+                {isTTS && (
+                    <div className="var-tts">
+                        <textarea rows={2} placeholder="Texte a convertir en voix..."
+                            value={v.ttsText}
+                            onChange={e => onChange({ ttsText: e.target.value })}
+                            style={{ resize:'vertical', minHeight:52 }} />
+                        <label className="bc-toggle" style={{ marginTop:4 }}>
+                            <input type="checkbox" checked={v.traduire}
+                                onChange={e => onChange({ traduire: e.target.checked })} />
+                            <span className="bc-toggle-track" />
+                            <span className="bc-toggle-label" style={{ fontSize:'0.78rem' }}>Traduire</span>
+                        </label>
+                        {v.traduire && (
+                            <select value={v.langueTraduction} onChange={e => onChange({ langueTraduction: e.target.value })}
+                                style={{ marginTop:4, padding:'4px 8px', borderRadius:6, border:'1.5px solid #e5e7eb', fontSize:'0.8rem' }}>
+                                <option value="ha">Vers Hausa</option>
+                                <option value="fr">Vers Francais</option>
+                            </select>
+                        )}
+                    </div>
+                )}
+
+                {isMedia && !v.mediaUrl && (
+                    <div className={`var-upload${v.uploading ? ' loading' : ''}`}
+                        onClick={() => inputRef.current?.click()}
+                        onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }}
+                        onDragLeave={e => e.currentTarget.classList.remove('drag-over')}
+                        onDrop={e => { e.preventDefault(); e.currentTarget.classList.remove('drag-over'); const f = e.dataTransfer.files?.[0]; if (f) onUpload(f, v.type); }}>
+                        {v.uploading
+                            ? <><span className="bc-spinner"/><span style={{ fontSize:'0.8rem' }}>Upload...</span></>
+                            : <><span>{v.type==='image'?'🖼️':v.type==='document'?'📄':'🎵'}</span><span style={{ fontSize:'0.78rem' }}>Cliquez ou glissez</span></>
+                        }
+                    </div>
+                )}
+
+                {isMedia && v.mediaUrl && (
+                    <div className="var-preview">
+                        {v.type==='image'    && <img src={v.mediaUrl} alt="" />}
+                        {v.type==='audio'    && <audio controls src={v.mediaUrl} style={{ height:30, width:'100%' }} />}
+                        {v.type==='document' && <span style={{ fontSize:'0.8rem' }}>📄 {v.mediaFileName}</span>}
+                        <button type="button" className="bc-remove-file"
+                            onClick={() => onChange({ mediaUrl:'', mediaFileName:'' })}>
+                            &#10005;
+                        </button>
+                    </div>
+                )}
+
+                <input ref={r => { inputRef.current = r; if (fileRef) fileRef(r); }}
+                    type="file" style={{ display:'none' }}
+                    accept={ACCEPT_MAP[v.type]}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) onUpload(f, v.type); }} />
+            </div>
+
+            {/* Supprimer */}
+            <button type="button" className="var-remove" onClick={onRemove}>&#10005;</button>
         </div>
     );
 }

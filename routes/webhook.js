@@ -116,7 +116,8 @@ async function getOrCreateContact(whatsappId) {
 }
 
 async function getOrCreateConversation(contactId) {
-    let conv = await Conversation.findOne({ contactId, statut: 'ouvert' });
+    // Cherche ouvert OU escalade_humain — sinon on crée une nouvelle conversation
+    let conv = await Conversation.findOne({ contactId, statut: { $in: ['ouvert', 'escalade_humain'] } });
     if (!conv) {
         conv = await Conversation.create({ contactId });
     }
@@ -344,6 +345,26 @@ async function processText(userText, userPhone) {
         console.log('[TEXT] Salutation mais contact existant → traitement normal');
     }
 
+    const contact = await getOrCreateContact(userPhone);
+    const conv    = await getOrCreateConversation(contact._id);
+
+    // Mode humain → enregistre sans réponse IA
+    if (conv.statut === 'escalade_humain') {
+        console.log(`[TEXT] Mode humain — message stocké sans réponse IA`);
+        const lang = detectTextLanguage(userText);
+        await Message.create({
+            conversationId: conv._id,
+            emetteurType:   'humain',
+            typeContenu:    'text',
+            texteBrut:      userText,
+            langue:         lang === 'unknown' ? 'unknown' : lang,
+        });
+        conv.nbMessages += 1;
+        conv.derniereMiseAJour = new Date();
+        await conv.save();
+        return;
+    }
+
     const lang = detectTextLanguage(userText);
     console.log(`[TEXT] Langue finale: ${lang}`);
 
@@ -365,7 +386,6 @@ async function processText(userText, userPhone) {
     await sendWhatsAppText(userPhone, reply);
 
     try {
-        const contact = await getOrCreateContact(userPhone);
         await saveMessages(contact._id, lang, { humanText: userText, aiText: reply });
     } catch (dbErr) {
         console.error('[DB] Erreur persistance text:', dbErr.message);
@@ -378,16 +398,32 @@ async function processAudio(mediaId, userPhone) {
     const metaHeaders = { Authorization: `Bearer ${process.env.META_TOKEN}` };
     console.log('[1/6] Téléchargement audio, mediaId:', mediaId);
 
-    // Récupérer le contact en avance pour avoir la langue préférée connue
+    // Récupérer le contact et la conversation pour vérifier le mode
     const contact = await getOrCreateContact(userPhone);
     const knownLang = contact.langue === 'hausa' ? 'ha' : contact.langue === 'fr' ? 'fr' : null;
+    const convCheck = await getOrCreateConversation(contact._id);
+
+    // Mode humain → enregistre sans réponse IA
+    if (convCheck.statut === 'escalade_humain') {
+        console.log(`[AUDIO] Mode humain — message audio reçu mais non traité par IA`);
+        await Message.create({
+            conversationId: convCheck._id,
+            emetteurType:   'humain',
+            typeContenu:    'audio',
+            texteBrut:      '[Audio reçu en mode humain]',
+            langue:         knownLang ?? 'unknown',
+        });
+        convCheck.nbMessages += 1;
+        convCheck.derniereMiseAJour = new Date();
+        await convCheck.save();
+        return;
+    }
 
     const mediaRes = await axios.get(`https://graph.facebook.com/v22.0/${mediaId}`, { headers: metaHeaders });
     const audioRes = await axios.get(mediaRes.data.url, { headers: metaHeaders, responseType: 'arraybuffer' });
 
     const tmpId = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const inputFile = `input_${tmpId}.ogg`;
-    const outputFile = `output_${tmpId}.mp3`;
 
     const audioBuffer = Buffer.from(audioRes.data);
     fs.writeFileSync(inputFile, audioBuffer);
@@ -474,7 +510,6 @@ async function processAudio(mediaId, userPhone) {
     console.log(`[OK] Réponse audio envoyée à ${userPhone}`);
 
     fs.unlink(inputFile, () => {});
-    fs.unlink(outputFile, () => {});
 
     try {
         await saveMessages(contact._id, finalLang, {
@@ -506,6 +541,27 @@ function haversine(lat1, lng1, lat2, lng2) {
 
 async function processLocation(lat, lng, userPhone) {
     console.log(`[LOC] Position reçue de ${userPhone}: lat=${lat}, lng=${lng}`);
+
+    // Mode humain → enregistre la position sans réponse IA
+    const contactLoc = await getOrCreateContact(userPhone);
+    const convLoc    = await getOrCreateConversation(contactLoc._id);
+    if (convLoc.statut === 'escalade_humain') {
+        console.log(`[LOC] Mode humain — position stockée sans réponse IA`);
+        await Message.create({
+            conversationId: convLoc._id,
+            emetteurType:   'humain',
+            typeContenu:    'location',
+            texteBrut:      `[LOCALISATION] lat:${lat}, lng:${lng}`,
+            coordonnees:    { latitude: lat, longitude: lng },
+            langue:         'unknown',
+        });
+        contactLoc.dernierePosition = { latitude: lat, longitude: lng, updatedAt: new Date() };
+        await contactLoc.save();
+        convLoc.nbMessages += 1;
+        convLoc.derniereMiseAJour = new Date();
+        await convLoc.save();
+        return;
+    }
 
     // Récupère toutes les structures actives
     const structures = await Structure.find({ statutVaccination: true })
@@ -544,13 +600,11 @@ async function processLocation(lat, lng, userPhone) {
 
     // Persistance
     try {
-        const contact = await getOrCreateContact(userPhone);
+        // contactLoc/convLoc déjà récupérés en haut de la fonction
+        contactLoc.dernierePosition = { latitude: lat, longitude: lng, updatedAt: new Date() };
+        await contactLoc.save();
 
-        // Sauvegarde de la dernière position connue du contact
-        contact.dernierePosition = { latitude: lat, longitude: lng, updatedAt: new Date() };
-        await contact.save();
-
-        const conv = await getOrCreateConversation(contact._id);
+        const conv = await getOrCreateConversation(contactLoc._id);
         await Message.create({
             conversationId: conv._id,
             emetteurType: 'humain',
@@ -569,7 +623,7 @@ async function processLocation(lat, lng, userPhone) {
         conv.nbMessages += 2;
         conv.derniereMiseAJour = new Date();
         await conv.save();
-        console.log(`[DB] Position sauvegardée pour ${userPhone} : lat=${lat}, lng=${lng}`);
+        console.log(`[DB] Position sauvegardée pour ${userPhone}: lat=${lat}, lng=${lng}`);
     } catch (dbErr) {
         console.error('[DB] Erreur persistance localisation:', dbErr.message);
     }

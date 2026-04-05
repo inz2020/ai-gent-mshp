@@ -1,21 +1,29 @@
 import { useEffect, useRef, useState } from 'react';
-import { getConversations, getConversationMessages } from '../../api/index.js';
+import {
+    getConversations,
+    getConversationMessages,
+    toggleConversationMode,
+    sendOperatorMessage,
+} from '../../api/index.js';
 import { usePagination } from '../../hooks/usePagination.js';
 import Pagination from '../../components/Pagination.jsx';
 
 const LANG_LABEL   = { fr: 'Français', ha: 'Hausa', unknown: 'Inconnu' };
 const STATUT_COLOR = { ouvert: 'dt-badge-actif', ferme: 'dt-badge-inactif', escalade_humain: 'dt-badge-danger' };
-const STATUT_LABEL = { ouvert: 'Ouvert', ferme: 'Fermé', escalade_humain: 'Escaladé' };
+const STATUT_LABEL = { ouvert: 'Ouvert', ferme: 'Fermé', escalade_humain: 'Mode Humain' };
 
 export default function Discussions() {
-    const [convs, setConvs]       = useState([]);
-    const [loading, setLoading]   = useState(true);
-    const [error, setError]       = useState('');
-    const [search, setSearch]     = useState('');
-    const [selected, setSelected] = useState(null);
-    const [messages, setMessages] = useState([]);
-    const [msgLoad, setMsgLoad]   = useState(false);
-    const threadEndRef            = useRef(null);
+    const [convs, setConvs]         = useState([]);
+    const [loading, setLoading]     = useState(true);
+    const [error, setError]         = useState('');
+    const [search, setSearch]       = useState('');
+    const [selected, setSelected]   = useState(null);
+    const [messages, setMessages]   = useState([]);
+    const [msgLoad, setMsgLoad]     = useState(false);
+    const [opText, setOpText]       = useState('');
+    const [sending, setSending]     = useState(false);
+    const [toggling, setToggling]   = useState(false);
+    const threadEndRef              = useRef(null);
 
     useEffect(() => { fetchConvs(); }, []);
 
@@ -35,13 +43,51 @@ export default function Discussions() {
     async function openThread(conv) {
         setSelected(conv);
         setMessages([]);
+        setOpText('');
         setMsgLoad(true);
         try { setMessages(await getConversationMessages(conv._id)); }
         catch { setMessages([]); }
         finally { setMsgLoad(false); }
     }
 
-    function closeThread() { setSelected(null); setMessages([]); }
+    function closeThread() { setSelected(null); setMessages([]); setOpText(''); }
+
+    async function handleToggleMode() {
+        if (!selected || toggling) return;
+        setToggling(true);
+        try {
+            const updated = await toggleConversationMode(selected._id);
+            setSelected(updated);
+            // Mettre à jour la liste
+            setConvs(prev => prev.map(c => c._id === updated._id ? { ...c, statut: updated.statut } : c));
+        } catch (e) {
+            alert('Erreur : ' + e.message);
+        } finally {
+            setToggling(false);
+        }
+    }
+
+    async function handleSend(e) {
+        e.preventDefault();
+        if (!opText.trim() || sending) return;
+        setSending(true);
+        try {
+            const msg = await sendOperatorMessage(selected._id, opText.trim());
+            setMessages(prev => [...prev, msg]);
+            setOpText('');
+            // Met à jour nbMessages dans la liste
+            setConvs(prev => prev.map(c =>
+                c._id === selected._id ? { ...c, nbMessages: (c.nbMessages ?? 0) + 1 } : c
+            ));
+            setTimeout(() => threadEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+        } catch (e) {
+            alert('Erreur envoi : ' + e.message);
+        } finally {
+            setSending(false);
+        }
+    }
+
+    const isHuman = selected?.statut === 'escalade_humain';
 
     const filtered = convs.filter(c => {
         const phone = c.contactId?.whatsappId ?? '';
@@ -124,7 +170,9 @@ export default function Discussions() {
             {/* Panneau fil de messages */}
             {selected && (
                 <div className="modal-overlay" onClick={closeThread}>
-                    <div className="modal" style={{ maxWidth: 620 }} onClick={e => e.stopPropagation()}>
+                    <div className="modal" style={{ maxWidth: 660 }} onClick={e => e.stopPropagation()}>
+
+                        {/* Header */}
                         <div className="modal-header">
                             <div>
                                 <h2>Conversation — +{selected.contactId?.whatsappId}</h2>
@@ -135,9 +183,29 @@ export default function Discussions() {
                                     </span>
                                 </small>
                             </div>
-                            <button className="modal-close" onClick={closeThread}>✕</button>
+
+                            {/* Toggle Mode */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <button
+                                    className={`conv-mode-btn ${isHuman ? 'conv-mode-human' : 'conv-mode-ai'}`}
+                                    onClick={handleToggleMode}
+                                    disabled={toggling}
+                                    title={isHuman ? 'Passer en mode IA' : 'Passer en mode Humain'}
+                                >
+                                    {toggling ? '…' : isHuman ? '🤖 Activer IA' : '👨‍⚕️ Mode Humain'}
+                                </button>
+                                <button className="modal-close" onClick={closeThread}>✕</button>
+                            </div>
                         </div>
 
+                        {/* Bannière mode humain */}
+                        {isHuman && (
+                            <div className="conv-human-banner">
+                                👨‍⚕️ Mode humain activé — l'IA ne répond plus. Vous pouvez écrire directement au contact.
+                            </div>
+                        )}
+
+                        {/* Fil de messages */}
                         <div className="modal-body thread-body">
                             {msgLoad ? (
                                 <p className="dt-center">Chargement des messages...</p>
@@ -148,13 +216,19 @@ export default function Discussions() {
                                     {messages.map(m => (
                                         <div
                                             key={m._id}
-                                            className={`thread-msg ${m.emetteurType === 'humain' ? 'thread-msg-user' : 'thread-msg-bot'}`}
+                                            className={`thread-msg ${
+                                                m.emetteurType === 'humain'
+                                                    ? 'thread-msg-user'
+                                                    : m.emetteurType === 'operateur_sante'
+                                                    ? 'thread-msg-op'
+                                                    : 'thread-msg-bot'
+                                            }`}
                                         >
                                             <div className="thread-msg-header">
                                                 <span className="thread-sender">
-                                                    {m.emetteurType === 'humain' ? '👤 Utilisateur'
-                                                        : m.emetteurType === 'agent_ia' ? '🤖 Hawa'
-                                                        : '👨‍⚕️ Opérateur'}
+                                                    {m.emetteurType === 'humain'    ? '👤 Utilisateur'
+                                                    : m.emetteurType === 'agent_ia' ? '🤖 Hawa'
+                                                    : '👨‍⚕️ Opérateur'}
                                                 </span>
                                                 <span className="thread-time">
                                                     {new Date(m.dateEnvoi).toLocaleString('fr-FR')}
@@ -185,6 +259,27 @@ export default function Discussions() {
                                 </>
                             )}
                         </div>
+
+                        {/* Zone de saisie opérateur — visible seulement en mode humain */}
+                        {isHuman && (
+                            <form className="conv-send-row" onSubmit={handleSend}>
+                                <input
+                                    className="conv-send-input"
+                                    placeholder="Écrire un message WhatsApp..."
+                                    value={opText}
+                                    onChange={e => setOpText(e.target.value)}
+                                    disabled={sending}
+                                    autoFocus
+                                />
+                                <button
+                                    type="submit"
+                                    className="conv-send-btn"
+                                    disabled={sending || !opText.trim()}
+                                >
+                                    {sending ? '…' : '➤ Envoyer'}
+                                </button>
+                            </form>
+                        )}
 
                         <div className="modal-footer">
                             <span className="dt-muted" style={{ fontSize: 12 }}>
