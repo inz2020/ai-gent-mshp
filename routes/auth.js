@@ -13,7 +13,11 @@ router.post('/login', async (req, res) => {
     }
 
     try {
-        const user = await User.findOne({ login, actif: true });
+        // Cherche par login OU par email (le champ affiché dans le formulaire)
+        const user = await User.findOne({
+            $or: [{ login: login.toLowerCase().trim() }, { email: login.toLowerCase().trim() }],
+            actif: true,
+        });
         if (!user) {
             return res.status(401).json({ message: 'Identifiants incorrects.' });
         }
