@@ -350,21 +350,6 @@ const AUDIO_ERRORS = {
     unknown_lang: 'Ban fahimci harshen saƙon ku. Don Allah sake aiko saƙon ku da Hausa ko Faransanci.'
 };
 
-function buildLangInstruction(lang, isAudio = false, whisperLangRaw = null) {
-    const transcriptWarning = (isAudio && whisperLangRaw && whisperLangRaw !== 'hausa' && whisperLangRaw !== 'french' && lang === 'ha')
-        ? `\n\nATTENTION: La transcription automatique est peut-être imprécise (Whisper a détecté "${whisperLangRaw}" au lieu du Hausa). Fais de ton mieux pour comprendre le sens général de la question et réponds en Hausa comme si tu avais bien compris.`
-        : '';
-
-    if (isAudio) {
-        return lang === 'ha'
-            ? `\n\nIMPORTANT: Message audio en HAUSA. Tu dois répondre OBLIGATOIREMENT et UNIQUEMENT en Hausa. Zéro mot français. 2 à 3 phrases courtes, simples, parlées. Pas de symboles, pas de listes, pas de tirets, pas d'astérisques — texte oral uniquement car ta réponse sera lue à voix haute en Hausa.${transcriptWarning}`
-            : `\n\nIMPORTANT: Message audio en français. Réponds UNIQUEMENT en français. 2 à 3 phrases simples et naturelles. Pas de symboles, pas de listes, pas d'astérisques — texte brut uniquement car ta réponse sera lue à voix haute.`;
-    }
-    return lang === 'ha'
-        ? `\n\nIMPORTANT: Message en HAUSA. Réponds OBLIGATOIREMENT et UNIQUEMENT en Hausa pur. Zéro mot français. Maximum 4 phrases.`
-        : `\n\nIMPORTANT: Message en français. Réponds UNIQUEMENT en français. Maximum 4 phrases courtes et directes.`;
-}
-
 // generateTTS, prepareVoiceText et uploadAudio importés depuis lib/audio.js
 
 async function getRecentMessages(conversationId, limit = 6) {
@@ -379,6 +364,27 @@ async function getRecentMessages(conversationId, limit = 6) {
 }
 
 // ─── Traitement texte ────────────────────────────────────────
+
+// Instruction injectée dans le system prompt pour la détection auto de langue.
+// GPT retourne un JSON {lang, reply} — une seule requête pour détecter ET répondre.
+const TEXT_LANG_DETECT_INSTRUCTION = `
+
+═══════════════════════════════════════════
+INSTRUCTION DE RÉPONSE — FORMAT OBLIGATOIRE
+═══════════════════════════════════════════
+
+Tu dois TOUJOURS répondre avec un objet JSON valide, sans aucun texte autour :
+{"lang":"fr","reply":"ta réponse ici"}
+
+Règles de détection de langue :
+- Message en français (quelle que soit l'orthographe ou les fautes) → lang="fr", reply en français
+- Message en Hausa (quelle que soit l'orthographe ou les fautes) → lang="ha", reply en Hausa pur, zéro mot français
+- Autre langue ou message totalement incompréhensible → lang="unknown", reply=""
+
+Exemples :
+{"lang":"fr","reply":"La rougeole se prévient par deux doses de vaccin..."}
+{"lang":"ha","reply":"Kyanda allurar rigakafi biyu ne..."}
+{"lang":"unknown","reply":""}`;
 
 async function processText(userText, userPhone) {
     console.log(`[TEXT] Message reçu: "${userText}"`);
@@ -397,7 +403,7 @@ async function processText(userText, userPhone) {
     const contact = await getOrCreateContact(userPhone);
     const conv    = await getOrCreateConversation(contact._id);
 
-    // Mode humain → enregistre sans réponse IA
+    // Mode humain → enregistre sans réponse IA (détection légère suffisante ici)
     if (conv.statut === 'escalade_humain') {
         console.log(`[TEXT] Mode humain — message stocké sans réponse IA`);
         const lang = detectTextLanguage(userText);
@@ -414,24 +420,38 @@ async function processText(userText, userPhone) {
         return;
     }
 
-    const lang = detectTextLanguage(userText);
-    console.log(`[TEXT] Langue finale: ${lang}`);
+    // Historique conversationnel (6 derniers échanges)
+    const history = await getRecentMessages(conv._id);
 
-    if (lang === 'unknown') {
+    // GPT détecte la langue ET génère la réponse en une seule requête JSON
+    const gptResponse = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        max_tokens: 250,
+        response_format: { type: 'json_object' },
+        messages: [
+            { role: 'system', content: SYSTEM_PROMPT + TEXT_LANG_DETECT_INSTRUCTION },
+            ...history,
+            { role: 'user', content: userText }
+        ]
+    });
+
+    let lang  = 'unknown';
+    let reply = '';
+    try {
+        const parsed = JSON.parse(gptResponse.choices[0].message.content);
+        lang  = ['fr', 'ha'].includes(parsed.lang) ? parsed.lang : 'unknown';
+        reply = (parsed.reply ?? '').trim();
+    } catch (parseErr) {
+        console.error('[TEXT] Échec parsing JSON GPT:', parseErr.message);
+    }
+
+    console.log(`[TEXT] Langue détectée: ${lang} | Réponse: ${reply}`);
+
+    if (lang === 'unknown' || !reply) {
         await sendAudioReply(userPhone, AUDIO_ERRORS.unknown_lang, 'ha');
         return;
     }
 
-    const response = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        max_tokens: 150,
-        messages: [
-            { role: "system", content: SYSTEM_PROMPT + buildLangInstruction(lang) },
-            { role: "user", content: userText }
-        ]
-    });
-    const reply = response.choices[0].message.content;
-    console.log(`[TEXT] Réponse (${lang}): ${reply}`);
     await sendWhatsAppText(userPhone, reply);
 
     try {
@@ -543,27 +563,52 @@ async function processAudio(mediaId, userPhone) {
         ? `[Transcription approximative depuis audio Hausa, Whisper a détecté "${whisperLangRaw}"] : ${transcription.text}`
         : transcription.text;
 
-    // Génération réponse GPT avec historique
+    // Instruction audio : JSON + pas de formatage (texte oral)
+    const AUDIO_LANG_DETECT_INSTRUCTION = `
+
+═══════════════════════════════════════════
+INSTRUCTION DE RÉPONSE AUDIO — FORMAT OBLIGATOIRE
+═══════════════════════════════════════════
+
+Réponds TOUJOURS avec un objet JSON valide :
+{"lang":"fr"|"ha","reply":"ta réponse orale"}
+
+- Message Hausa (y compris transcription approximative) → lang="ha", reply en Hausa pur, 2-3 phrases courtes
+- Message français → lang="fr", reply en français, 2-3 phrases courtes
+- Pas de symboles, pas de listes, pas d'astérisques — texte oral uniquement (sera lu à voix haute)
+- Si Whisper a mal transcrit le Hausa, comprends le sens général et réponds quand même en Hausa`;
+
     const response = await openai.chat.completions.create({
         model: 'gpt-4o-mini',
-        max_tokens: 200,
+        max_tokens: 250,
+        response_format: { type: 'json_object' },
         messages: [
-            { role: 'system', content: SYSTEM_PROMPT + buildLangInstruction(finalLang, true, whisperLangRaw) },
+            { role: 'system', content: SYSTEM_PROMPT + AUDIO_LANG_DETECT_INSTRUCTION },
             ...history,
             { role: 'user', content: userContent }
         ]
     });
-    const replyText = response.choices[0].message.content;
-    console.log(`[4/6] Réponse GPT (${finalLang}): ${replyText}`);
+
+    let audioLang = finalLang; // fallback sur la détection Whisper
+    let replyText = '';
+    try {
+        const parsed = JSON.parse(response.choices[0].message.content);
+        if (['fr', 'ha'].includes(parsed.lang)) audioLang = parsed.lang;
+        replyText = (parsed.reply ?? '').trim();
+    } catch (parseErr) {
+        console.error('[AUDIO] Échec parsing JSON GPT:', parseErr.message);
+        replyText = response.choices[0].message.content; // fallback texte brut
+    }
+    console.log(`[4/6] Réponse GPT (${audioLang}): ${replyText}`);
 
     let uploadResult = null;
     try {
-        const ttsBuffer = await generateTTS(prepareVoiceText(replyText), finalLang);
+        const ttsBuffer = await generateTTS(prepareVoiceText(replyText), audioLang);
         console.log('[5/6] Audio TTS généré:', ttsBuffer.byteLength, 'bytes');
         uploadResult = await uploadAudio(ttsBuffer, 'chatbot_audio');
         console.log('[6/6] Cloudinary URL:', uploadResult.secure_url);
     } catch (ttsErr) {
-        console.error(`[TTS] Échec génération audio (${finalLang}), fallback texte:`, ttsErr.message);
+        console.error(`[TTS] Échec génération audio (${audioLang}), fallback texte:`, ttsErr.message);
     }
 
     if (uploadResult) {
@@ -588,11 +633,11 @@ async function processAudio(mediaId, userPhone) {
     fs.unlink(inputFile, () => {});
 
     try {
-        await saveMessages(contact._id, finalLang, {
+        await saveMessages(contact._id, audioLang, {
             humanText: transcription.text,
             aiText: replyText,
-            audioUrl: uploadResult.secure_url,
-            cloudinaryId: uploadResult.public_id
+            audioUrl: uploadResult?.secure_url ?? '',
+            cloudinaryId: uploadResult?.public_id ?? ''
         });
     } catch (dbErr) {
         console.error('[DB] Erreur persistance audio:', dbErr.message);
