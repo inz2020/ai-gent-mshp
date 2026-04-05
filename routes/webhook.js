@@ -3,7 +3,7 @@ import axios from 'axios';
 import fs from 'fs';
 import OpenAI from 'openai';
 import SYSTEM_PROMPT from '../prompt.js';
-import {HAUSA_PHRASES,HAUSA_WORDS,FRENCH_WORDS, VERIFY_TOKEN, DEFAULT_MESSAGES, GREETING_CONFIG } from '../constants/config.js';
+import {HAUSA_PHRASES,HAUSA_WORDS,FRENCH_WORDS, VERIFY_TOKEN, GREETING_CONFIG } from '../constants/config.js';
 import Contact from '../db/models/Contact.js';
 import Conversation from '../db/models/Conversations.js';
 import Message from '../db/models/Message.js';
@@ -58,6 +58,8 @@ function detectTextLanguage(text) {
 function resolveFinalLanguage(whisperLang, textLang) {
     const whisperCode = whisperLang === 'hausa' ? 'ha'
         : whisperLang === 'french' ? 'fr'
+        // Whisper détecte souvent le Hausa comme langue africaine voisine ou slave
+        : ['amharic','somali','swahili','yoruba','igbo','zulu','ukrainian','russian','polish'].includes(whisperLang) ? 'ha'
         : 'unknown';
 
     // Les deux sont d'accord → confiance maximale
@@ -75,8 +77,9 @@ function resolveFinalLanguage(whisperLang, textLang) {
 // ─── Contrôle qualité audio (via segments Whisper) ──────────
 // Seuils assouplis pour les langues africaines (Hausa, etc.)
 // Whisper est moins confiant sur ces langues → log_prob plus bas, no_speech plus élevé
+// isLikelyHausa=true → seuils encore plus souples (logprob Hausa souvent entre -1.6 et -2.2)
 
-function checkAudioQuality(transcription) {
+function checkAudioQuality(transcription, isLikelyHausa = false) {
     const text = transcription.text?.trim() ?? '';
 
     if (text.length < 3) {
@@ -90,12 +93,14 @@ function checkAudioQuality(transcription) {
     const avgLogProb    = segments.reduce((s, seg) => s + seg.avg_logprob, 0) / segments.length;
     const avgCompRatio  = segments.reduce((s, seg) => s + seg.compression_ratio, 0) / segments.length;
 
-    console.log(`[AUDIO QUALITY] no_speech: ${avgNoSpeech.toFixed(2)}, logprob: ${avgLogProb.toFixed(2)}, compression: ${avgCompRatio.toFixed(2)}`);
+    console.log(`[AUDIO QUALITY] no_speech: ${avgNoSpeech.toFixed(2)}, logprob: ${avgLogProb.toFixed(2)}, compression: ${avgCompRatio.toFixed(2)}, haussa: ${isLikelyHausa}`);
 
     if (avgNoSpeech > 0.85) {
         return { ok: false, reason: 'Audio trop bruité ou silencieux. / Murya ba ta bayyana ba.' };
     }
-    if (avgLogProb < -1.5) {
+    // Hausa est peu représenté dans le corpus Whisper → logprob plus bas par défaut
+    const logProbThreshold = isLikelyHausa ? -2.3 : -1.5;
+    if (avgLogProb < logProbThreshold) {
         return { ok: false, reason: 'Audio peu clair, veuillez réessayer. / Murya ba ta fito sosai.' };
     }
     if (avgCompRatio > 3.0) {
@@ -342,17 +347,21 @@ const AUDIO_ERRORS = {
         fr: 'L\'audio est peu clair. Parlez lentement et distinctement, puis réessayez.',
         ha: 'Murya ba ta bayyana ba. Don Allah magana sannu sannu, a sake.'
     },
-    unknown_lang: 'Je n\'ai pas compris la langue de votre message. Parlez en français ou en hausa. Ban gane harshen da aka yi amfani da shi ba. Don Allah yi amfani da Hausa ko Faransanci.'
+    unknown_lang: 'Ban fahimci harshen saƙon ku. Don Allah sake aiko saƙon ku da Hausa ko Faransanci.'
 };
 
-function buildLangInstruction(lang, isAudio = false) {
+function buildLangInstruction(lang, isAudio = false, whisperLangRaw = null) {
+    const transcriptWarning = (isAudio && whisperLangRaw && whisperLangRaw !== 'hausa' && whisperLangRaw !== 'french' && lang === 'ha')
+        ? `\n\nATTENTION: La transcription automatique est peut-être imprécise (Whisper a détecté "${whisperLangRaw}" au lieu du Hausa). Fais de ton mieux pour comprendre le sens général de la question et réponds en Hausa comme si tu avais bien compris.`
+        : '';
+
     if (isAudio) {
         return lang === 'ha'
-            ? `\n\nIMPORTANT: Message audio en Hausa. Réponds UNIQUEMENT en Hausa. 2 à 3 phrases simples. Pas de symboles, pas de listes, pas d'astérisques — texte brut uniquement car ta réponse sera lue à voix haute.`
+            ? `\n\nIMPORTANT: Message audio en HAUSA. Tu dois répondre OBLIGATOIREMENT et UNIQUEMENT en Hausa. Zéro mot français. 2 à 3 phrases courtes, simples, parlées. Pas de symboles, pas de listes, pas de tirets, pas d'astérisques — texte oral uniquement car ta réponse sera lue à voix haute en Hausa.${transcriptWarning}`
             : `\n\nIMPORTANT: Message audio en français. Réponds UNIQUEMENT en français. 2 à 3 phrases simples et naturelles. Pas de symboles, pas de listes, pas d'astérisques — texte brut uniquement car ta réponse sera lue à voix haute.`;
     }
     return lang === 'ha'
-        ? `\n\nIMPORTANT: Message en Hausa. Réponds UNIQUEMENT en Hausa. Maximum 4 phrases.`
+        ? `\n\nIMPORTANT: Message en HAUSA. Réponds OBLIGATOIREMENT et UNIQUEMENT en Hausa pur. Zéro mot français. Maximum 4 phrases.`
         : `\n\nIMPORTANT: Message en français. Réponds UNIQUEMENT en français. Maximum 4 phrases courtes et directes.`;
 }
 
@@ -409,7 +418,7 @@ async function processText(userText, userPhone) {
     console.log(`[TEXT] Langue finale: ${lang}`);
 
     if (lang === 'unknown') {
-        await sendWhatsAppText(userPhone, DEFAULT_MESSAGES.unknown);
+        await sendAudioReply(userPhone, AUDIO_ERRORS.unknown_lang, 'ha');
         return;
     }
 
@@ -481,8 +490,11 @@ async function processAudio(mediaId, userPhone) {
     const transcription = await openai.audio.transcriptions.create(whisperParams);
     console.log('[3/6] Whisper lang:', transcription.language, '| Texte:', transcription.text);
 
-    // Filtre qualité
-    const quality = checkAudioQuality(transcription);
+    // Filtre qualité — seuils assouplis si Whisper détecte une langue africaine ou slave
+    // (Hausa est souvent confondu avec ces langues)
+    const HAUSA_CONFUSIONS = ['hausa','amharic','somali','swahili','yoruba','igbo','zulu','ukrainian','russian','polish'];
+    const isLikelyHausa = HAUSA_CONFUSIONS.includes(transcription.language) || knownLang === 'ha';
+    const quality = checkAudioQuality(transcription, isLikelyHausa);
     if (!quality.ok) {
         console.log('[AUDIO] Qualité insuffisante:', quality.reason);
         fs.unlink(inputFile, () => {});
@@ -523,31 +535,55 @@ async function processAudio(mediaId, userPhone) {
     const conv = await getOrCreateConversation(contact._id);
     const history = await getRecentMessages(conv._id);
 
+    // Si Whisper a transcrit dans une langue inattendue (ex: cyrillique pour du Hausa),
+    // on enrichit le contenu utilisateur pour aider GPT
+    const whisperLangRaw = transcription.language;
+    const isTranscriptSuspect = finalLang === 'ha' && whisperLangRaw !== 'hausa' && whisperLangRaw !== 'french';
+    const userContent = isTranscriptSuspect
+        ? `[Transcription approximative depuis audio Hausa, Whisper a détecté "${whisperLangRaw}"] : ${transcription.text}`
+        : transcription.text;
+
     // Génération réponse GPT avec historique
     const response = await openai.chat.completions.create({
         model: 'gpt-4o-mini',
         max_tokens: 200,
         messages: [
-            { role: 'system', content: SYSTEM_PROMPT + buildLangInstruction(finalLang, true) },
+            { role: 'system', content: SYSTEM_PROMPT + buildLangInstruction(finalLang, true, whisperLangRaw) },
             ...history,
-            { role: 'user', content: transcription.text }
+            { role: 'user', content: userContent }
         ]
     });
     const replyText = response.choices[0].message.content;
     console.log(`[4/6] Réponse GPT (${finalLang}): ${replyText}`);
 
-    const ttsBuffer  = await generateTTS(prepareVoiceText(replyText), finalLang);
-    console.log('[5/6] Audio TTS généré:', ttsBuffer.byteLength, 'bytes');
+    let uploadResult = null;
+    try {
+        const ttsBuffer = await generateTTS(prepareVoiceText(replyText), finalLang);
+        console.log('[5/6] Audio TTS généré:', ttsBuffer.byteLength, 'bytes');
+        uploadResult = await uploadAudio(ttsBuffer, 'chatbot_audio');
+        console.log('[6/6] Cloudinary URL:', uploadResult.secure_url);
+    } catch (ttsErr) {
+        console.error(`[TTS] Échec génération audio (${finalLang}), fallback texte:`, ttsErr.message);
+    }
 
-    const uploadResult = await uploadAudio(ttsBuffer, 'chatbot_audio');
-    console.log('[6/6] Cloudinary URL:', uploadResult.secure_url);
-
-    await axios.post(
-        `https://graph.facebook.com/v22.0/${process.env.PHONE_ID}/messages`,
-        { messaging_product: 'whatsapp', to: userPhone, type: 'audio', audio: { link: uploadResult.secure_url } },
-        { headers: { Authorization: `Bearer ${process.env.META_TOKEN}`, 'Content-Type': 'application/json' } }
-    );
-    console.log(`[OK] Réponse audio envoyée à ${userPhone}`);
+    if (uploadResult) {
+        try {
+            await axios.post(
+                `https://graph.facebook.com/v22.0/${process.env.PHONE_ID}/messages`,
+                { messaging_product: 'whatsapp', to: userPhone, type: 'audio', audio: { link: uploadResult.secure_url } },
+                { headers: { Authorization: `Bearer ${process.env.META_TOKEN}`, 'Content-Type': 'application/json' } }
+            );
+            console.log(`[OK] Réponse audio envoyée à ${userPhone}`);
+        } catch (sendErr) {
+            const status = sendErr.response?.status;
+            console.error(`[AUDIO-SEND] Échec envoi audio (${status}), fallback texte:`, sendErr.response?.data?.error?.message ?? sendErr.message);
+            await sendWhatsAppText(userPhone, replyText);
+            console.log(`[AUDIO-SEND] Fallback texte envoyé à ${userPhone}`);
+        }
+    } else {
+        await sendWhatsAppText(userPhone, replyText);
+        console.log(`[AUDIO-SEND] Fallback texte envoyé à ${userPhone}`);
+    }
 
     fs.unlink(inputFile, () => {});
 
