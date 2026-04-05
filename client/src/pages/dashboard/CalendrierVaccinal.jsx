@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { getCalendrier, createCalendrier, updateCalendrier, deleteCalendrier, importCalendrier, getVaccins } from '../../api/index.js';
 import { usePagination } from '../../hooks/usePagination.js';
@@ -23,7 +23,21 @@ export default function CalendrierVaccinal() {
     const [saving, setSaving]     = useState(false);
     const [toast, setToast]       = useState('');
 
+    // Combobox vaccin
+    const [vaccinSearch, setVaccinSearch] = useState('');
+    const [vaccinOpen,   setVaccinOpen]   = useState(false);
+    const comboRef = useRef(null);
+
     useEffect(() => { fetchAll(); }, []);
+
+    // Ferme la liste si clic en dehors
+    useEffect(() => {
+        function onClickOutside(e) {
+            if (comboRef.current && !comboRef.current.contains(e.target)) setVaccinOpen(false);
+        }
+        document.addEventListener('mousedown', onClickOutside);
+        return () => document.removeEventListener('mousedown', onClickOutside);
+    }, []);
 
     async function fetchAll() {
         setLoading(true);
@@ -35,14 +49,23 @@ export default function CalendrierVaccinal() {
     }
 
     function showToast(msg) { setToast(msg); setTimeout(() => setToast(''), 3500); }
-    function openCreate() { setForm({ ...EMPTY, vaccinId: vaccins[0]?._id || '' }); setFormErr(''); setModal('create'); }
+    function openCreate() {
+        setForm(EMPTY);
+        setVaccinSearch('');
+        setVaccinOpen(false);
+        setFormErr('');
+        setModal('create');
+    }
     function openEdit(r) {
         setSelected(r);
         setForm({ vaccinId: r.vaccinId?._id || '', ageLabel: r.ageLabel, ageEnSemaines: r.ageEnSemaines, cible: r.cible, notes: r.notes || '' });
-        setFormErr(''); setModal('edit');
+        setVaccinSearch(r.vaccinId ? `${r.vaccinId.code} — ${r.vaccinId.nom}` : '');
+        setVaccinOpen(false);
+        setFormErr('');
+        setModal('edit');
     }
     function openDelete(r) { setSelected(r); setFormErr(''); setModal('delete'); }
-    function close() { setModal(null); setSelected(null); setFormErr(''); }
+    function close() { setModal(null); setSelected(null); setVaccinSearch(''); setVaccinOpen(false); setFormErr(''); }
     function handleChange(e) { setForm(f => ({ ...f, [e.target.name]: e.target.value })); }
 
     async function handleSave(e) {
@@ -176,12 +199,55 @@ export default function CalendrierVaccinal() {
                         </div>
                         <form onSubmit={handleSave} className="modal-form">
                             {formErr && <div className="modal-error">⚠️ {formErr}</div>}
-                            <div className="form-group">
+                            <div className="form-group" ref={comboRef} style={{ position: 'relative' }}>
                                 <label>Vaccin</label>
-                                <select name="vaccinId" value={form.vaccinId} onChange={handleChange} required>
-                                    <option value="">— Sélectionner un vaccin —</option>
-                                    {vaccins.map(v => <option key={v._id} value={v._id}>{v.code} — {v.nom}</option>)}
-                                </select>
+                                <input
+                                    placeholder="Rechercher un vaccin..."
+                                    value={vaccinSearch}
+                                    autoComplete="off"
+                                    onChange={e => {
+                                        setVaccinSearch(e.target.value);
+                                        setVaccinOpen(true);
+                                        setForm(f => ({ ...f, vaccinId: '' }));
+                                    }}
+                                    onFocus={() => setVaccinOpen(true)}
+                                    required={!form.vaccinId}
+                                    style={{ borderColor: form.vaccinId ? undefined : vaccinSearch ? '#f59e0b' : undefined }}
+                                />
+                                {/* champ caché pour la validation HTML */}
+                                <input type="hidden" name="vaccinId" value={form.vaccinId} required />
+                                {vaccinOpen && (
+                                    <div className="vaccin-combo-list">
+                                        {vaccins
+                                            .filter(v => {
+                                                const q = vaccinSearch.toLowerCase();
+                                                return !q || v.code.toLowerCase().includes(q) || v.nom.toLowerCase().includes(q);
+                                            })
+                                            .map(v => (
+                                                <button
+                                                    key={v._id}
+                                                    type="button"
+                                                    className={`vaccin-combo-item${form.vaccinId === v._id ? ' selected' : ''}`}
+                                                    onMouseDown={e => {
+                                                        e.preventDefault();
+                                                        setForm(f => ({ ...f, vaccinId: v._id }));
+                                                        setVaccinSearch(`${v.code} — ${v.nom}`);
+                                                        setVaccinOpen(false);
+                                                    }}
+                                                >
+                                                    <span className="vaccin-combo-code">{v.code}</span>
+                                                    <span className="vaccin-combo-nom">{v.nom}</span>
+                                                </button>
+                                            ))
+                                        }
+                                        {vaccins.filter(v => {
+                                            const q = vaccinSearch.toLowerCase();
+                                            return !q || v.code.toLowerCase().includes(q) || v.nom.toLowerCase().includes(q);
+                                        }).length === 0 && (
+                                            <div className="vaccin-combo-empty">Aucun vaccin trouvé.</div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                             <div className="form-row">
                                 <div className="form-group">

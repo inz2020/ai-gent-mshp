@@ -231,12 +231,19 @@ async function envoyerDiffusion(broadcast, contacts) {
             const contact = batch[j];
             if (r.status === 'fulfilled') {
                 envoyes++;
-                await BroadcastMessage.create({
-                    broadcastId: broadcast._id,
-                    whatsappId:  contact.whatsappId,
-                    messageId:   r.value ?? '',
-                    statut: 'envoye',
-                });
+                const msgId = r.value ?? '';
+                if (!msgId) {
+                    // Numéro test ou API sans id → on ne crée pas de BroadcastMessage
+                    // (impossible de tracker la livraison sans messageId)
+                    console.warn(`[BROADCAST] ok +${contact.whatsappId} — pas de messageId (numéro test ?)`);
+                } else {
+                    await BroadcastMessage.create({
+                        broadcastId: broadcast._id,
+                        whatsappId:  contact.whatsappId,
+                        messageId:   msgId,
+                        statut: 'envoye',
+                    });
+                }
                 console.log(`[BROADCAST] ok +${contact.whatsappId}`);
             } else {
                 echecs++;

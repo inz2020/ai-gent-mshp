@@ -38,9 +38,7 @@ export default function Utilisateurs() {
     async function fetchUsers() {
         setLoading(true);
         try { setUsers(await getUsers()); }
-        catch (e) { 
-            console.log('e:', e)
-            setError(e.message); }
+        catch (e) { setError(e.message); }
         finally { setLoading(false); }
     }
 
@@ -152,9 +150,9 @@ export default function Utilisateurs() {
                     </thead>
                     <tbody>
                         {loading ? (
-                            <tr><td colSpan="6" className="dt-center">Chargement...</td></tr>
+                            <tr><td colSpan="7" className="dt-center">Chargement...</td></tr>
                         ) : filtered.length === 0 ? (
-                            <tr><td colSpan="6" className="dt-center">Aucun utilisateur trouvé.</td></tr>
+                            <tr><td colSpan="7" className="dt-center">Aucun utilisateur trouvé.</td></tr>
                         ) : paged.map(u => (
                             <tr key={u._id}>
                                 <td><span className="dt-avatar">{u.nom[0].toUpperCase()}</span>{u.nom}</td>

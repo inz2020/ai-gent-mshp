@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
-import { getContacts, createContact, getContactConversations } from '../../api/index.js';
+import { getContacts, createContact, importContacts, getContactConversations } from '../../api/index.js';
 import { usePagination } from '../../hooks/usePagination.js';
 import Pagination from '../../components/Pagination.jsx';
 
@@ -98,9 +98,28 @@ export default function Contacts() {
     const [form, setForm]           = useState(DEFAULT_FORM);
     const [saving, setSaving]       = useState(false);
     const [formError, setFormError] = useState('');
-    const [codeSearch, setCodeSearch] = useState('');
+    const [codeSearch, setCodeSearch]   = useState('');
+    const [ccOpen, setCcOpen]           = useState(false);
+    const ccRef                         = useRef(null);
+
+    // Import Excel
+    const importInputRef                = useRef(null);
+    const [importing, setImporting]     = useState(false);
+    const [importResult, setImportResult] = useState(null); // { crees, ignores, erreurs[] }
 
     useEffect(() => { fetchContacts(); }, []);
+
+    // Ferme le dropdown code pays si clic en dehors
+    useEffect(() => {
+        if (!ccOpen) return;
+        function handleOutside(e) {
+            if (ccRef.current && !ccRef.current.contains(e.target)) {
+                setCcOpen(false);
+            }
+        }
+        document.addEventListener('mousedown', handleOutside);
+        return () => document.removeEventListener('mousedown', handleOutside);
+    }, [ccOpen]);
 
     async function fetchContacts() {
         setLoading(true);
@@ -136,7 +155,50 @@ export default function Contacts() {
         }
     }
 
-    function openModal() { setForm(DEFAULT_FORM); setFormError(''); setCodeSearch(''); setModal(true); }
+    function openModal() { setForm(DEFAULT_FORM); setFormError(''); setCodeSearch(''); setCcOpen(false); setModal(true); }
+
+    // ── Télécharger le modèle Excel
+    function downloadTemplate() {
+        const ws = XLSX.utils.json_to_sheet([
+            { 'N° WhatsApp': '22790123456', 'Nom': 'Amina Moussa',  'Langue': 'fr' },
+            { 'N° WhatsApp': '22791234567', 'Nom': 'Ibrahim Malam', 'Langue': 'ha' },
+        ]);
+        ws['!cols'] = [{ wch: 18 }, { wch: 24 }, { wch: 10 }];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Contacts');
+        XLSX.writeFile(wb, 'modele_import_contacts.xlsx');
+    }
+
+    // ── Lire et envoyer le fichier Excel
+    async function handleImportFile(e) {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        e.target.value = '';   // reset input pour re-sélectionner le même fichier
+        setImporting(true);
+        setImportResult(null);
+        setError('');
+        try {
+            const buffer = await file.arrayBuffer();
+            const wb     = XLSX.read(buffer, { type: 'array' });
+            const ws     = wb.Sheets[wb.SheetNames[0]];
+            const rows   = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+            if (rows.length === 0) {
+                setError('Le fichier est vide ou ne contient pas de données.');
+                return;
+            }
+
+            const result = await importContacts(rows);
+            setImportResult(result);
+            if (result.crees > 0) {
+                await fetchContacts();   // recharge la liste
+            }
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setImporting(false);
+        }
+    }
 
     const filtered = contacts.filter(c =>
         c.whatsappId.includes(search) ||
@@ -184,11 +246,31 @@ export default function Contacts() {
             {error   && <div className="dt-error">&#9888; {error}</div>}
             {success && <div className="dt-success">&#10003; {success}</div>}
 
+            {/* Input caché pour import */}
+            <input
+                ref={importInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                style={{ display: 'none' }}
+                onChange={handleImportFile}
+            />
+
             <div className="dt-toolbar">
                 <input className="dt-search"
                     placeholder="Rechercher par numero, nom ou region..."
                     value={search} onChange={e => setSearch(e.target.value)} />
                 <button className="dt-btn dt-btn-primary" onClick={openModal}>+ Nouveau contact</button>
+                <button
+                    className="dt-btn dt-btn-import"
+                    onClick={() => importInputRef.current?.click()}
+                    disabled={importing}
+                    title="Importer des contacts depuis un fichier Excel"
+                >
+                    {importing ? '⏳ Import...' : '⬆ Importer Excel'}
+                </button>
+                <button className="dt-btn dt-btn-template" onClick={downloadTemplate} title="Telecharger le modele Excel">
+                    ⬇ Modele
+                </button>
                 <button className="dt-btn" onClick={fetchContacts}>&#8635; Actualiser</button>
                 <button className="dt-btn dt-btn-export" onClick={exportExcel} disabled={filtered.length === 0}>
                     &#11015; Exporter ({filtered.length})
@@ -273,31 +355,38 @@ export default function Contacts() {
                                 <label>Numero WhatsApp</label>
                                 <div className="cc-phone-row">
                                     {/* Code pays */}
-                                    <div className="cc-wrapper" tabIndex={0}>
-                                        <div className="cc-selected">
+                                    <div className="cc-wrapper" ref={ccRef}>
+                                        <div className="cc-selected" onClick={() => { setCcOpen(o => !o); setCodeSearch(''); }}>
                                             <span>{currentCode?.flag}</span>
                                             <span className="cc-code">+{form.countryCode}</span>
+                                            <span className="cc-chevron">{ccOpen ? '▲' : '▼'}</span>
                                         </div>
-                                        <div className="cc-dropdown">
-                                            <input
-                                                className="cc-search"
-                                                placeholder="Rechercher..."
-                                                value={codeSearch}
-                                                onChange={e => setCodeSearch(e.target.value)}
-                                                onClick={e => e.stopPropagation()}
-                                            />
-                                            <div className="cc-list">
-                                                {filteredCodes.map(c => (
-                                                    <div key={c.code}
-                                                        className={`cc-item${c.code === form.countryCode ? ' active' : ''}`}
-                                                        onMouseDown={() => { setForm(f => ({ ...f, countryCode: c.code })); setCodeSearch(''); }}>
-                                                        <span>{c.flag}</span>
-                                                        <span className="cc-item-name">{c.name}</span>
-                                                        <span className="cc-item-code">+{c.code}</span>
-                                                    </div>
-                                                ))}
+                                        {ccOpen && (
+                                            <div className="cc-dropdown">
+                                                <input
+                                                    className="cc-search"
+                                                    placeholder="Rechercher..."
+                                                    value={codeSearch}
+                                                    onChange={e => setCodeSearch(e.target.value)}
+                                                    autoFocus
+                                                />
+                                                <div className="cc-list">
+                                                    {filteredCodes.map(c => (
+                                                        <div key={c.code}
+                                                            className={`cc-item${c.code === form.countryCode ? ' active' : ''}`}
+                                                            onMouseDown={() => {
+                                                                setForm(f => ({ ...f, countryCode: c.code }));
+                                                                setCodeSearch('');
+                                                                setCcOpen(false);
+                                                            }}>
+                                                            <span>{c.flag}</span>
+                                                            <span className="cc-item-name">{c.name}</span>
+                                                            <span className="cc-item-code">+{c.code}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             </div>
-                                        </div>
+                                        )}
                                     </div>
 
                                     {/* Numero local */}
@@ -332,6 +421,50 @@ export default function Contacts() {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* ══ Modal résultat import ══ */}
+            {importResult && (
+                <div className="modal-overlay" onClick={() => setImportResult(null)}>
+                    <div className="modal" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h2>Résultat de l'import</h2>
+                            <button className="modal-close" onClick={() => setImportResult(null)}>✕</button>
+                        </div>
+                        <div className="modal-body" style={{ padding: '20px 24px' }}>
+                            <div className="import-stats">
+                                <div className="import-stat import-stat-ok">
+                                    <span className="import-stat-num">{importResult.crees}</span>
+                                    <span className="import-stat-label">Créés</span>
+                                </div>
+                                <div className="import-stat import-stat-skip">
+                                    <span className="import-stat-num">{importResult.ignores}</span>
+                                    <span className="import-stat-label">Ignorés</span>
+                                </div>
+                            </div>
+
+                            {importResult.erreurs?.length > 0 && (
+                                <div className="import-errors">
+                                    <p className="import-errors-title">⚠ Détails des erreurs :</p>
+                                    <ul className="import-errors-list">
+                                        {importResult.erreurs.map((e, i) => (
+                                            <li key={i}>{e}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+
+                            {importResult.crees === 0 && importResult.erreurs?.length === 0 && (
+                                <p className="dt-muted" style={{ textAlign: 'center', marginTop: 8 }}>
+                                    Tous les contacts existent déjà.
+                                </p>
+                            )}
+                        </div>
+                        <div className="modal-footer">
+                            <button className="dt-btn dt-btn-primary" onClick={() => setImportResult(null)}>OK</button>
+                        </div>
                     </div>
                 </div>
             )}

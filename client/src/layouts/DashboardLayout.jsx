@@ -34,6 +34,8 @@ export default function DashboardLayout() {
     const navigate  = useNavigate();
     const location  = useLocation();
     const [collapsed, setCollapsed] = useState(false);
+    const userNom  = localStorage.getItem('user_nom') || 'Administrateur';
+    const userRole = localStorage.getItem('user_role') || '';
 
     // État des sous-menus : { utilisateurs: bool, metadonnees: bool }
     const [openMenus, setOpenMenus] = useState(() => {
@@ -50,6 +52,8 @@ export default function DashboardLayout() {
 
     function handleLogout() {
         localStorage.removeItem('token');
+        localStorage.removeItem('user_nom');
+        localStorage.removeItem('user_role');
         navigate('/connexion');
     }
 
@@ -133,7 +137,7 @@ export default function DashboardLayout() {
                     <h2 className="dash-title">Espace Administration</h2>
                     <div className="dash-user">
                         <span className="dash-avatar">👤</span>
-                        <span>Administrateur</span>
+                        <span>{userNom}{userRole ? ` (${userRole})` : ''}</span>
                     </div>
                 </header>
                 <main className="dash-main">

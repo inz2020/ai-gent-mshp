@@ -31,7 +31,8 @@ export default function Districts() {
     }
 
     function showToast(msg) { setToast(msg); setTimeout(() => setToast(''), 3500); }
-    function openCreate() { setForm({ ...EMPTY, regionId: regions[0]?._id || '' }); setFormErr(''); setModal('create'); }
+    function openCreate() { setForm({ ...EMPTY, regionId: regions[0]?._id || '' });
+     setFormErr(''); setModal('create'); }
     function openEdit(r) { setSelected(r); setForm({ nom: r.nom, regionId: r.regionId?._id || '' }); setFormErr(''); setModal('edit'); }
     function openDelete(r) { setSelected(r); setFormErr(''); setModal('delete'); }
     function close() { setModal(null); setSelected(null); setFormErr(''); }

@@ -12,6 +12,30 @@ const LANG_LABEL   = { fr: 'Français', ha: 'Hausa', unknown: 'Inconnu' };
 const STATUT_COLOR = { ouvert: 'dt-badge-actif', ferme: 'dt-badge-inactif', escalade_humain: 'dt-badge-danger' };
 const STATUT_LABEL = { ouvert: 'Ouvert', ferme: 'Fermé', escalade_humain: 'Mode Humain' };
 
+function formatTime(date) {
+    return new Date(date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+}
+function formatDate(date) {
+    const d = new Date(date);
+    const today = new Date();
+    const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+    if (d.toDateString() === today.toDateString()) return "Aujourd'hui";
+    if (d.toDateString() === yesterday.toDateString()) return 'Hier';
+    return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+// Groupe les messages par date
+function groupByDate(messages) {
+    const groups = [];
+    let lastDate = null;
+    for (const m of messages) {
+        const d = new Date(m.dateEnvoi).toDateString();
+        if (d !== lastDate) { groups.push({ type: 'date', label: formatDate(m.dateEnvoi), key: d }); lastDate = d; }
+        groups.push({ type: 'msg', data: m });
+    }
+    return groups;
+}
+
 export default function Discussions() {
     const [convs, setConvs]         = useState([]);
     const [loading, setLoading]     = useState(true);
@@ -24,12 +48,13 @@ export default function Discussions() {
     const [sending, setSending]     = useState(false);
     const [toggling, setToggling]   = useState(false);
     const threadEndRef              = useRef(null);
+    const textareaRef               = useRef(null);
 
     useEffect(() => { fetchConvs(); }, []);
 
     useEffect(() => {
-        if (!msgLoad && messages.length > 0) {
-            threadEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        if (!msgLoad) {
+            setTimeout(() => threadEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 60);
         }
     }, [messages, msgLoad]);
 
@@ -58,7 +83,6 @@ export default function Discussions() {
         try {
             const updated = await toggleConversationMode(selected._id);
             setSelected(updated);
-            // Mettre à jour la liste
             setConvs(prev => prev.map(c => c._id === updated._id ? { ...c, statut: updated.statut } : c));
         } catch (e) {
             alert('Erreur : ' + e.message);
@@ -67,19 +91,17 @@ export default function Discussions() {
         }
     }
 
-    async function handleSend(e) {
-        e.preventDefault();
+    async function handleSend() {
         if (!opText.trim() || sending) return;
         setSending(true);
         try {
             const msg = await sendOperatorMessage(selected._id, opText.trim());
             setMessages(prev => [...prev, msg]);
             setOpText('');
-            // Met à jour nbMessages dans la liste
             setConvs(prev => prev.map(c =>
                 c._id === selected._id ? { ...c, nbMessages: (c.nbMessages ?? 0) + 1 } : c
             ));
-            setTimeout(() => threadEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+            if (textareaRef.current) { textareaRef.current.style.height = 'auto'; }
         } catch (e) {
             alert('Erreur envoi : ' + e.message);
         } finally {
@@ -87,7 +109,24 @@ export default function Discussions() {
         }
     }
 
+    function handleKeyDown(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSend();
+        }
+    }
+
+    function handleTextareaChange(e) {
+        setOpText(e.target.value);
+        // Auto-resize
+        e.target.style.height = 'auto';
+        e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+    }
+
     const isHuman = selected?.statut === 'escalade_humain';
+    const contactName = selected?.contactId?.nom ?? 'Inconnu';
+    const contactPhone = selected?.contactId?.whatsappId ?? '';
+    const contactInitial = contactName[0]?.toUpperCase() ?? '?';
 
     const filtered = convs.filter(c => {
         const phone = c.contactId?.whatsappId ?? '';
@@ -136,9 +175,7 @@ export default function Discussions() {
                         ) : paged.map(c => (
                             <tr key={c._id}>
                                 <td>
-                                    <span className="dt-avatar">
-                                        {(c.contactId?.nom?.[0] ?? '?').toUpperCase()}
-                                    </span>
+                                    <span className="dt-avatar">{(c.contactId?.nom?.[0] ?? '?').toUpperCase()}</span>
                                     {c.contactId?.nom ?? 'Inconnu'}
                                 </td>
                                 <td><span className="dt-mono">+{c.contactId?.whatsappId ?? '—'}</span></td>
@@ -147,7 +184,7 @@ export default function Discussions() {
                                         {STATUT_LABEL[c.statut] ?? c.statut}
                                     </span>
                                 </td>
-                                <td>{LANG_LABEL[c.langue] ?? c.langue}</td>
+                                <td>{LANG_LABEL[c.contactId?.langue] ?? c.contactId?.langue ?? '—'}</td>
                                 <td style={{ textAlign: 'center' }}>{c.nbMessages}</td>
                                 <td>{new Date(c.derniereMiseAJour).toLocaleString('fr-FR')}</td>
                                 <td>{new Date(c.createdAt).toLocaleDateString('fr-FR')}</td>
@@ -167,129 +204,206 @@ export default function Discussions() {
                 <Pagination page={page} totalPages={totalPages} onChange={setPage} />
             </div>
 
-            {/* Panneau fil de messages */}
+            {/* ══════════ FENÊTRE WHATSAPP ══════════ */}
             {selected && (
                 <div className="modal-overlay" onClick={closeThread}>
-                    <div className="modal" style={{ maxWidth: 660 }} onClick={e => e.stopPropagation()}>
+                    <div className="wa-window" onClick={e => e.stopPropagation()}>
 
-                        {/* Header */}
-                        <div className="modal-header">
-                            <div>
-                                <h2>Conversation — +{selected.contactId?.whatsappId}</h2>
-                                <small style={{ color: '#94a3b8' }}>
-                                    {selected.contactId?.nom} &nbsp;·&nbsp;
-                                    <span className={`dt-badge ${STATUT_COLOR[selected.statut]}`}>
-                                        {STATUT_LABEL[selected.statut]}
-                                    </span>
-                                </small>
+                        {/* ── Header style WhatsApp ── */}
+                        <div className="wa-header">
+                            <button className="wa-back" onClick={closeThread} title="Fermer">
+                                <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+                                    <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+                                </svg>
+                            </button>
+
+                            <div className="wa-header-avatar">{contactInitial}</div>
+
+                            <div className="wa-header-info">
+                                <span className="wa-header-name">{contactName}</span>
+                                <span className="wa-header-sub">
+                                    +{contactPhone} &nbsp;·&nbsp;
+                                    {isHuman ? '👨‍⚕️ Mode Humain' : '🤖 Mode IA'}
+                                </span>
                             </div>
 
-                            {/* Toggle Mode */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div className="wa-header-actions">
                                 <button
-                                    className={`conv-mode-btn ${isHuman ? 'conv-mode-human' : 'conv-mode-ai'}`}
+                                    className={`wa-mode-btn ${isHuman ? 'wa-mode-btn-ai' : 'wa-mode-btn-human'}`}
                                     onClick={handleToggleMode}
                                     disabled={toggling}
-                                    title={isHuman ? 'Passer en mode IA' : 'Passer en mode Humain'}
+                                    title={isHuman ? 'Repasser en mode IA' : 'Prendre la main (Mode Humain)'}
                                 >
-                                    {toggling ? '…' : isHuman ? '🤖 Activer IA' : '👨‍⚕️ Mode Humain'}
+                                    {toggling ? '…' : isHuman
+                                        ? <><RobotIcon /> IA</>
+                                        : <><AgentIcon /> Prendre la main</>
+                                    }
                                 </button>
-                                <button className="modal-close" onClick={closeThread}>✕</button>
                             </div>
                         </div>
 
-                        {/* Bannière mode humain */}
-                        {isHuman && (
-                            <div className="conv-human-banner">
-                                👨‍⚕️ Mode humain activé — l'IA ne répond plus. Vous pouvez écrire directement au contact.
-                            </div>
-                        )}
-
-                        {/* Fil de messages */}
-                        <div className="modal-body thread-body">
+                        {/* ── Fond chat + bulles ── */}
+                        <div className="wa-chat-bg">
                             {msgLoad ? (
-                                <p className="dt-center">Chargement des messages...</p>
+                                <div className="wa-loading">
+                                    <span className="wa-loading-dot" /><span className="wa-loading-dot" /><span className="wa-loading-dot" />
+                                </div>
                             ) : messages.length === 0 ? (
-                                <p className="dt-muted">Aucun message enregistré.</p>
+                                <div className="wa-empty">Aucun message enregistré.</div>
                             ) : (
-                                <>
-                                    {messages.map(m => (
-                                        <div
-                                            key={m._id}
-                                            className={`thread-msg ${
-                                                m.emetteurType === 'humain'
-                                                    ? 'thread-msg-user'
-                                                    : m.emetteurType === 'operateur_sante'
-                                                    ? 'thread-msg-op'
-                                                    : 'thread-msg-bot'
-                                            }`}
-                                        >
-                                            <div className="thread-msg-header">
-                                                <span className="thread-sender">
-                                                    {m.emetteurType === 'humain'    ? '👤 Utilisateur'
-                                                    : m.emetteurType === 'agent_ia' ? '🤖 Hawa'
-                                                    : '👨‍⚕️ Opérateur'}
-                                                </span>
-                                                <span className="thread-time">
-                                                    {new Date(m.dateEnvoi).toLocaleString('fr-FR')}
-                                                </span>
+                                groupByDate(messages).map((item) => {
+                                    if (item.type === 'date') {
+                                        return (
+                                            <div key={item.key} className="wa-date-pill">
+                                                {item.label}
                                             </div>
-                                            <div className="thread-msg-body">
+                                        );
+                                    }
+                                    const m = item.data;
+                                    const isRight = m.emetteurType === 'agent_ia' || m.emetteurType === 'operateur_sante';
+                                    const isOp    = m.emetteurType === 'operateur_sante';
+
+                                    return (
+                                        <div key={m._id} className={`wa-row ${isRight ? 'wa-row-right' : 'wa-row-left'}`}>
+                                            <div className={`wa-bubble ${
+                                                isRight
+                                                    ? isOp ? 'wa-bubble-op' : 'wa-bubble-ai'
+                                                    : 'wa-bubble-user'
+                                            }`}>
+                                                {/* Étiquette expéditeur (uniquement en bulles gauche) */}
+                                                {!isRight && (
+                                                    <span className="wa-sender-label">👤 Contact</span>
+                                                )}
+                                                {isOp && (
+                                                    <span className="wa-sender-label wa-sender-op">👨‍⚕️ Vous</span>
+                                                )}
+                                                {m.emetteurType === 'agent_ia' && (
+                                                    <span className="wa-sender-label wa-sender-ai">🤖 Hawa</span>
+                                                )}
+
+                                                {/* Contenu */}
                                                 {m.typeContenu === 'location' && m.coordonnees?.latitude != null ? (
                                                     <a
                                                         href={`https://www.openstreetmap.org/?mlat=${m.coordonnees.latitude}&mlon=${m.coordonnees.longitude}&zoom=14`}
-                                                        target="_blank"
-                                                        rel="noreferrer"
-                                                        style={{ color: '#0a7c4e', fontSize: '0.88rem' }}
+                                                        target="_blank" rel="noreferrer"
+                                                        className="wa-location-link"
                                                     >
-                                                        📍 Position GPS — {m.coordonnees.latitude.toFixed(5)}, {m.coordonnees.longitude.toFixed(5)}
+                                                        <span className="wa-location-icon">📍</span>
+                                                        <span>
+                                                            Position GPS<br />
+                                                            <small>{m.coordonnees.latitude.toFixed(4)}, {m.coordonnees.longitude.toFixed(4)}</small>
+                                                        </span>
                                                     </a>
                                                 ) : m.typeContenu === 'audio' && m.audioUrl ? (
-                                                    <>
-                                                        {m.texteBrut && <p style={{ marginBottom: 6, fontStyle: 'italic', color: '#64748b' }}>"{m.texteBrut}"</p>}
-                                                        <audio controls src={m.audioUrl} style={{ width: '100%' }} />
-                                                    </>
+                                                    <div className="wa-audio-block">
+                                                        {m.texteBrut && m.texteBrut !== '[Audio reçu en mode humain]' && (
+                                                            <em className="wa-audio-transcript">"{m.texteBrut}"</em>
+                                                        )}
+                                                        <audio controls src={m.audioUrl} className="wa-audio" />
+                                                    </div>
                                                 ) : (
-                                                    <p style={{ whiteSpace: 'pre-wrap' }}>{m.texteBrut || <em className="dt-muted">Message vide</em>}</p>
+                                                    <p className="wa-text">{m.texteBrut || <em className="wa-text-empty">Message vide</em>}</p>
                                                 )}
+
+                                                {/* Heure + coches */}
+                                                <div className="wa-meta">
+                                                    <span className="wa-time">{formatTime(m.dateEnvoi)}</span>
+                                                    {isRight && (
+                                                        <svg className="wa-ticks" viewBox="0 0 16 11" width="14" height="10">
+                                                            <path d="M11.071.653a.75.75 0 0 1 .206 1.04l-5.5 8a.75.75 0 0 1-1.197.077l-3-3.5a.75.75 0 0 1 1.14-.977l2.418 2.82 4.893-7.254a.75.75 0 0 1 1.04-.206z" fill="currentColor"/>
+                                                            <path d="M14.571.653a.75.75 0 0 1 .206 1.04l-5.5 8a.75.75 0 0 1-1.04.206.75.75 0 0 1-.206-1.04l5.5-8a.75.75 0 0 1 1.04-.206z" fill="currentColor" opacity=".5"/>
+                                                        </svg>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
-                                    ))}
-                                    <div ref={threadEndRef} />
-                                </>
+                                    );
+                                })
                             )}
+                            <div ref={threadEndRef} />
                         </div>
 
-                        {/* Zone de saisie opérateur — visible seulement en mode humain */}
-                        {isHuman && (
-                            <form className="conv-send-row" onSubmit={handleSend}>
-                                <input
-                                    className="conv-send-input"
-                                    placeholder="Écrire un message WhatsApp..."
+                        {/* ── Barre de saisie style WhatsApp ── */}
+                        {isHuman ? (
+                            <div className="wa-input-bar">
+                                <button className="wa-input-icon" title="Emoji" tabIndex={-1}>
+                                    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                                        <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/>
+                                    </svg>
+                                </button>
+
+                                <textarea
+                                    ref={textareaRef}
+                                    className="wa-input-field"
+                                    placeholder="Écrire un message..."
                                     value={opText}
-                                    onChange={e => setOpText(e.target.value)}
+                                    onChange={handleTextareaChange}
+                                    onKeyDown={handleKeyDown}
+                                    rows={1}
                                     disabled={sending}
                                     autoFocus
                                 />
-                                <button
-                                    type="submit"
-                                    className="conv-send-btn"
-                                    disabled={sending || !opText.trim()}
-                                >
-                                    {sending ? '…' : '➤ Envoyer'}
-                                </button>
-                            </form>
-                        )}
 
-                        <div className="modal-footer">
-                            <span className="dt-muted" style={{ fontSize: 12 }}>
-                                {messages.length} message{messages.length !== 1 ? 's' : ''}
-                            </span>
-                            <button className="dt-btn" onClick={closeThread}>Fermer</button>
-                        </div>
+                                <button
+                                    className={`wa-send-btn ${opText.trim() ? 'wa-send-btn-active' : ''}`}
+                                    onClick={handleSend}
+                                    disabled={sending || !opText.trim()}
+                                    title="Envoyer"
+                                >
+                                    {sending ? (
+                                        <svg viewBox="0 0 24 24" width="22" height="22" fill="white">
+                                            <circle cx="12" cy="12" r="3" opacity="0.4"/>
+                                        </svg>
+                                    ) : opText.trim() ? (
+                                        /* Icône envoi */
+                                        <svg viewBox="0 0 24 24" width="22" height="22" fill="white">
+                                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                                        </svg>
+                                    ) : (
+                                        /* Icône micro */
+                                        <svg viewBox="0 0 24 24" width="22" height="22" fill="white">
+                                            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                                        </svg>
+                                    )}
+                                </button>
+                            </div>
+                        ) : (
+                            /* Mode IA — barre grisée avec hint */
+                            <div className="wa-input-bar wa-input-bar-disabled">
+                                <button className="wa-input-icon" disabled>
+                                    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                                        <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/>
+                                    </svg>
+                                </button>
+                                <div className="wa-input-field wa-input-ai-hint">
+                                    🤖 Hawa répond automatiquement — cliquez "Prendre la main" pour écrire
+                                </div>
+                                <button className="wa-send-btn" disabled>
+                                    <svg viewBox="0 0 24 24" width="22" height="22" fill="white">
+                                        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
         </div>
+    );
+}
+
+/* ── Icônes inline ── */
+function RobotIcon() {
+    return (
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style={{ marginRight: 4 }}>
+            <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7H3a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2zM7.5 14a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm9 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM3 21v-2a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v2H3z"/>
+        </svg>
+    );
+}
+function AgentIcon() {
+    return (
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style={{ marginRight: 4 }}>
+            <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
+        </svg>
     );
 }

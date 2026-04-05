@@ -5,7 +5,6 @@ async function request(path, options = {}) {
         ...options,
         headers: { 'Content-Type': 'application/json', ...options.headers },
     });
-    console.log('res:',res)
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || 'Erreur serveur.');
     return data;
@@ -66,6 +65,14 @@ export function createContact(data) {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify(data),
+    });
+}
+
+export function importContacts(rows) {
+    return request('/api/contacts/import', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify(rows),
     });
 }
 
@@ -143,7 +150,7 @@ export async function uploadBroadcastMedia(file, mediaType) {
     const form = new FormData();
     form.append('file', file);
     form.append('mediaType', mediaType);
-    const res = await fetch('/api/broadcasts/upload', {
+    const res = await fetch(`${BASE_URL}/api/broadcasts/upload`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
         body: form,

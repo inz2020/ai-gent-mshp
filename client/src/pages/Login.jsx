@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { loginUser } from '../api/index.js';
-import { validerMotDePasse, PASSWORD_RULES } from '../utils/passwordPolicy.js';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -21,21 +20,17 @@ export default function Login() {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    console.log('user:', form)
     if (!form.login || !form.password) {
       setError('Veuillez remplir tous les champs.');
-      return;
-    }
-    const { valide, erreurs } = validerMotDePasse(form.password);
-    if (!valide) {
-      setError(erreurs[0]);
       return;
     }
     setLoading(true);
     setError('');
     try {
-      const { token } = await loginUser(form.login, form.password);
+      const { token, nom, role } = await loginUser(form.login, form.password);
       localStorage.setItem('token', token);
+      localStorage.setItem('user_nom', nom ?? '');
+      localStorage.setItem('user_role', role ?? '');
       navigate('/dashboard');
     } catch (err) {
       setError(err.message);
@@ -75,7 +70,7 @@ export default function Login() {
 
           <form onSubmit={handleSubmit} className="login-form">
             <div className="form-group">
-              <label htmlFor="email">Adresse e-mail</label>
+              <label htmlFor="login">Adresse e-mail</label>
               <input
                 id="login"
                 name="login"
@@ -83,7 +78,7 @@ export default function Login() {
                 placeholder="exemple@sante.gouv.ne"
                 value={form.login}
                 onChange={handleChange}
-                autoComplete="login"
+                autoComplete="email"
               />
             </div>
 
@@ -110,15 +105,6 @@ export default function Login() {
                   {showPassword ? 'Cacher' : 'Voir'}
                 </button>
               </div>
-              {form.password.length > 0 && (
-                <ul className="password-rules">
-                  {PASSWORD_RULES.map(rule => (
-                    <li key={rule.message} className={rule.regex.test(form.password) ? 'rule-ok' : 'rule-ko'}>
-                      {rule.regex.test(form.password) ? '✓' : '✗'} {rule.message}
-                    </li>
-                  ))}
-                </ul>
-              )}
             </div>
 
             <button type="submit" className="btn-login" disabled={loading}>

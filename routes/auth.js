@@ -1,7 +1,6 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import User from '../db/models/User.js';
-import { validerMotDePasse } from '../constants/passwordPolicy.js';
 
 const router = express.Router();
 
@@ -11,11 +10,6 @@ router.post('/login', async (req, res) => {
 
     if (!login || !password) {
         return res.status(400).json({ message: 'Identifiant et mot de passe requis.' });
-    }
-
-    const { valide, erreurs } = validerMotDePasse(password);
-    if (!valide) {
-        return res.status(400).json({ message: erreurs[0] });
     }
 
     try {

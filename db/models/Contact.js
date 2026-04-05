@@ -5,7 +5,7 @@ const ContactSchema = new mongoose.Schema({
     nom: { type: String, default: "Utilisateur Inconnu" },
     region: { type: mongoose.Schema.Types.ObjectId, ref: 'Region' },
     district: { type: mongoose.Schema.Types.ObjectId, ref: 'District' },
-    langue: { type: String, default: 'hausa' },
+    langue: { type: String, default: 'fr' },
     dateInscription: { type: Date, default: Date.now },
     statutVaxEnfants: { type: String, enum: ['A jour', 'En retard', 'Inconnu'], default: 'Inconnu' },
     dernierePosition: {

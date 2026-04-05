@@ -1,4 +1,4 @@
-export const VERIFY_TOKEN = "MON_SECRET_NIGER_2024";
+export const VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN || "MON_SECRET_NIGER_2024";
 
 // ============================================================
 // MESSAGES PAR DÉFAUT — À PERSONNALISER ICI

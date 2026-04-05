@@ -43,6 +43,54 @@ router.post('/', requireAuth, requireRole('admin', 'staff'), async (req, res) =>
     }
 });
 
+// POST /api/contacts/import — import en masse depuis Excel (JSON)
+router.post('/import', requireAuth, requireRole('admin', 'staff'), async (req, res) => {
+    const rows = req.body;
+    if (!Array.isArray(rows) || rows.length === 0) {
+        return res.status(400).json({ message: 'Fichier vide ou format invalide.' });
+    }
+    if (rows.length > 500) {
+        return res.status(400).json({ message: 'Maximum 500 contacts par import.' });
+    }
+
+    const results = { crees: 0, ignores: 0, erreurs: [] };
+
+    for (const row of rows) {
+        // Normalise le numéro : retire le + et les espaces
+        const raw = String(row['N° WhatsApp'] ?? row['whatsappId'] ?? '').replace(/\D/g, '');
+        const nom  = String(row['Nom'] ?? row['nom'] ?? '').trim();
+        const langueRaw = String(row['Langue'] ?? row['langue'] ?? 'fr').toLowerCase().trim();
+        const langue = langueRaw === 'hausa' || langueRaw === 'ha' ? 'ha' : 'fr';
+
+        if (!raw || !/^\d{7,15}$/.test(raw)) {
+            results.erreurs.push(`Numéro invalide : "${row['N° WhatsApp'] ?? raw}"`);
+            results.ignores++;
+            continue;
+        }
+        if (!nom) {
+            results.erreurs.push(`Nom manquant pour le numéro +${raw}`);
+            results.ignores++;
+            continue;
+        }
+
+        const exists = await Contact.findOne({ whatsappId: raw });
+        if (exists) {
+            results.ignores++;
+            continue;
+        }
+
+        try {
+            await Contact.create({ whatsappId: raw, nom, langue });
+            results.crees++;
+        } catch (err) {
+            results.erreurs.push(`Erreur pour +${raw} : ${err.message}`);
+            results.ignores++;
+        }
+    }
+
+    res.json(results);
+});
+
 // GET /api/contacts/:id/conversations — conversations d'un contact
 router.get('/:id/conversations', requireAuth, async (req, res) => {
     try {

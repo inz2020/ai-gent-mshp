@@ -264,6 +264,46 @@ async function sendGreetingResponse(userPhone) {
         { ...base, type: "text", text: { body: GREETING_CONFIG.message } },
         { headers }
     );
+
+    // Demande automatique de localisation après le message de bienvenue
+    await sendLocationRequest(userPhone);
+}
+
+/**
+ * Envoie un message interactif avec le bouton natif WhatsApp "Envoyer ma position".
+ * Quand l'utilisateur appuie dessus, WhatsApp envoie un message de type 'location'
+ * que processLocation() traite déjà pour trouver les centres les plus proches.
+ */
+async function sendLocationRequest(userPhone) {
+    try {
+        await axios.post(
+            `https://graph.facebook.com/v22.0/${process.env.PHONE_ID}/messages`,
+            {
+                messaging_product: 'whatsapp',
+                to: userPhone,
+                type: 'interactive',
+                interactive: {
+                    type: 'location_request_message',
+                    body: {
+                        text: '📍 Partagez votre position pour trouver le centre de vaccination le plus proche de chez vous.\n\nKayi rabawa da wurin ka don nemo cibiyar rigakafi mafi kusa da kai.',
+                    },
+                    action: {
+                        name: 'send_location',
+                    },
+                },
+            },
+            {
+                headers: {
+                    Authorization: `Bearer ${process.env.META_TOKEN}`,
+                    'Content-Type': 'application/json',
+                },
+            }
+        );
+        console.log(`[LOC-REQ] Demande de localisation envoyée à ${userPhone}`);
+    } catch (err) {
+        // Non bloquant — l'utilisateur peut toujours partager manuellement
+        console.warn(`[LOC-REQ] Échec envoi location_request à ${userPhone}:`, err.response?.data?.error?.message ?? err.message);
+    }
 }
 
 // prepareVoiceText importé depuis lib/audio.js
@@ -598,15 +638,13 @@ async function processLocation(lat, lng, userPhone) {
     await sendWhatsAppText(userPhone, message);
     console.log(`[LOC] ${nearest.length} structures envoyées à ${userPhone}`);
 
-    // Persistance
+    // Persistance — réutilise contactLoc/convLoc déjà récupérés plus haut
     try {
-        // contactLoc/convLoc déjà récupérés en haut de la fonction
         contactLoc.dernierePosition = { latitude: lat, longitude: lng, updatedAt: new Date() };
         await contactLoc.save();
 
-        const conv = await getOrCreateConversation(contactLoc._id);
         await Message.create({
-            conversationId: conv._id,
+            conversationId: convLoc._id,
             emetteurType: 'humain',
             typeContenu: 'location',
             texteBrut: `[LOCALISATION] lat:${lat}, lng:${lng}`,
@@ -614,15 +652,15 @@ async function processLocation(lat, lng, userPhone) {
             langue: 'unknown'
         });
         await Message.create({
-            conversationId: conv._id,
+            conversationId: convLoc._id,
             emetteurType: 'agent_ia',
             typeContenu: 'text',
             texteBrut: message,
             langue: 'fr'
         });
-        conv.nbMessages += 2;
-        conv.derniereMiseAJour = new Date();
-        await conv.save();
+        convLoc.nbMessages += 2;
+        convLoc.derniereMiseAJour = new Date();
+        await convLoc.save();
         console.log(`[DB] Position sauvegardée pour ${userPhone}: lat=${lat}, lng=${lng}`);
     } catch (dbErr) {
         console.error('[DB] Erreur persistance localisation:', dbErr.message);

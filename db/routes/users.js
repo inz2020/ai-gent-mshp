@@ -49,7 +49,7 @@ router.put('/:id', async (req, res) => {
     if (!user) return res.status(404).json({ message: 'Utilisateur introuvable.' });
 
     // Empêcher de modifier le seul admin
-    if (user.role === 'admin' && role === 'agent') {
+    if (user.role === 'admin' && role && role !== 'admin') {
         const nbAdmins = await User.countDocuments({ role: 'admin', actif: true });
         if (nbAdmins <= 1) {
             return res.status(400).json({ message: 'Impossible de rétrograder le seul administrateur.' });
