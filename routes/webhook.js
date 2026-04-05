@@ -352,7 +352,7 @@ const AUDIO_ERRORS = {
 
 // generateTTS, prepareVoiceText et uploadAudio importés depuis lib/audio.js
 
-async function getRecentMessages(conversationId, limit = 6) {
+async function getRecentMessages(conversationId, limit = 12) {
     const msgs = await Message.find({ conversationId })
         .sort({ dateEnvoi: -1 })
         .limit(limit)
@@ -365,8 +365,8 @@ async function getRecentMessages(conversationId, limit = 6) {
 
 // ─── Traitement texte ────────────────────────────────────────
 
-// Instruction injectée dans le system prompt pour la détection auto de langue.
 // GPT retourne un JSON {lang, reply} — une seule requête pour détecter ET répondre.
+// Si un hint de langue est fourni (détection dictionnaire), il est injecté dans le contenu.
 const TEXT_LANG_DETECT_INSTRUCTION = `
 
 ═══════════════════════════════════════════
@@ -377,8 +377,8 @@ Tu dois TOUJOURS répondre avec un objet JSON valide, sans aucun texte autour :
 {"lang":"fr","reply":"ta réponse ici"}
 
 Règles de détection de langue :
-- Message en français (quelle que soit l'orthographe ou les fautes) → lang="fr", reply en français
-- Message en Hausa (quelle que soit l'orthographe ou les fautes) → lang="ha", reply en Hausa pur, zéro mot français
+- Message en français (quelle que soit l'orthographe ou les fautes) → lang="fr", reply en français, maximum 4 phrases
+- Message en Hausa (quelle que soit l'orthographe ou les fautes) → lang="ha", reply en Hausa pur, zéro mot français, 2-3 phrases orales courtes
 - Autre langue ou message totalement incompréhensible → lang="unknown", reply=""
 
 Exemples :
@@ -420,7 +420,15 @@ async function processText(userText, userPhone) {
         return;
     }
 
-    // Historique conversationnel (6 derniers échanges)
+    // Pré-détection rapide par dictionnaire (HAUSA_WORDS / HAUSA_PHRASES)
+    // Si des mots Hausa sont trouvés → on confirme à GPT que c'est du Hausa
+    const dictLang = detectTextLanguage(userText);
+    const hausaHint = dictLang === 'ha'
+        ? `[IMPORTANT: Ce message contient des mots Hausa identifiés — réponds OBLIGATOIREMENT en Hausa pur, lang="ha"] `
+        : '';
+    console.log(`[TEXT] Pré-détection dictionnaire: ${dictLang}`);
+
+    // Historique conversationnel complet (12 derniers messages)
     const history = await getRecentMessages(conv._id);
 
     // GPT détecte la langue ET génère la réponse en une seule requête JSON
@@ -431,7 +439,7 @@ async function processText(userText, userPhone) {
         messages: [
             { role: 'system', content: SYSTEM_PROMPT + TEXT_LANG_DETECT_INSTRUCTION },
             ...history,
-            { role: 'user', content: userText }
+            { role: 'user', content: hausaHint + userText }
         ]
     });
 
@@ -445,14 +453,26 @@ async function processText(userText, userPhone) {
         console.error('[TEXT] Échec parsing JSON GPT:', parseErr.message);
     }
 
-    console.log(`[TEXT] Langue détectée: ${lang} | Réponse: ${reply}`);
+    // Si dictionnaire a détecté Hausa mais GPT ne l'a pas confirmé → on force Hausa
+    if (dictLang === 'ha' && lang !== 'ha') {
+        console.log(`[TEXT] Forçage Hausa (dictionnaire=ha, GPT=${lang})`);
+        lang = 'ha';
+    }
+
+    console.log(`[TEXT] Langue finale: ${lang} | Réponse: ${reply}`);
 
     if (lang === 'unknown' || !reply) {
         await sendAudioReply(userPhone, AUDIO_ERRORS.unknown_lang, 'ha');
         return;
     }
 
-    await sendWhatsAppText(userPhone, reply);
+    // Hausa → réponse audio (meilleure expérience pour locuteurs Hausa)
+    // Français → réponse texte
+    if (lang === 'ha') {
+        await sendAudioReply(userPhone, reply, 'ha');
+    } else {
+        await sendWhatsAppText(userPhone, reply);
+    }
 
     try {
         await saveMessages(contact._id, lang, { humanText: userText, aiText: reply });
