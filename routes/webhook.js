@@ -12,7 +12,7 @@ import Message from '../db/models/Message.js';
 import Structure from '../db/models/Structure.js';
 import BroadcastMessage from '../db/models/BroadcastMessage.js';
 import Broadcast from '../db/models/Broadcast.js';
-import { generateTTS, ttsElevenLabs, sttElevenLabs, prepareVoiceText, uploadAudio } from '../lib/audio.js';
+import { generateTTS, ttsOpenAI, ttsElevenLabs, sttElevenLabs, prepareVoiceText, uploadAudio } from '../lib/audio.js';
 import { getErrorAudioUrl, ERROR_TEXTS } from '../lib/errorAudio.js';
 
 const router = express.Router();
@@ -341,24 +341,42 @@ async function sendWhatsAppText(to, text) {
 }
 
 // Envoie TOUJOURS un message AUDIO (TTS).
-// Si le TTS principal échoue → ElevenLabs comme 2e tentative.
-// Texte uniquement si les deux TTS sont indisponibles (dernier recours absolu).
+// Chaîne de fallback selon la langue :
+//   FR : OpenAI shimmer → ElevenLabs → texte (dernier recours)
+//   HA : ElevenLabs     → OpenAI shimmer → texte (dernier recours)
 async function sendAudioReply(to, text, lang = 'fr') {
     let ttsBuffer;
     const voiceText = prepareVoiceText(text);
 
-    // Tentative 1 : TTS principal (OpenAI pour FR, ElevenLabs pour HA)
-    try {
-        ttsBuffer = await generateTTS(voiceText, lang);
-    } catch (primaryErr) {
-        console.error(`[TTS] Échec TTS principal (${lang}), tentative ElevenLabs:`, primaryErr.message);
-        // Tentative 2 : ElevenLabs multilingue (supporte FR et HA)
+    if (lang === 'ha') {
+        // Tentative 1 : ElevenLabs (meilleur pour Hausa)
         try {
             ttsBuffer = await ttsElevenLabs(voiceText);
-        } catch (fallbackErr) {
-            console.error('[TTS] Échec ElevenLabs aussi, dernier recours texte:', fallbackErr.message);
-            await sendWhatsAppText(to, text);
-            return null;
+        } catch (e1) {
+            console.warn('[TTS] ElevenLabs échoué (ha), fallback OpenAI shimmer:', e1.message);
+            // Tentative 2 : OpenAI shimmer (lit le Hausa en romanisation)
+            try {
+                ttsBuffer = await ttsOpenAI(voiceText);
+            } catch (e2) {
+                console.error('[TTS] OpenAI shimmer aussi échoué, dernier recours texte:', e2.message);
+                await sendWhatsAppText(to, text);
+                return null;
+            }
+        }
+    } else {
+        // Tentative 1 : OpenAI shimmer (optimal pour FR)
+        try {
+            ttsBuffer = await ttsOpenAI(voiceText);
+        } catch (e1) {
+            console.warn('[TTS] OpenAI shimmer échoué (fr), fallback ElevenLabs:', e1.message);
+            // Tentative 2 : ElevenLabs multilingue
+            try {
+                ttsBuffer = await ttsElevenLabs(voiceText);
+            } catch (e2) {
+                console.error('[TTS] ElevenLabs aussi échoué, dernier recours texte:', e2.message);
+                await sendWhatsAppText(to, text);
+                return null;
+            }
         }
     }
 
