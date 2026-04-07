@@ -70,8 +70,6 @@ function detectTextLanguage(text) {
 // Règle de décision : si pas clairement FR → on choisit HA.
 
 function resolveFinalLanguage(whisperLang, textLang) {
-    // Whisper détecte le Hausa comme langue africaine voisine, slave ou arabe
-    // car Hausa n'est pas dans son corpus d'entraînement
     const WHISPER_HAUSA_ALIASES = [
         'hausa', 'amharic', 'somali', 'swahili', 'yoruba', 'igbo', 'zulu',
         'ukrainian', 'russian', 'polish', 'arabic', 'turkish', 'persian',
@@ -82,13 +80,15 @@ function resolveFinalLanguage(whisperLang, textLang) {
         : WHISPER_HAUSA_ALIASES.includes(whisperLang) ? 'ha'
         : 'unknown';
 
-    // Si l'un des deux dit clairement FR, et l'autre ne dit pas HA → FR
+    // FR : au moins un signal fort FR, aucun signal Hausa
     if (whisperCode === 'fr' && textLang !== 'ha') return 'fr';
     if (textLang === 'fr' && whisperCode !== 'ha') return 'fr';
 
-    // Dans tous les autres cas → HA
-    // (service binaire : si pas clairement FR, c'est HA)
-    return 'ha';
+    // HA : au moins un signal Hausa explicite
+    if (whisperCode === 'ha' || textLang === 'ha') return 'ha';
+
+    // Aucun signal clair des deux côtés → on ne sait pas encore
+    return 'unknown';
 }
 
 // ─── Contrôle qualité audio (via segments Whisper) ──────────
@@ -592,22 +592,69 @@ async function processAudio(mediaId, userPhone) {
     }
 
     // ══════════════════════════════════════════════════════════════
-    // TRANSCRIPTION — OpenAI Whisper
-    // ══════════════════════════════════════════════════════════════
-    //
-    // IMPORTANT : Whisper ne supporte PAS le Hausa ('ha') comme code
-    // de langue explicite — l'API retourne 400 si on le passe.
-    // Pour le Hausa on laisse Whisper auto-détecter, en guidant la
-    // transcription via le prompt de vocabulaire médical nigérien.
-    //
-    // Priorité :
-    //  1. Si langue = FR  → Whisper language:'fr' (forcé, langue supportée)
-    //  2. Si langue = HA ou inconnue → auto-détection + prompt Hausa
+    // ── Double-pass Whisper pour TOUS les cas ───────────────────
+    // On transcrit FR forcé + Hausa prompt en parallèle,
+    // puis on compare les logprob pour choisir la vraie langue.
+    // Cela détecte les changements de langue (contact Hausa qui parle FR, etc.)
 
     let transcription;
+    const avgLogProbFn = t => {
+        const segs = t.segments ?? [];
+        if (!segs.length) return -99;
+        return segs.reduce((s, sg) => s + sg.avg_logprob, 0) / segs.length;
+    };
 
-    if (knownLang === 'fr') {
-        // ── Français connu → Whisper forcé FR ───────────────────
+    // Prompt médical français — ancre Whisper sur le vocabulaire santé/vaccination.
+    // Sans ce prompt, Whisper peut transcrire "rougeole" en "rujul" ou changer de langue.
+    const FR_WHISPER_PROMPT =
+        'Qu\'est-ce que la rougeole ? La rougeole est une maladie évitable par le vaccin. ' +
+        'La vaccination protège les enfants contre la poliomyélite, la coqueluche, le tétanos, ' +
+        'la diphtérie, l\'hépatite B, la méningite et la fièvre jaune. ' +
+        'Le centre de santé le plus proche propose des vaccins gratuits pour les nourrissons. ' +
+        'Quels sont les effets secondaires du vaccin ? Où puis-je me faire vacciner au Niger ?';
+
+    try {
+        const [transcriptionFr, transcriptionHa] = await Promise.all([
+            openai.audio.transcriptions.create({
+                file: fs.createReadStream(inputFile),
+                model: 'whisper-1',
+                response_format: 'verbose_json',
+                timestamp_granularities: ['segment'],
+                language: 'fr',
+                prompt: FR_WHISPER_PROMPT,
+            }),
+            openai.audio.transcriptions.create({
+                file: fs.createReadStream(inputFile),
+                model: 'whisper-1',
+                response_format: 'verbose_json',
+                timestamp_granularities: ['segment'],
+                prompt: getHausaWhisperPrompt(),
+            }),
+        ]);
+
+        const frScore = avgLogProbFn(transcriptionFr);
+        const haScore = avgLogProbFn(transcriptionHa);
+        console.log(`[3/6] Whisper double-pass — FR logprob: ${frScore.toFixed(2)}, HA logprob: ${haScore.toFixed(2)}`);
+
+        // FR gagne si son score >= HA − 0.15 (légère préférence FR, plus fiable sur Whisper)
+        const pickedFr = frScore >= haScore - 0.15;
+        transcription = pickedFr ? transcriptionFr : transcriptionHa;
+        console.log(`[3/6] Choisi: ${pickedFr ? 'FR' : 'HA'} | lang Whisper: ${transcription.language} | Texte:`, transcription.text.slice(0, 80));
+
+        // Si contact Hausa ET Hausa choisi → tenter ElevenLabs pour meilleure précision
+        if (!pickedFr && knownLang === 'ha' && process.env.ELEVEN_KEY) {
+            try {
+                const elTrans = await sttElevenLabs(inputFile, 'hau');
+                if (elTrans.text.trim().length > 3) {
+                    transcription = elTrans;
+                    console.log('[3/6] ElevenLabs STT Hausa appliqué | Texte:', transcription.text.slice(0, 80));
+                }
+            } catch (elErr) {
+                console.warn('[3/6] ElevenLabs STT ignoré:', elErr.message);
+            }
+        }
+    } catch (err) {
+        console.warn('[3/6] Double-pass échoué, fallback FR forcé:', err.message);
         transcription = await openai.audio.transcriptions.create({
             file: fs.createReadStream(inputFile),
             model: 'whisper-1',
@@ -615,54 +662,6 @@ async function processAudio(mediaId, userPhone) {
             timestamp_granularities: ['segment'],
             language: 'fr',
         });
-        console.log('[3/6] Whisper FR | Texte:', transcription.text.slice(0, 80));
-    } else if (knownLang === 'ha') {
-        // ── Hausa connu → ElevenLabs Scribe (supporte hau nativement) ──
-        // Whisper ne supporte pas le Hausa — ElevenLabs Scribe donne
-        // une précision bien supérieure sur les langues africaines.
-        try {
-            transcription = await sttElevenLabs(inputFile, 'hau');
-            console.log('[3/6] ElevenLabs STT Hausa | Texte:', transcription.text.slice(0, 80));
-        } catch (elErr) {
-            console.warn('[3/6] ElevenLabs STT échoué, fallback Whisper:', elErr.message);
-            transcription = await openai.audio.transcriptions.create({
-                file: fs.createReadStream(inputFile),
-                model: 'whisper-1',
-                response_format: 'verbose_json',
-                timestamp_granularities: ['segment'],
-                prompt: getHausaWhisperPrompt(),
-            });
-            console.log('[3/6] Whisper Hausa fallback | Texte:', transcription.text.slice(0, 80));
-        }
-    } else {
-        // ── Langue inconnue → Whisper auto-détection NEUTRE ─────
-        // On essaie d'abord ElevenLabs en auto-detect, fallback Whisper.
-        // IMPORTANT : pas de prompt Hausa ici — il biaise contre le français.
-        try {
-            transcription = await sttElevenLabs(inputFile, 'hau');
-            // ElevenLabs retourne la langue détectée — si c'est clairement
-            // du français (fra), on relance Whisper FR pour plus de précision.
-            if (transcription.language === 'fra' || transcription.language === 'fr') {
-                console.log('[3/6] ElevenLabs détecte FR → re-transcription Whisper FR');
-                transcription = await openai.audio.transcriptions.create({
-                    file: fs.createReadStream(inputFile),
-                    model: 'whisper-1',
-                    response_format: 'verbose_json',
-                    timestamp_granularities: ['segment'],
-                    language: 'fr',
-                });
-            }
-            console.log('[3/6] ElevenLabs STT auto | lang:', transcription.language, '| Texte:', transcription.text.slice(0, 80));
-        } catch (elErr) {
-            console.warn('[3/6] ElevenLabs STT échoué, fallback Whisper neutre:', elErr.message);
-            transcription = await openai.audio.transcriptions.create({
-                file: fs.createReadStream(inputFile),
-                model: 'whisper-1',
-                response_format: 'verbose_json',
-                timestamp_granularities: ['segment'],
-            });
-            console.log('[3/6] Whisper auto fallback | lang:', transcription.language, '| Texte:', transcription.text.slice(0, 80));
-        }
     }
 
     console.log(`[3/6] Whisper | lang: ${transcription.language} | "${transcription.text.slice(0, 60)}"`);
@@ -705,11 +704,27 @@ async function processAudio(mediaId, userPhone) {
         console.log('[AUDIO] Salutation mais contact existant → traitement normal');
     }
 
-    // Détection de langue binaire : FR ou HA (jamais unknown pour les audios)
-    // knownLang du contact sert de hint prioritaire si disponible
+    // Détection de langue — toujours analyser le message ACTUEL,
+    // knownLang sert uniquement de fallback si la détection est ambiguë.
     const textLang = detectTextLanguage(transcription.text);
-    let finalLang = knownLang ?? resolveFinalLanguage(transcription.language, textLang);
-    console.log(`[AUDIO] Whisper: ${transcription.language} | Texte: ${textLang} | Contact: ${knownLang} | Final: ${finalLang}`);
+    const detectedNow = resolveFinalLanguage(transcription.language, textLang);
+
+    let finalLang;
+    if (detectedNow !== 'unknown') {
+        // Signal clair dans le message actuel → on le respecte toujours,
+        // même si le contact avait une langue différente en DB.
+        finalLang = detectedNow;
+        if (knownLang && knownLang !== detectedNow) {
+            // L'utilisateur a changé de langue → on met à jour le contact
+            contact.langue = detectedNow === 'ha' ? 'hausa' : 'fr';
+            await contact.save();
+            console.log(`[CONTACT] Changement de langue détecté: ${knownLang} → ${detectedNow}`);
+        }
+    } else {
+        // Signal ambigu → on se fie à la langue mémorisée, sinon 'ha' par défaut
+        finalLang = knownLang ?? 'ha';
+    }
+    console.log(`[AUDIO] Whisper: ${transcription.language} | Texte: ${textLang} | Détecté: ${detectedNow} | Contact: ${knownLang} | Final: ${finalLang}`);
 
     // Contexte conversationnel (6 derniers échanges)
     const conv = await getOrCreateConversation(contact._id);
@@ -717,45 +732,61 @@ async function processAudio(mediaId, userPhone) {
 
     const userContent = transcription.text;
 
-    // Instruction audio : service binaire FR/HA, JSON obligatoire, texte oral
-    const AUDIO_LANG_DETECT_INSTRUCTION = `
+    // La langue est définitivement fixée — GPT ne peut pas la changer.
+    // audioLang est figé à finalLang pour toute la suite du traitement.
+    const audioLang = finalLang;
+
+    const AUDIO_REPLY_INSTRUCTION = finalLang === 'fr'
+        ? `
 
 ═══════════════════════════════════════════
-INSTRUCTION AUDIO — FORMAT OBLIGATOIRE
+INSTRUCTION AUDIO — FRANÇAIS OBLIGATOIRE
 ═══════════════════════════════════════════
 
-Ce service ne traite QUE deux langues : français et hausa. Aucune autre.
+Réponds UNIQUEMENT en français. Langue de réponse : FRANÇAIS.
+Retourne un objet JSON valide :
+{"reply":"ta réponse en français ici"}
 
-Réponds TOUJOURS avec un objet JSON valide :
-{"lang":"fr"|"ha","reply":"ta réponse orale"}
+RÈGLES ABSOLUES :
+- Réponse en français uniquement — zéro mot Hausa, zéro autre langue
+- 2 à 3 phrases courtes, style oral (sera lu à voix haute)
+- Pas de symboles, pas de listes, pas d'astérisques
+- INTERDIT : ne jamais dire "je ne comprends pas" ou "quelle langue" — si la transcription est imparfaite, déduis le sens du contexte santé/vaccination et réponds toujours en français`
+        : `
 
-RÈGLES STRICTES :
-- La langue de l'audio est déjà identifiée : "${finalLang === 'ha' ? 'hausa' : 'français'}"
-- Tu DOIS répondre dans cette langue sans exception — ne change PAS la langue même si certains mots semblent incertains
-- lang="ha" → reply en Hausa pur, zéro mot français, 2-3 phrases courtes orales
-- lang="fr" → reply en français uniquement, 2-3 phrases courtes orales, zéro mot Hausa
-- Pas de symboles, pas de listes, pas d'astérisques — texte oral uniquement (sera lu à voix haute)`;
+═══════════════════════════════════════════
+INSTRUCTION AUDIO — HAUSA WAJIBI NE
+═══════════════════════════════════════════
+
+Ka amsa DA HAUSA KAWAI. Harshen amsa : HAUSA.
+Ka mayar da JSON mai inganci :
+{"reply":"amsar ka da Hausa a nan"}
+
+DOKOKI MASU WAJIBI :
+- Amsa da Hausa kawai — babu Faransanci, babu wata harshe
+- Jumla 2 zuwa 3 na gajere, salon magana (za a karanta da murya)
+- Babu alamu, babu jerin abubuwa, babu tauraro
+- HARAMUN : kada ka ce "ban fahimci" ko "wace harshe" — idan rubutun ba cikakke ba ne, yi amfani da mahallin lafiya/rigakafi ka amsa da Hausa kullum`;
 
     const response = await openai.chat.completions.create({
         model: 'gpt-4o-mini',
         max_tokens: 250,
         response_format: { type: 'json_object' },
         messages: [
-            { role: 'system', content: SYSTEM_PROMPT + AUDIO_LANG_DETECT_INSTRUCTION },
+            { role: 'system', content: SYSTEM_PROMPT + AUDIO_REPLY_INSTRUCTION },
             ...history,
             { role: 'user', content: userContent }
         ]
     });
 
-    let audioLang = finalLang; // fallback sur la détection Whisper
     let replyText = '';
     try {
         const parsed = JSON.parse(response.choices[0].message.content);
-        if (['fr', 'ha'].includes(parsed.lang)) audioLang = parsed.lang;
+        // On utilise parsed.reply — on ignore parsed.lang si présent (langue fixée)
         replyText = (parsed.reply ?? '').trim();
     } catch (parseErr) {
         console.error('[AUDIO] Échec parsing JSON GPT:', parseErr.message);
-        replyText = response.choices[0].message.content; // fallback texte brut
+        replyText = response.choices[0].message.content;
     }
     console.log(`[4/6] Réponse GPT (${audioLang}): ${replyText}`);
 
@@ -767,7 +798,7 @@ RÈGLES STRICTES :
     fs.unlink(inputFile, () => {});
 
     try {
-        // Mémoriser la langue du contact pour accélérer la détection des prochains audios
+        // Mémoriser la langue si c'est un nouveau contact (changement déjà géré plus haut)
         if (!knownLang && audioLang !== 'unknown') {
             contact.langue = audioLang === 'ha' ? 'hausa' : 'fr';
             await contact.save();
