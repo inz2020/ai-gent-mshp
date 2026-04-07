@@ -16,6 +16,7 @@ const ContactSchema = new mongoose.Schema({
     // 'dashboard' = ajouté manuellement | 'webhook' = auto-créé par un message entrant
     source: { type: String, enum: ['dashboard', 'webhook'], default: 'webhook' },
     bloque: { type: Boolean, default: false },
+    derniereInvitation: { type: Date, default: null },
 });
 export default mongoose.model('Contact', ContactSchema);
 

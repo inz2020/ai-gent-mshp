@@ -1,4 +1,5 @@
 import express from 'express';
+import axios from 'axios';
 import Contact from '../models/Contact.js';
 import Conversation from '../models/Conversations.js';
 import { requireAuth, requireRole } from '../../middlewares/auth.js';
@@ -115,6 +116,53 @@ router.get('/:id/conversations', requireAuth, async (req, res) => {
         res.json(conversations);
     } catch (err) {
         res.status(500).json({ message: err.message });
+    }
+});
+
+// POST /api/contacts/:id/inviter — envoie un template WhatsApp d'invitation
+// Utilise un message template approuvé par Meta pour initier le contact.
+// Le nom du template et la langue sont configurés via variables d'env.
+router.post('/:id/inviter', requireAuth, requireRole('admin', 'staff'), async (req, res) => {
+    try {
+        const contact = await Contact.findById(req.params.id);
+        if (!contact) return res.status(404).json({ message: 'Contact introuvable.' });
+
+        const templateName = process.env.WA_INVITE_TEMPLATE ?? 'hello_world';
+        const langCode     = contact.langue === 'ha' ? (process.env.WA_INVITE_TEMPLATE_LANG_HA ?? 'en_US')
+                                                     : (process.env.WA_INVITE_TEMPLATE_LANG_FR ?? 'fr');
+
+        const payload = {
+            messaging_product: 'whatsapp',
+            to: contact.whatsappId,
+            type: 'template',
+            template: {
+                name: templateName,
+                language: { code: langCode },
+            },
+        };
+
+        // Si le template a un paramètre {{1}} pour le nom, on l'injecte
+        if (contact.nom) {
+            payload.template.components = [{
+                type: 'body',
+                parameters: [{ type: 'text', text: contact.nom }],
+            }];
+        }
+
+        await axios.post(
+            `https://graph.facebook.com/v22.0/${process.env.PHONE_ID}/messages`,
+            payload,
+            { headers: { Authorization: `Bearer ${process.env.META_TOKEN}`, 'Content-Type': 'application/json' } }
+        );
+
+        // Marquer la date du dernier envoi d'invitation
+        contact.derniereInvitation = new Date();
+        await contact.save();
+
+        res.json({ message: 'Invitation envoyée.', whatsappId: contact.whatsappId });
+    } catch (err) {
+        const metaMsg = err.response?.data?.error?.message ?? err.message;
+        res.status(500).json({ message: metaMsg });
     }
 });
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
-import { getContacts, createContact, importContacts, getContactConversations } from '../../api/index.js';
+import { getContacts, createContact, importContacts, getContactConversations, inviterContact } from '../../api/index.js';
 import { usePagination } from '../../hooks/usePagination.js';
 import Pagination from '../../components/Pagination.jsx';
 
@@ -92,6 +92,7 @@ export default function Contacts() {
     const [selected, setSelected]   = useState(null);
     const [convs, setConvs]         = useState([]);
     const [convLoad, setConvLoad]   = useState(false);
+    const [inviting, setInviting]   = useState(null); // id du contact en cours d'envoi
 
     // Creation
     const [modal, setModal]         = useState(false);
@@ -152,6 +153,25 @@ export default function Contacts() {
             setFormError(err.message);
         } finally {
             setSaving(false);
+        }
+    }
+
+    async function handleInvite(contact) {
+        if (inviting) return;
+        setInviting(contact._id);
+        try {
+            await inviterContact(contact._id);
+            setSuccess(`Invitation envoyée à +${contact.whatsappId}`);
+            // Mettre à jour derniereInvitation localement
+            setContacts(prev => prev.map(c =>
+                c._id === contact._id ? { ...c, derniereInvitation: new Date().toISOString() } : c
+            ));
+            setTimeout(() => setSuccess(''), 4000);
+        } catch (err) {
+            setError('Envoi échoué : ' + err.message);
+            setTimeout(() => setError(''), 5000);
+        } finally {
+            setInviting(null);
         }
     }
 
@@ -241,7 +261,7 @@ export default function Contacts() {
     return (
         <div className="dash-page">
             <h1 className="dash-page-title">Contacts</h1>
-            <p className="dash-page-sub">Liste des numeros ayant contacte le chatbot Hawa.</p>
+            <p className="dash-page-sub">Liste des numéros ayant contacté le chatbot Hawa.</p>
 
             {error   && <div className="dt-error">&#9888; {error}</div>}
             {success && <div className="dt-success">&#10003; {success}</div>}
@@ -316,8 +336,19 @@ export default function Contacts() {
                                     </span>
                                 </td>
                                 <td>{new Date(c.dateInscription).toLocaleDateString('fr-FR')}</td>
-                                <td>
+                                        <td style={{ display: 'flex', gap: 6 }}>
                                     <button className="dt-btn dt-btn-edit" onClick={() => openDetail(c)}>Voir</button>
+                                    <button
+                                        className="dt-btn dt-btn-primary"
+                                        style={{ fontSize: '0.78rem', padding: '4px 10px' }}
+                                        onClick={() => handleInvite(c)}
+                                        disabled={inviting === c._id}
+                                        title={c.derniereInvitation
+                                            ? `Dernière invitation : ${new Date(c.derniereInvitation).toLocaleString('fr-FR')}`
+                                            : 'Envoyer un message WhatsApp pour initier le contact'}
+                                    >
+                                        {inviting === c._id ? '…' : c.derniereInvitation ? '✓ Ré-inviter' : '📲 Inviter'}
+                                    </button>
                                 </td>
                             </tr>
                         ))}
@@ -530,6 +561,16 @@ export default function Contacts() {
                         </div>
                         <div className="modal-footer">
                             <button className="dt-btn" onClick={() => { setSelected(null); setConvs([]); }}>Fermer</button>
+                            <button
+                                className="dt-btn dt-btn-primary"
+                                onClick={() => handleInvite(selected)}
+                                disabled={inviting === selected._id}
+                                title="Envoyer un template WhatsApp pour initier la conversation"
+                            >
+                                {inviting === selected._id ? 'Envoi...' : selected.derniereInvitation
+                                    ? `📲 Ré-inviter (dernier : ${new Date(selected.derniereInvitation).toLocaleDateString('fr-FR')})`
+                                    : '📲 Envoyer invitation WhatsApp'}
+                            </button>
                         </div>
                     </div>
                 </div>

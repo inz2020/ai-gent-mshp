@@ -414,25 +414,32 @@ export default function Diffusions() {
                                             {loadingContacts ? (
                                                 <div className="bc-contact-loading"><span className="bc-spinner"/><span>Chargement...</span></div>
                                             ) : filteredContacts.length === 0 ? (
-                                                <div className="bc-contact-empty">Aucun contact.</div>
+                                                <div className="bc-contact-empty">Aucun contact trouvé.</div>
                                             ) : filteredContacts.map(c => {
                                                 const checked = form.contactIds.includes(c._id);
+                                                const initiale = c.nom?.[0]?.toUpperCase() ?? '?';
                                                 return (
-                                                    <label key={c._id} className={`bc-contact-row${checked?' checked':''}`}>
+                                                    <label key={c._id} className={`bc-contact-row${checked ? ' checked' : ''}`}>
                                                         <input type="checkbox" checked={checked} onChange={() => toggleContact(c._id)} />
+                                                        <div className="bc-contact-check" />
+                                                        <div className="bc-contact-avatar">{initiale}</div>
                                                         <div className="bc-contact-info">
                                                             <span className="bc-contact-name">{c.nom}</span>
                                                             <span className="bc-contact-phone">+{c.whatsappId}</span>
                                                         </div>
-                                                        <span className={`bc-contact-lang bc-lang-${c.langue==='fr'?'fr':'ha'}`}>
-                                                            {c.langue==='fr'?'FR':'HA'}
+                                                        <span className={`bc-contact-lang bc-lang-${c.langue === 'fr' ? 'fr' : 'ha'}`}>
+                                                            {c.langue === 'fr' ? 'FR' : 'HA'}
                                                         </span>
                                                     </label>
                                                 );
                                             })}
                                         </div>
                                         <div className="bc-contact-footer">
-                                            {form.contactIds.length} / {contacts.length} selectionne{form.contactIds.length>1?'s':''}
+                                            <span>{filteredContacts.length} contact{filteredContacts.length !== 1 ? 's' : ''}</span>
+                                            <span>
+                                                <span className="bc-contact-footer-count">{form.contactIds.length}</span>
+                                                {' / '}{contacts.length} sélectionné{form.contactIds.length > 1 ? 's' : ''}
+                                            </span>
                                         </div>
                                     </div>
                                 )}

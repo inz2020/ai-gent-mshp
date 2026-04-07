@@ -671,15 +671,29 @@ async function processAudio(mediaId, userPhone) {
         const wLang = detect.language?.toLowerCase() ?? '';
         const hasArabic = /[\u0600-\u06FF]/.test(detect.text);
 
+        // Script arabe dès le Pass 1 → court-circuit immédiat, pas de Pass 2, pas de GPT
+        if (hasArabic) {
+            console.log('[3a/6] Script arabe au Pass 1 — court-circuit immédiat');
+            fs.unlink(inputFile, () => {});
+            await sendErrorAudio(userPhone, 'repeat_ha');
+            try {
+                await saveMessages(contact._id, 'ha', {
+                    humanText: '[Audio Hausa — transcription échouée]',
+                    aiText: ERROR_TEXTS.repeat_ha,
+                    humanAudioUrl,
+                });
+            } catch { /* non bloquant */ }
+            return;
+        }
+
         if (wLang === 'french') {
             detectedLang = 'fr';
-        } else if (WHISPER_HAUSA_LANGS.has(wLang) || hasArabic) {
+        } else if (WHISPER_HAUSA_LANGS.has(wLang)) {
             detectedLang = 'ha';
         } else {
-            // Langue ambiguë → on se fie à knownLang, sinon 'ha' par défaut
             detectedLang = knownLang ?? 'ha';
         }
-        console.log(`[3a/6] Détection langue — Whisper: "${wLang}" | Arabic script: ${hasArabic} | → ${detectedLang}`);
+        console.log(`[3a/6] Détection langue — Whisper: "${wLang}" | → ${detectedLang}`);
     } catch (detectErr) {
         // Si la détection échoue, on tombe sur knownLang
         detectedLang = knownLang ?? 'ha';
@@ -716,10 +730,19 @@ async function processAudio(mediaId, userPhone) {
                 });
                 console.log('[3b/6] Whisper Hausa | Texte:', transcription.text.slice(0, 80));
             }
-            // Si même après ça on reçoit du script arabe → placeholder Hausa pour GPT
+            // Script arabe résiduel → transcription inutilisable, on ne passe pas par GPT
             if (/[\u0600-\u06FF]/.test(transcription.text)) {
-                console.log('[3b/6] Script arabe résiduel → placeholder Hausa');
-                transcription = { ...transcription, text: '[Hausa audio — transcription incomplète, réponds à une question santé/vaccination en Hausa]', language: 'hausa' };
+                console.log('[3b/6] Script arabe résiduel — court-circuit GPT, audio répétition Hausa');
+                fs.unlink(inputFile, () => {});
+                await sendErrorAudio(userPhone, 'repeat_ha');
+                try {
+                    await saveMessages(contact._id, 'ha', {
+                        humanText: '[Audio Hausa — transcription échouée]',
+                        aiText: ERROR_TEXTS.repeat_ha,
+                        humanAudioUrl,
+                    });
+                } catch { /* non bloquant */ }
+                return;
             }
         }
     } catch (err) {
@@ -736,9 +759,8 @@ async function processAudio(mediaId, userPhone) {
 
     console.log(`[3/6] Transcription finale | lang: ${detectedLang} | "${transcription.text.slice(0, 60)}"`);
 
-    // Filtre qualité — seuils assouplis pour le Hausa (log_prob naturellement plus bas)
-    // !knownLang NE signifie PAS Hausa : un nouveau contact peut très bien parler français.
-    const isLikelyHausa = knownLang === 'ha' || transcription.language === 'hausa';
+    // isLikelyHausa basé sur detectedLang (Pass 1) — fiable même si Whisper retourne 'swahili'
+    const isLikelyHausa = detectedLang === 'ha';
     const quality = checkAudioQuality(transcription, isLikelyHausa);
     if (!quality.ok) {
         console.log('[AUDIO] Qualité insuffisante:', quality.reason);

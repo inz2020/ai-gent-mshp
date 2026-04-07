@@ -94,6 +94,13 @@ export function toggleContactBlock(id) {
     });
 }
 
+export function inviterContact(id) {
+    return request(`/api/contacts/${id}/inviter`, {
+        method: 'POST',
+        headers: authHeaders(),
+    });
+}
+
 // ── Conversations ─────────────────────────────────────────────
 export function getConversations() {
     return request('/api/conversations', { headers: authHeaders() });

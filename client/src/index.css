@@ -997,49 +997,119 @@ main { flex: 1; }
 .bc-contacts-btn { font-size: 0.82rem; padding: 6px 12px; white-space: nowrap; }
 
 .bc-contact-panel {
-  margin-top: 8px; border: 1.5px solid #e5e7eb; border-radius: 10px;
-  background: var(--white); overflow: hidden;
+  margin-top: 10px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
+
+/* ── Barre de recherche + boutons ── */
 .bc-contact-search-row {
-  display: flex; gap: 6px; align-items: center;
-  padding: 10px 12px; border-bottom: 1px solid #f3f4f6;
+  display: flex; gap: 8px; align-items: center;
+  padding: 12px 14px;
+  background: #f8fafc;
+  border-bottom: 1.5px solid #e2e8f0;
 }
 .bc-contact-search {
-  flex: 1; padding: 7px 11px; border: 1.5px solid #e5e7eb;
+  flex: 1; padding: 8px 12px;
+  border: 1.5px solid #e2e8f0;
   border-radius: 8px; font-size: 0.85rem; font-family: inherit; outline: none;
+  background: #fff; color: #1e293b;
+  transition: border-color 0.15s;
 }
-.bc-contact-search:focus { border-color: var(--green); }
+.bc-contact-search::placeholder { color: #94a3b8; }
+.bc-contact-search:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(22,163,74,0.08); }
 .bc-sel-btn {
-  padding: 5px 10px; border: 1.5px solid #e5e7eb; border-radius: 7px;
-  background: var(--white); font-size: 0.78rem; font-weight: 600;
-  color: var(--gray-600); cursor: pointer; font-family: inherit;
-  white-space: nowrap; transition: all var(--transition);
+  padding: 7px 13px;
+  border: 1.5px solid #e2e8f0; border-radius: 8px;
+  background: #fff; font-size: 0.78rem; font-weight: 600;
+  color: #475569; cursor: pointer; font-family: inherit;
+  white-space: nowrap; transition: all 0.15s;
 }
-.bc-sel-btn:hover { border-color: var(--green); color: var(--green); }
+.bc-sel-btn:hover { border-color: var(--green); color: var(--green); background: #f0fdf4; }
 
-.bc-contact-list { max-height: 220px; overflow-y: auto; }
+/* ── Liste des contacts ── */
+.bc-contact-list { max-height: 280px; overflow-y: auto; }
+.bc-contact-list::-webkit-scrollbar { width: 5px; }
+.bc-contact-list::-webkit-scrollbar-track { background: transparent; }
+.bc-contact-list::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
+
 .bc-contact-loading, .bc-contact-empty {
   display: flex; align-items: center; justify-content: center;
-  gap: 8px; padding: 20px; color: var(--gray-400); font-size: 0.88rem;
+  gap: 8px; padding: 28px; color: #94a3b8; font-size: 0.88rem;
 }
+
+/* ── Ligne contact — checkbox custom ── */
 .bc-contact-row {
-  display: flex; align-items: center; gap: 10px;
-  padding: 9px 12px; cursor: pointer; border-bottom: 1px solid #f9fafb;
-  transition: background var(--transition);
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #f1f5f9;
+  transition: background 0.12s;
+  user-select: none;
 }
-.bc-contact-row:hover  { background: var(--gray-50); }
-.bc-contact-row.checked { background: var(--green-light); }
-.bc-contact-row input[type="checkbox"] { accent-color: var(--green); width: 15px; height: 15px; flex-shrink: 0; }
-.bc-contact-info { flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.bc-contact-name  { font-size: 0.88rem; font-weight: 600; color: var(--gray-800); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.bc-contact-phone { font-size: 0.78rem; color: var(--gray-400); }
-.bc-contact-lang  { font-size: 0.7rem; font-weight: 700; padding: 2px 7px; border-radius: 99px; }
+.bc-contact-row:last-child { border-bottom: none; }
+.bc-contact-row:hover { background: #f8fafc; }
+.bc-contact-row.checked { background: #f0fdf4; }
+
+/* Cache le checkbox natif et le remplace par un custom */
+.bc-contact-row input[type="checkbox"] { display: none; }
+
+.bc-contact-check {
+  width: 17px; height: 17px; flex-shrink: 0;
+  border: 2px solid #cbd5e1; border-radius: 5px;
+  background: #fff; display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.bc-contact-row.checked .bc-contact-check {
+  background: var(--green); border-color: var(--green);
+}
+.bc-contact-check::after {
+  content: ''; display: none;
+  width: 4px; height: 8px;
+  border: 2px solid #fff; border-top: none; border-left: none;
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+.bc-contact-row.checked .bc-contact-check::after { display: block; }
+
+/* ── Avatar initiale ── */
+.bc-contact-avatar {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  background: #e2e8f0; color: #475569;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+}
+.bc-contact-row.checked .bc-contact-avatar {
+  background: #bbf7d0; color: #166534;
+}
+
+/* ── Infos nom + téléphone ── */
+.bc-contact-info { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.bc-contact-name {
+  font-size: 0.88rem; font-weight: 600; color: #1e293b;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.bc-contact-phone { font-size: 0.78rem; color: #94a3b8; font-family: monospace; }
+
+/* ── Badge langue ── */
+.bc-contact-lang {
+  font-size: 0.68rem; font-weight: 700; padding: 3px 8px;
+  border-radius: 99px; letter-spacing: 0.03em; flex-shrink: 0;
+}
 .bc-lang-fr { background: #dbeafe; color: #1d4ed8; }
 .bc-lang-ha { background: #fef3c7; color: #92400e; }
 
+/* ── Footer compteur ── */
 .bc-contact-footer {
-  padding: 8px 12px; background: var(--gray-50); border-top: 1px solid #f3f4f6;
-  font-size: 0.8rem; color: var(--gray-400); text-align: right;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px;
+  background: #f8fafc; border-top: 1.5px solid #e2e8f0;
+  font-size: 0.8rem; color: #64748b;
+}
+.bc-contact-footer-count {
+  font-weight: 700; color: var(--green);
 }
 
 .dt-footer {
