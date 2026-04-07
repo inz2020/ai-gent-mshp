@@ -1834,12 +1834,27 @@ main { flex: 1; }
 .wa-text-empty { color: #8696a0; font-style: italic; }
 
 /* Audio */
-.wa-audio-block { display: flex; flex-direction: column; gap: 4px; }
+.wa-audio-block { display: flex; flex-direction: column; gap: 6px; }
 .wa-audio { width: 100%; max-width: 280px; height: 32px; }
 .wa-audio-transcript {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-top: 1px solid rgba(0,0,0,0.08);
+  padding-top: 5px;
+  margin-top: 2px;
+}
+.wa-audio-transcript em {
   font-size: 0.75rem;
   color: #8696a0;
   font-style: italic;
+}
+.wa-transcript-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #aab;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 /* Localisation */

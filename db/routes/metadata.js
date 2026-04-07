@@ -4,7 +4,9 @@ import District from '../models/District.js';
 import Structure from '../models/Structure.js';
 import Vaccin from '../models/Vaccin.js';
 import CalendrierVaccinal from '../models/CalendrierVaccinal.js';
+import HausaVocabulaire from '../models/HausaVocabulaire.js';
 import { requireAuth, requireAdmin } from '../../middlewares/auth.js';
+import { reloadHausaVocab } from '../../lib/hausaVocab.js';
 
 const router = express.Router();
 router.use(requireAuth, requireAdmin);
@@ -286,6 +288,57 @@ router.post('/calendrier/import', async (req, res) => {
         created++;
     }
     res.json({ message: `${created} entrée(s) importée(s), ${skipped} ignorée(s).` });
+});
+
+// ═══════════════════════════════════════════════════════
+// VOCABULAIRE IA (Hausa + Francais)
+// ═══════════════════════════════════════════════════════
+
+router.get('/hausa-prompt', async (req, res) => {
+    const entries = await HausaVocabulaire.find().sort({ langue: 1, type: 1, valeur: 1 });
+    res.json(entries);
+});
+
+router.post('/hausa-prompt', async (req, res) => {
+    const { type, valeur, traduction_fr, categorie } = req.body;
+    if (!type || !valeur?.trim()) return err(res, 400, 'Type et valeur sont requis.');
+    if (!['mot', 'phrase'].includes(type)) return err(res, 400, 'Type doit etre "mot" ou "phrase".');
+    const v = valeur.trim().toLowerCase();
+    const existe = await HausaVocabulaire.findOne({ type, valeur: v });
+    if (existe) return err(res, 409, 'Cette entree existe deja.');
+    const entry = await HausaVocabulaire.create({
+        type, valeur: v,
+        traduction_fr: traduction_fr?.trim() || '',
+        categorie: categorie?.trim() || ''
+    });
+    await reloadHausaVocab();
+    res.status(201).json(entry);
+});
+
+router.delete('/hausa-prompt/:id', async (req, res) => {
+    const entry = await HausaVocabulaire.findByIdAndDelete(req.params.id);
+    if (!entry) return err(res, 404, 'Entree introuvable.');
+    await reloadHausaVocab();
+    res.json({ message: 'Entree supprimee.' });
+});
+
+router.post('/hausa-prompt/import', async (req, res) => {
+    const rows = req.body;
+    if (!Array.isArray(rows) || rows.length === 0) return err(res, 400, 'Donnees invalides.');
+    let created = 0, skipped = 0;
+    for (const row of rows) {
+        const type         = row.type?.trim().toLowerCase();
+        const valeur       = row.valeur?.trim().toLowerCase();
+        const traduction_fr = row.traduction_fr?.trim() || '';
+        const categorie    = row.categorie?.trim() || '';
+        if (!type || !valeur || !['mot', 'phrase'].includes(type)) { skipped++; continue; }
+        const existe = await HausaVocabulaire.findOne({ type, valeur });
+        if (existe) { skipped++; continue; }
+        await HausaVocabulaire.create({ type, valeur, traduction_fr, categorie });
+        created++;
+    }
+    await reloadHausaVocab();
+    res.json({ message: `${created} entree(s) importee(s), ${skipped} ignoree(s).` });
 });
 
 export default router;

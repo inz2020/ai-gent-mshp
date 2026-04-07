@@ -16,9 +16,11 @@ import Districts from './pages/dashboard/Districts.jsx';
 import Structures from './pages/dashboard/Structures.jsx';
 import Vaccins from './pages/dashboard/Vaccins.jsx';
 import CalendrierVaccinal from './pages/dashboard/CalendrierVaccinal.jsx';
+import HausaPrompt from './pages/dashboard/HausaPrompt.jsx';
 import PrivateRoute from './components/PrivateRoute.jsx';
 import NotFound from './pages/NotFound.jsx';
 import ErrorPage from './pages/ErrorPage.jsx';
+import SessionExpired from './pages/SessionExpired.jsx';
 
 function PublicLayout() {
   return (
@@ -53,12 +55,14 @@ export default function App() {
           <Route path="metadonnees/structures"       element={<Structures />} />
           <Route path="metadonnees/vaccins"          element={<Vaccins />} />
           <Route path="metadonnees/calendrier"       element={<CalendrierVaccinal />} />
+          <Route path="metadonnees/hausa-prompt"    element={<HausaPrompt />} />
           <Route path="parametres"                   element={<Parametres />} />
         </Route>
       </Route>
       {/* Pages d'erreur */}
-      <Route path="/erreur" element={<ErrorPage />} />
-      <Route path="*" element={<NotFound />} />
+      <Route path="/erreur"           element={<ErrorPage />} />
+      <Route path="/session-expiree"  element={<SessionExpired />} />
+      <Route path="*"                 element={<NotFound />} />
     </Routes>
   );
 }

@@ -9,6 +9,7 @@ import contactsRouter from './db/routes/contacts.js';
 import conversationsRouter from './db/routes/conversations.js';
 import broadcastsRouter from './db/routes/broadcasts.js';
 import metadataRouter from './db/routes/metadata.js';
+import { reloadHausaVocab } from './lib/hausaVocab.js';
 
 const app = express();
 app.use(cors({ origin: process.env.FRONTEND_URL || '*' }));
@@ -29,4 +30,4 @@ app.use('/webhook', webhookRouter);
 
 const PORT = process.env.PORT || 50000;
 app.listen(PORT, () => console.log(`Serveur actif sur port ${PORT}`));
-connectDB();
+connectDB().then(() => reloadHausaVocab());

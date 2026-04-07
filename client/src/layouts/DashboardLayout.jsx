@@ -20,11 +20,12 @@ const NAV_ITEMS = [
         icon: '🗂️', label: 'Métadonnées',
         prefix: '/dashboard/metadonnees',
         children: [
-            { to: '/dashboard/metadonnees/regions',    label: 'Régions' },
-            { to: '/dashboard/metadonnees/districts',  label: 'Districts' },
-            { to: '/dashboard/metadonnees/structures', label: 'Structures' },
-            { to: '/dashboard/metadonnees/vaccins',    label: 'Vaccins' },
-            { to: '/dashboard/metadonnees/calendrier', label: 'Calendrier vaccinal' },
+            { to: '/dashboard/metadonnees/regions',       label: 'Régions' },
+            { to: '/dashboard/metadonnees/districts',     label: 'Districts' },
+            { to: '/dashboard/metadonnees/structures',    label: 'Structures' },
+            { to: '/dashboard/metadonnees/vaccins',       label: 'Vaccins' },
+            { to: '/dashboard/metadonnees/calendrier',    label: 'Calendrier vaccinal' },
+            { to: '/dashboard/metadonnees/hausa-prompt',  label: 'Vocabulaire Hausa' },
         ]
     },
     { to: '/dashboard/parametres', icon: '⚙️', label: 'Paramètres' },

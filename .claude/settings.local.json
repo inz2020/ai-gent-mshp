@@ -6,7 +6,15 @@
       "Bash(node app.js)",
       "Bash(curl -s http://localhost:50000/api/users -H \"Authorization: Bearer test\")",
       "Bash(rm -rf node_modules package-lock.json)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(node scripts/generate_hausa_excel.mjs)",
+      "Bash(node --check app.js)",
+      "Bash(node --check routes/webhook.js)",
+      "Bash(node --check lib/hausaVocab.js)",
+      "Bash(node --check lib/googleStt.js)",
+      "Bash(node --check lib/audio.js)",
+      "Bash(npm run:*)",
+      "Bash(node --experimental-vm-modules --input-type=module)"
     ]
   }
 }

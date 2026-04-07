@@ -5,6 +5,13 @@ async function request(path, options = {}) {
         ...options,
         headers: { 'Content-Type': 'application/json', ...options.headers },
     });
+    if (res.status === 401) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user_nom');
+        localStorage.removeItem('user_role');
+        window.location.replace('/session-expiree');
+        return;
+    }
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || 'Erreur serveur.');
     return data;
@@ -136,6 +143,11 @@ export const createCalendrier = (data)   => request(`${META}/calendrier`,    { m
 export const updateCalendrier = (id, d)  => request(`${META}/calendrier/${id}`, { method: 'PUT',  headers: authHeaders(), body: JSON.stringify(d) });
 export const deleteCalendrier = (id)     => request(`${META}/calendrier/${id}`, { method: 'DELETE', headers: authHeaders() });
 export const importCalendrier = (rows)   => request(`${META}/calendrier/import`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(rows) });
+
+export const getHausaVocab    = ()       => request(`${META}/hausa-prompt`,        { headers: authHeaders() });
+export const createHausaEntry = (data)   => request(`${META}/hausa-prompt`,        { method: 'POST',   headers: authHeaders(), body: JSON.stringify(data) });
+export const deleteHausaEntry = (id)     => request(`${META}/hausa-prompt/${id}`,  { method: 'DELETE', headers: authHeaders() });
+export const importHausaVocab = (rows)   => request(`${META}/hausa-prompt/import`, { method: 'POST',   headers: authHeaders(), body: JSON.stringify(rows) });
 
 // ── Broadcasts ────────────────────────────────────────────────
 export function getBroadcasts() {

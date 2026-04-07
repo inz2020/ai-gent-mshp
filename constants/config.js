@@ -28,14 +28,33 @@ export const GREETING_CONFIG = {
 
 
 export const HAUSA_WORDS = new Set([
-    'ina', 'kai', 'kin', 'mun', 'sun', 'shi', 'ta', 'sai', 'don',
-    'mai', 'wanda', 'wata', 'yaro', 'yarinya', 'aboki', 'abokai',
-    'rigakafi', 'lafiya', 'cibiya', 'yaya', 'sannu', 'barka', 'ne',
-    'ce', 'ba', 'da', 'ko', 'tafi', 'zo', 'yi', 'yin', 'nan',
-    'zazzabi', 'jariri', 'haihuwa', 'allurar', 'magani', 'rashin',
-    'ciki', 'yaya', 'wai', 'kuma', 'amma', 'saboda', 'lokaci',
-    'kana', 'tana', 'muna', 'suna', 'gida', 'asibiti', 'likita',
-    'chanchawa', 'shawa', 'chawa'
+    // Pronoms et déterminants
+    'ina', 'kai', 'kin', 'mun', 'sun', 'shi', 'ta', 'ni', 'mu', 'ku', 'su',
+    'na', 'ka', 'ki', 'ya', 'ta', 'ga', 'wannan', 'wancan', 'wadannan',
+    'wanda', 'wacce', 'wadanda', 'wata', 'wani', 'kowane', 'duk',
+    // Verbes courants
+    'sai', 'tafi', 'zo', 'yi', 'yin', 'je', 'aje', 'kai', 'ba', 'bai',
+    'ce', 'ne', 'ake', 'yake', 'tana', 'kana', 'muna', 'suna', 'zai',
+    'za', 'gani', 'ji', 'sani', 'fada', 'tambaya', 'nema', 'kare',
+    'fara', 'gama', 'dawo', 'tashi', 'kwana', 'zauna', 'tsaya',
+    // Conjonctions / adverbes
+    'don', 'da', 'ko', 'nan', 'wai', 'kuma', 'amma', 'saboda', 'lokaci',
+    'yanzu', 'yau', 'gobe', 'jiya', 'bayan', 'kafin', 'tun', 'har',
+    'sosai', 'kawai', 'kuwa', 'ma', 'fa', 'to', 'ai',
+    // Substantifs santé / vaccination
+    'mai', 'rigakafi', 'lafiya', 'cibiya', 'rashin', 'ciki', 'asibiti',
+    'likita', 'zazzabi', 'jariri', 'haihuwa', 'allurar', 'magani',
+    'gida', 'aboki', 'abokai', 'yaro', 'yarinya', 'uwa', 'uba',
+    'jiki', 'cuta', 'gudawa', 'tari', 'jini', 'ruwa', 'abinci',
+    'sauro', 'malamarta', 'kwaya', 'allurar', 'cibiyar', 'asibiti',
+    'ungozoma', 'yara', 'jarma', 'nono', 'shayarwa',
+    // Salutations
+    'sannu', 'barka', 'yaya', 'ina',
+    // Divers
+    'nawa', 'wane', 'ina', 'cikin', 'chanchawa', 'shawa', 'chawa',
+    'kyauta', 'gaggawa', 'mataki', 'amsawa', 'tambayar', 'lafiyar',
+    'inganta', 'kariya', 'hana', 'kare', 'gwaji', 'gwajin', 'jini',
+    'numfashi', 'kasala', 'rauni', 'farfadiya', 'farfadiyya'
 ]);
 export const FRENCH_WORDS = new Set([
     'je', 'tu', 'il', 'elle', 'nous', 'vous', 'ils', 'elles',

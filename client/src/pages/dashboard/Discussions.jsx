@@ -294,12 +294,19 @@ export default function Discussions() {
                                                             <small>{m.coordonnees.latitude.toFixed(4)}, {m.coordonnees.longitude.toFixed(4)}</small>
                                                         </span>
                                                     </a>
-                                                ) : m.typeContenu === 'audio' && m.audioUrl ? (
+                                                ) : m.typeContenu === 'audio' ? (
                                                     <div className="wa-audio-block">
-                                                        {m.texteBrut && m.texteBrut !== '[Audio reçu en mode humain]' && (
-                                                            <em className="wa-audio-transcript">"{m.texteBrut}"</em>
+                                                        {m.audioUrl && (
+                                                            <audio controls src={m.audioUrl} className="wa-audio" />
                                                         )}
-                                                        <audio controls src={m.audioUrl} className="wa-audio" />
+                                                        {m.texteBrut && m.texteBrut !== '[Audio reçu en mode humain]' ? (
+                                                            <div className="wa-audio-transcript">
+                                                                <span className="wa-transcript-label">🎙️ Transcription</span>
+                                                                <em>"{m.texteBrut}"</em>
+                                                            </div>
+                                                        ) : !m.audioUrl && (
+                                                            <em className="wa-text-empty">🎵 Message audio</em>
+                                                        )}
                                                     </div>
                                                 ) : (
                                                     <p className="wa-text">{m.texteBrut || <em className="wa-text-empty">Message vide</em>}</p>
