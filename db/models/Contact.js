@@ -12,7 +12,10 @@ const ContactSchema = new mongoose.Schema({
         latitude:  { type: Number, default: null },
         longitude: { type: Number, default: null },
         updatedAt: { type: Date,   default: null }
-    }
+    },
+    // 'dashboard' = ajouté manuellement | 'webhook' = auto-créé par un message entrant
+    source: { type: String, enum: ['dashboard', 'webhook'], default: 'webhook' },
+    bloque: { type: Boolean, default: false },
 });
 export default mongoose.model('Contact', ContactSchema);
 

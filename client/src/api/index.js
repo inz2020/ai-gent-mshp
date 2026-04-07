@@ -87,6 +87,13 @@ export function getContactConversations(id) {
     return request(`/api/contacts/${id}/conversations`, { headers: authHeaders() });
 }
 
+export function toggleContactBlock(id) {
+    return request(`/api/contacts/${id}/bloquer`, {
+        method: 'PATCH',
+        headers: authHeaders(),
+    });
+}
+
 // ── Conversations ─────────────────────────────────────────────
 export function getConversations() {
     return request('/api/conversations', { headers: authHeaders() });

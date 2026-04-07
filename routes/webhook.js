@@ -132,7 +132,7 @@ function checkAudioQuality(transcription, isLikelyHausa = false) {
 async function getOrCreateContact(whatsappId) {
     let contact = await Contact.findOne({ whatsappId });
     if (!contact) {
-        contact = await Contact.create({ whatsappId });
+        contact = await Contact.create({ whatsappId, source: 'webhook' });
     }
     return contact;
 }
@@ -407,6 +407,13 @@ Exemples :
 async function processText(userText, userPhone) {
     console.log(`[TEXT] Message reçu: "${userText}"`);
 
+    // Vérification blocage — contact bloqué = silence total (pas de réponse)
+    const contactCheck = await Contact.findOne({ whatsappId: userPhone });
+    if (contactCheck?.bloque) {
+        console.log(`[BLOCKED] ${userPhone} — message texte ignoré (contact bloqué)`);
+        return;
+    }
+
     if (isGreeting(userText)) {
         const firstTime = await isFirstConversation(userPhone);
         if (firstTime) {
@@ -505,6 +512,13 @@ async function processAudio(mediaId, userPhone) {
     const metaHeaders = { Authorization: `Bearer ${process.env.META_TOKEN}` };
     console.log('[1/6] Téléchargement audio, mediaId:', mediaId);
 
+    // Vérification blocage
+    const contactCheck = await Contact.findOne({ whatsappId: userPhone });
+    if (contactCheck?.bloque) {
+        console.log(`[BLOCKED] ${userPhone} — message audio ignoré (contact bloqué)`);
+        return;
+    }
+
     // Récupérer le contact et la conversation pour vérifier le mode
     const contact = await getOrCreateContact(userPhone);
     const knownLang = contact.langue === 'hausa' ? 'ha' : contact.langue === 'fr' ? 'fr' : null;
@@ -547,17 +561,17 @@ async function processAudio(mediaId, userPhone) {
     }
 
     // ══════════════════════════════════════════════════════════════
-    // TRANSCRIPTION — OpenAI Whisper (language explicite FR ou HA)
+    // TRANSCRIPTION — OpenAI Whisper
     // ══════════════════════════════════════════════════════════════
     //
-    // Whisper supporte officiellement le Hausa (code ISO 639-1 : 'ha').
-    // On force la langue plutôt que de laisser Whisper détecter seul,
-    // car la détection automatique confond souvent Hausa avec d'autres langues.
+    // IMPORTANT : Whisper ne supporte PAS le Hausa ('ha') comme code
+    // de langue explicite — l'API retourne 400 si on le passe.
+    // Pour le Hausa on laisse Whisper auto-détecter, en guidant la
+    // transcription via le prompt de vocabulaire médical nigérien.
     //
     // Priorité :
-    //  1. Si langue = FR  → Whisper language:'fr'
-    //  2. Si langue = HA  → Whisper language:'ha' + prompt vocabulaire Niger
-    //  3. Si langue inconnue → Whisper language:'ha' + prompt (service santé Niger : majorité HA)
+    //  1. Si langue = FR  → Whisper language:'fr' (forcé, langue supportée)
+    //  2. Si langue = HA ou inconnue → auto-détection + prompt Hausa
 
     let transcription;
 
@@ -572,18 +586,18 @@ async function processAudio(mediaId, userPhone) {
         });
         console.log('[3/6] Whisper FR | Texte:', transcription.text.slice(0, 80));
     } else {
-        // ── Hausa (connu ou inconnu → on force HA) ───────────────
-        // Le prompt contextualise Whisper sur le vocabulaire médical
-        // nigérien (vaccination, maternité, santé communautaire).
+        // ── Hausa / inconnu → auto-détection avec prompt Hausa ──
+        // Le prompt donne à Whisper du contexte sur le vocabulaire
+        // médical nigérien pour orienter la transcription.
+        // Ne PAS passer language:'ha' — non supporté par l'API Whisper.
         transcription = await openai.audio.transcriptions.create({
             file: fs.createReadStream(inputFile),
             model: 'whisper-1',
             response_format: 'verbose_json',
             timestamp_granularities: ['segment'],
-            language: 'ha',
             prompt: getHausaWhisperPrompt(),
         });
-        console.log('[3/6] Whisper HA | lang détecté:', transcription.language, '| Texte:', transcription.text.slice(0, 80));
+        console.log('[3/6] Whisper auto | lang détecté:', transcription.language, '| Texte:', transcription.text.slice(0, 80));
     }
 
     console.log(`[3/6] Whisper | lang: ${transcription.language} | "${transcription.text.slice(0, 60)}"`);
@@ -739,6 +753,13 @@ function haversine(lat1, lng1, lat2, lng2) {
 
 async function processLocation(lat, lng, userPhone) {
     console.log(`[LOC] Position reçue de ${userPhone}: lat=${lat}, lng=${lng}`);
+
+    // Vérification blocage
+    const contactCheck = await Contact.findOne({ whatsappId: userPhone });
+    if (contactCheck?.bloque) {
+        console.log(`[BLOCKED] ${userPhone} — localisation ignorée (contact bloqué)`);
+        return;
+    }
 
     // Mode humain → enregistre la position sans réponse IA
     const contactLoc = await getOrCreateContact(userPhone);

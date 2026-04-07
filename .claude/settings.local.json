@@ -14,7 +14,8 @@
       "Bash(node --check lib/googleStt.js)",
       "Bash(node --check lib/audio.js)",
       "Bash(npm run:*)",
-      "Bash(node --experimental-vm-modules --input-type=module)"
+      "Bash(node --experimental-vm-modules --input-type=module)",
+      "Bash(node -e ':*)"
     ]
   }
 }

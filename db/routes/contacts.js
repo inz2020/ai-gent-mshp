@@ -35,7 +35,7 @@ router.post('/', requireAuth, requireRole('admin', 'staff'), async (req, res) =>
     }
 
     try {
-        const contact = await Contact.create({ whatsappId, nom: nom.trim(), langue });
+        const contact = await Contact.create({ whatsappId, nom: nom.trim(), langue, source: 'dashboard' });
         const populated = await Contact.findById(contact._id).populate('region', 'nom').populate('district', 'nom');
         res.status(201).json(populated);
     } catch (err) {
@@ -80,7 +80,7 @@ router.post('/import', requireAuth, requireRole('admin', 'staff'), async (req, r
         }
 
         try {
-            await Contact.create({ whatsappId: raw, nom, langue });
+            await Contact.create({ whatsappId: raw, nom, langue, source: 'dashboard' });
             results.crees++;
         } catch (err) {
             results.erreurs.push(`Erreur pour +${raw} : ${err.message}`);
@@ -89,6 +89,22 @@ router.post('/import', requireAuth, requireRole('admin', 'staff'), async (req, r
     }
 
     res.json(results);
+});
+
+// PATCH /api/contacts/:id/bloquer — bloquer ou débloquer un contact
+router.patch('/:id/bloquer', requireAuth, requireRole('admin', 'staff'), async (req, res) => {
+    try {
+        const contact = await Contact.findById(req.params.id);
+        if (!contact) return res.status(404).json({ message: 'Contact introuvable.' });
+        if (contact.source === 'dashboard') {
+            return res.status(400).json({ message: 'Impossible de bloquer un contact enregistré dans la liste officielle.' });
+        }
+        contact.bloque = !contact.bloque;
+        await contact.save();
+        res.json({ bloque: contact.bloque, message: contact.bloque ? 'Contact bloqué.' : 'Contact débloqué.' });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
 });
 
 // GET /api/contacts/:id/conversations — conversations d'un contact

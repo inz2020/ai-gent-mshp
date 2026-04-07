@@ -29,7 +29,9 @@
     "seed:structures": "node db/seeders/structures.js",
     "seed:prod": "node --env-file=.env.prod db/seed.js",
     "seed:geo:prod": "node --env-file=.env.prod db/seeders/regions_districts.js",
-    "seed:structures:prod": "node --env-file=.env.prod db/seeders/structures.js"
+    "seed:structures:prod": "node --env-file=.env.prod db/seeders/structures.js",
+    "seed:hausa": "node db/seeders/hausa_vocab.js",
+    "seed:hausa:prod": "node --env-file=.env.prod db/seeders/hausa_vocab.js"
   },
   "keywords": [],
   "author": "",

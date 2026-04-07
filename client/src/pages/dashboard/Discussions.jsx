@@ -4,6 +4,7 @@ import {
     getConversationMessages,
     toggleConversationMode,
     sendOperatorMessage,
+    toggleContactBlock,
 } from '../../api/index.js';
 import { usePagination } from '../../hooks/usePagination.js';
 import Pagination from '../../components/Pagination.jsx';
@@ -47,6 +48,7 @@ export default function Discussions() {
     const [opText, setOpText]       = useState('');
     const [sending, setSending]     = useState(false);
     const [toggling, setToggling]   = useState(false);
+    const [blocking, setBlocking]   = useState(false);
     const threadEndRef              = useRef(null);
     const textareaRef               = useRef(null);
 
@@ -76,6 +78,28 @@ export default function Discussions() {
     }
 
     function closeThread() { setSelected(null); setMessages([]); setOpText(''); }
+
+    async function handleToggleBlock(contactId) {
+        if (blocking) return;
+        setBlocking(true);
+        try {
+            const res = await toggleContactBlock(contactId);
+            // Met à jour bloque dans la liste des conversations
+            setConvs(prev => prev.map(c =>
+                c.contactId?._id === contactId
+                    ? { ...c, contactId: { ...c.contactId, bloque: res.bloque } }
+                    : c
+            ));
+            // Met à jour la conversation sélectionnée si c'est la même
+            if (selected?.contactId?._id === contactId) {
+                setSelected(s => ({ ...s, contactId: { ...s.contactId, bloque: res.bloque } }));
+            }
+        } catch (e) {
+            alert('Erreur : ' + e.message);
+        } finally {
+            setBlocking(false);
+        }
+    }
 
     async function handleToggleMode() {
         if (!selected || toggling) return;
@@ -127,6 +151,8 @@ export default function Discussions() {
     const contactName = selected?.contactId?.nom ?? 'Inconnu';
     const contactPhone = selected?.contactId?.whatsappId ?? '';
     const contactInitial = contactName[0]?.toUpperCase() ?? '?';
+    const contactIsUnknown = selected?.contactId?.source === 'webhook';
+    const contactIsBlocked = selected?.contactId?.bloque === true;
 
     const filtered = convs.filter(c => {
         const phone = c.contactId?.whatsappId ?? '';
@@ -164,7 +190,7 @@ export default function Discussions() {
                             <th>Messages</th>
                             <th>Dernière activité</th>
                             <th>Créée le</th>
-                            <th>Fil</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -172,11 +198,15 @@ export default function Discussions() {
                             <tr><td colSpan="8" className="dt-center">Chargement...</td></tr>
                         ) : filtered.length === 0 ? (
                             <tr><td colSpan="8" className="dt-center">Aucune discussion trouvée.</td></tr>
-                        ) : paged.map(c => (
-                            <tr key={c._id}>
+                        ) : paged.map(c => {
+                            const isUnknown = c.contactId?.source === 'webhook';
+                            const isBlocked = c.contactId?.bloque === true;
+                            return (
+                            <tr key={c._id} style={isBlocked ? { opacity: 0.6 } : undefined}>
                                 <td>
                                     <span className="dt-avatar">{(c.contactId?.nom?.[0] ?? '?').toUpperCase()}</span>
                                     {c.contactId?.nom ?? 'Inconnu'}
+                                    {isBlocked && <span className="dt-badge dt-badge-danger" style={{ marginLeft: 6, fontSize: '0.7rem' }}>Bloqué</span>}
                                 </td>
                                 <td><span className="dt-mono">{c.contactId?.whatsappId ? `+${c.contactId.whatsappId}` : '—'}</span></td>
                                 <td>
@@ -188,13 +218,24 @@ export default function Discussions() {
                                 <td style={{ textAlign: 'center' }}>{c.nbMessages}</td>
                                 <td>{new Date(c.derniereMiseAJour).toLocaleString('fr-FR')}</td>
                                 <td>{new Date(c.createdAt).toLocaleDateString('fr-FR')}</td>
-                                <td>
+                                <td className="dt-actions">
                                     <button className="dt-btn dt-btn-edit" onClick={() => openThread(c)}>
                                         Ouvrir
                                     </button>
+                                    {isUnknown && (
+                                        <button
+                                            className={`dt-btn ${isBlocked ? 'dt-btn-import' : 'dt-btn-danger'}`}
+                                            onClick={() => handleToggleBlock(c.contactId._id)}
+                                            disabled={blocking}
+                                            title={isBlocked ? 'Débloquer ce contact' : 'Bloquer ce contact — il ne pourra plus envoyer de messages'}
+                                        >
+                                            {isBlocked ? 'Débloquer' : 'Bloquer'}
+                                        </button>
+                                    )}
                                 </td>
                             </tr>
-                        ))}
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>
@@ -220,7 +261,14 @@ export default function Discussions() {
                             <div className="wa-header-avatar">{contactInitial}</div>
 
                             <div className="wa-header-info">
-                                <span className="wa-header-name">{contactName}</span>
+                                <span className="wa-header-name">
+                                    {contactName}
+                                    {contactIsBlocked && (
+                                        <span style={{ marginLeft: 8, fontSize: '0.72rem', background: '#fee2e2', color: '#dc2626', borderRadius: 4, padding: '1px 6px', fontWeight: 600 }}>
+                                            Bloqué
+                                        </span>
+                                    )}
+                                </span>
                                 <span className="wa-header-sub">
                                     {contactPhone ? `+${contactPhone}` : '—'} &nbsp;·&nbsp;
                                     {isHuman ? '👨‍⚕️ Mode Humain' : '🤖 Mode IA'}
@@ -228,6 +276,17 @@ export default function Discussions() {
                             </div>
 
                             <div className="wa-header-actions">
+                                {contactIsUnknown && (
+                                    <button
+                                        className={`wa-mode-btn ${contactIsBlocked ? 'wa-mode-btn-ai' : 'wa-mode-btn-human'}`}
+                                        style={contactIsBlocked ? { background: '#16a34a' } : { background: '#dc2626' }}
+                                        onClick={() => handleToggleBlock(selected.contactId._id)}
+                                        disabled={blocking}
+                                        title={contactIsBlocked ? 'Débloquer ce contact' : 'Bloquer — stoppe toute réponse IA à ce numéro'}
+                                    >
+                                        {blocking ? '…' : contactIsBlocked ? '✓ Débloquer' : '⛔ Bloquer'}
+                                    </button>
+                                )}
                                 <button
                                     className={`wa-mode-btn ${isHuman ? 'wa-mode-btn-ai' : 'wa-mode-btn-human'}`}
                                     onClick={handleToggleMode}

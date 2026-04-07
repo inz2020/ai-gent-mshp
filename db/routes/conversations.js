@@ -10,7 +10,7 @@ const router = express.Router();
 router.get('/', requireAuth, async (req, res) => {
     try {
         const conversations = await Conversation.find()
-            .populate('contactId', 'whatsappId nom langue')
+            .populate('contactId', 'whatsappId nom langue source bloque')
             .sort({ derniereMiseAJour: -1 });
         res.json(conversations);
     } catch (err) {
@@ -33,7 +33,7 @@ router.get('/:id/messages', requireAuth, async (req, res) => {
 router.patch('/:id/mode', requireAuth, requireRole('admin', 'staff'), async (req, res) => {
     try {
         const conv = await Conversation.findById(req.params.id)
-            .populate('contactId', 'whatsappId nom langue');
+            .populate('contactId', 'whatsappId nom langue source bloque');
         if (!conv) return res.status(404).json({ message: 'Conversation introuvable.' });
 
         if (conv.statut === 'ferme') {
