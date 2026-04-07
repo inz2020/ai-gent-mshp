@@ -676,52 +676,49 @@ async function processAudio(mediaId, userPhone) {
 
     let transcription;
 
-    // ── PASS 1 : détection de langue ────────────────────────────
-    let detectedLang; // 'fr' | 'ha'
-    try {
-        const detect = await openai.audio.transcriptions.create({
-            file: fs.createReadStream(inputFile),
-            model: 'whisper-1',
-            response_format: 'verbose_json',
-            timestamp_granularities: ['segment'],
-            // Aucun language, aucun prompt → Whisper choisit librement
-        });
-        const wLang = detect.language?.toLowerCase() ?? '';
-        const hasArabic = /[\u0600-\u06FF]/.test(detect.text);
+    // ══════════════════════════════════════════════════════════════
+    // STRATÉGIE DE TRANSCRIPTION
+    //
+    // Si knownLang est connu → on saute la détection et on transcrit directement.
+    //   FR  → Whisper forcé FR (excellent)
+    //   HA  → ElevenLabs STT d'abord (supporte Hausa nativement),
+    //          Whisper + prompt Hausa en fallback
+    //
+    // Si langue inconnue → Pass 1 Whisper neutre pour détecter, puis Pass 2 ciblé.
+    // ══════════════════════════════════════════════════════════════
 
-        // Script arabe dès le Pass 1 → court-circuit immédiat, pas de Pass 2, pas de GPT
-        if (hasArabic) {
-            console.log('[3a/6] Script arabe au Pass 1 — court-circuit immédiat');
-            fs.unlink(inputFile, () => {});
-            await sendErrorAudio(userPhone, 'repeat_ha');
-            try {
-                await saveMessages(contact._id, 'ha', {
-                    humanText: '[Audio Hausa — transcription échouée]',
-                    aiText: ERROR_TEXTS.repeat_ha,
-                    humanAudioUrl,
-                });
-            } catch { /* non bloquant */ }
-            return;
-        }
+    let detectedLang = knownLang ?? null; // 'fr' | 'ha' | null
 
-        if (wLang === 'french') {
-            detectedLang = 'fr';
-        } else if (WHISPER_HAUSA_LANGS.has(wLang)) {
+    // ── PASS 1 : détection seulement si langue inconnue ─────────
+    if (!detectedLang) {
+        try {
+            const detect = await openai.audio.transcriptions.create({
+                file: fs.createReadStream(inputFile),
+                model: 'whisper-1',
+                response_format: 'verbose_json',
+                timestamp_granularities: ['segment'],
+            });
+            const wLang = detect.language?.toLowerCase() ?? '';
+            const hasArabic = /[\u0600-\u06FF]/.test(detect.text);
+
+            if (wLang === 'french') {
+                detectedLang = 'fr';
+            } else {
+                // Hausa, alias africain, script arabe → tout ça c'est du Hausa
+                detectedLang = 'ha';
+            }
+            console.log(`[3a/6] Détection langue — Whisper: "${wLang}" | Arabic: ${hasArabic} | → ${detectedLang}`);
+        } catch (detectErr) {
             detectedLang = 'ha';
-        } else {
-            detectedLang = knownLang ?? 'ha';
+            console.warn('[3a/6] Détection échouée, fallback ha:', detectErr.message);
         }
-        console.log(`[3a/6] Détection langue — Whisper: "${wLang}" | → ${detectedLang}`);
-    } catch (detectErr) {
-        // Si la détection échoue, on tombe sur knownLang
-        detectedLang = knownLang ?? 'ha';
-        console.warn('[3a/6] Détection langue échouée, fallback:', detectedLang);
+    } else {
+        console.log(`[3a/6] Langue connue (DB): ${detectedLang} — détection sautée`);
     }
 
-    // ── PASS 2 : transcription ciblée ───────────────────────────
+    // ── PASS 2 : transcription ciblée selon la langue ───────────
     try {
         if (detectedLang === 'fr') {
-            // Français → Whisper forcé FR + prompt médical français
             transcription = await openai.audio.transcriptions.create({
                 file: fs.createReadStream(inputFile),
                 model: 'whisper-1',
@@ -732,13 +729,12 @@ async function processAudio(mediaId, userPhone) {
             });
             console.log('[3b/6] Whisper FR | Texte:', transcription.text.slice(0, 80));
         } else {
-            // Hausa → ElevenLabs STT (bien meilleur sur les langues africaines)
-            // Fallback : Whisper + prompt Hausa
+            // Hausa → ElevenLabs STT en priorité absolue (supporte hau nativement)
             try {
                 transcription = await sttElevenLabs(inputFile, 'hau');
                 console.log('[3b/6] ElevenLabs STT Hausa | Texte:', transcription.text.slice(0, 80));
             } catch (elErr) {
-                console.warn('[3b/6] ElevenLabs STT échoué, fallback Whisper Hausa:', elErr.message);
+                console.warn('[3b/6] ElevenLabs STT échoué, fallback Whisper + prompt Hausa:', elErr.message);
                 transcription = await openai.audio.transcriptions.create({
                     file: fs.createReadStream(inputFile),
                     model: 'whisper-1',
@@ -746,21 +742,21 @@ async function processAudio(mediaId, userPhone) {
                     timestamp_granularities: ['segment'],
                     prompt: getHausaWhisperPrompt(),
                 });
-                console.log('[3b/6] Whisper Hausa | Texte:', transcription.text.slice(0, 80));
-            }
-            // Script arabe résiduel → transcription inutilisable, on ne passe pas par GPT
-            if (/[\u0600-\u06FF]/.test(transcription.text)) {
-                console.log('[3b/6] Script arabe résiduel — court-circuit GPT, audio répétition Hausa');
-                fs.unlink(inputFile, () => {});
-                await sendErrorAudio(userPhone, 'repeat_ha');
-                try {
-                    await saveMessages(contact._id, 'ha', {
-                        humanText: '[Audio Hausa — transcription échouée]',
-                        aiText: ERROR_TEXTS.repeat_ha,
-                        humanAudioUrl,
-                    });
-                } catch { /* non bloquant */ }
-                return;
+                console.log('[3b/6] Whisper Hausa fallback | Texte:', transcription.text.slice(0, 80));
+                // Script arabe résiduel après Whisper → GPT ne peut pas l'exploiter
+                if (/[\u0600-\u06FF]/.test(transcription.text)) {
+                    console.log('[3b/6] Script arabe résiduel après tous les STT — audio répétition');
+                    fs.unlink(inputFile, () => {});
+                    await sendErrorAudio(userPhone, 'repeat_ha');
+                    try {
+                        await saveMessages(contact._id, 'ha', {
+                            humanText: '[Audio Hausa — transcription échouée]',
+                            aiText: ERROR_TEXTS.repeat_ha,
+                            humanAudioUrl,
+                        });
+                    } catch { /* non bloquant */ }
+                    return;
+                }
             }
         }
     } catch (err) {
