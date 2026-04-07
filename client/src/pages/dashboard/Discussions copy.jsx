@@ -222,7 +222,16 @@ export default function Discussions() {
                                     <button className="dt-btn dt-btn-edit" onClick={() => openThread(c)}>
                                         Ouvrir
                                     </button>
-                                    
+                                    {isUnknown && (
+                                        <button
+                                            className={`dt-btn ${isBlocked ? 'dt-btn-import' : 'dt-btn-danger'}`}
+                                            onClick={() => handleToggleBlock(c.contactId._id)}
+                                            disabled={blocking}
+                                            title={isBlocked ? 'Débloquer ce contact' : 'Bloquer ce contact — il ne pourra plus envoyer de messages'}
+                                        >
+                                            {isBlocked ? 'Débloquer' : 'Bloquer'}
+                                        </button>
+                                    )}
                                 </td>
                             </tr>
                             );

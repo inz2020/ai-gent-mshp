@@ -339,19 +339,24 @@ async function sendWhatsAppText(to, text) {
     );
 }
 
+// Envoie toujours un message AUDIO (TTS). Retourne l'objet Cloudinary pour
+// les appelants qui ont besoin de l'URL (sauvegarde DB). Fallback texte uniquement
+// si la génération TTS elle-même échoue de façon irrémédiable.
 async function sendAudioReply(to, text, lang = 'fr') {
     try {
-        const ttsBuffer  = await generateTTS(prepareVoiceText(text), lang);
-        const uploaded   = await uploadAudio(ttsBuffer, 'chatbot_audio');
+        const ttsBuffer = await generateTTS(prepareVoiceText(text), lang);
+        const uploaded  = await uploadAudio(ttsBuffer, 'chatbot_audio');
         await axios.post(
             `https://graph.facebook.com/v22.0/${process.env.PHONE_ID}/messages`,
             { messaging_product: 'whatsapp', to, type: 'audio', audio: { link: uploaded.secure_url } },
             { headers: { Authorization: `Bearer ${process.env.META_TOKEN}`, 'Content-Type': 'application/json' } }
         );
         console.log(`[TTS] Réponse audio envoyée à ${to} (${lang})`);
+        return uploaded; // { secure_url, public_id, … }
     } catch (err) {
-        console.error('[TTS] Échec envoi audio, fallback texte:', err.message);
+        console.error('[TTS] Échec génération/envoi audio, fallback texte:', err.message);
         await sendWhatsAppText(to, text);
+        return null;
     }
 }
 
@@ -487,7 +492,15 @@ async function processText(userText, userPhone) {
     console.log(`[TEXT] Langue finale: ${lang} | Réponse: ${reply}`);
 
     if (lang === 'unknown' || !reply) {
-        await sendAudioReply(userPhone, AUDIO_ERRORS.unknown_lang, 'ha');
+        const errorMsg = AUDIO_ERRORS.unknown_lang;
+        await sendAudioReply(userPhone, errorMsg, 'ha');
+        // Sauvegarde quand même : le message humain + la réponse d'erreur doivent
+        // apparaître dans le fil de discussion (langue inconnue visible par l'opérateur)
+        try {
+            await saveMessages(contact._id, 'unknown', { humanText: userText, aiText: errorMsg });
+        } catch (dbErr) {
+            console.error('[DB] Erreur persistance message inconnu:', dbErr.message);
+        }
         return;
     }
 
@@ -576,7 +589,7 @@ async function processAudio(mediaId, userPhone) {
     let transcription;
 
     if (knownLang === 'fr') {
-        // ── Français ────────────────────────────────────────────
+        // ── Français connu ───────────────────────────────────────
         transcription = await openai.audio.transcriptions.create({
             file: fs.createReadStream(inputFile),
             model: 'whisper-1',
@@ -585,10 +598,8 @@ async function processAudio(mediaId, userPhone) {
             language: 'fr',
         });
         console.log('[3/6] Whisper FR | Texte:', transcription.text.slice(0, 80));
-    } else {
-        // ── Hausa / inconnu → auto-détection avec prompt Hausa ──
-        // Le prompt donne à Whisper du contexte sur le vocabulaire
-        // médical nigérien pour orienter la transcription.
+    } else if (knownLang === 'ha') {
+        // ── Hausa connu → auto-détection avec prompt Hausa ──────
         // Ne PAS passer language:'ha' — non supporté par l'API Whisper.
         transcription = await openai.audio.transcriptions.create({
             file: fs.createReadStream(inputFile),
@@ -597,6 +608,18 @@ async function processAudio(mediaId, userPhone) {
             timestamp_granularities: ['segment'],
             prompt: getHausaWhisperPrompt(),
         });
+        console.log('[3/6] Whisper Hausa | lang détecté:', transcription.language, '| Texte:', transcription.text.slice(0, 80));
+    } else {
+        // ── Langue inconnue → auto-détection NEUTRE (sans prompt Hausa) ──
+        // IMPORTANT : le prompt Hausa biaise Whisper et lui fait confondre
+        // le français avec des langues slaves/arabes. On laisse Whisper
+        // auto-détecter librement pour les nouveaux contacts.
+        transcription = await openai.audio.transcriptions.create({
+            file: fs.createReadStream(inputFile),
+            model: 'whisper-1',
+            response_format: 'verbose_json',
+            timestamp_granularities: ['segment'],
+        });
         console.log('[3/6] Whisper auto | lang détecté:', transcription.language, '| Texte:', transcription.text.slice(0, 80));
     }
 
@@ -604,7 +627,8 @@ async function processAudio(mediaId, userPhone) {
 
 
     // Filtre qualité — seuils assouplis pour le Hausa (log_prob naturellement plus bas)
-    const isLikelyHausa = knownLang === 'ha' || !knownLang || transcription.language === 'hausa';
+    // !knownLang NE signifie PAS Hausa : un nouveau contact peut très bien parler français.
+    const isLikelyHausa = knownLang === 'ha' || transcription.language === 'hausa';
     const quality = checkAudioQuality(transcription, isLikelyHausa);
     if (!quality.ok) {
         console.log('[AUDIO] Qualité insuffisante:', quality.reason);
@@ -614,6 +638,16 @@ async function processAudio(mediaId, userPhone) {
             ? AUDIO_ERRORS.quality[errLang]
             : AUDIO_ERRORS.unclear[errLang];
         await sendAudioReply(userPhone, errMsg, errLang);
+        // Sauvegarde : message audio + erreur visible dans le fil de discussion
+        try {
+            await saveMessages(contact._id, 'unknown', {
+                humanText: transcription.text || '[Audio non transcrit]',
+                aiText: errMsg,
+                humanAudioUrl,
+            });
+        } catch (dbErr) {
+            console.error('[DB] Erreur persistance audio qualité:', dbErr.message);
+        }
         return;
     }
 
@@ -684,34 +718,10 @@ RÈGLES STRICTES :
     }
     console.log(`[4/6] Réponse GPT (${audioLang}): ${replyText}`);
 
-    let uploadResult = null;
-    try {
-        const ttsBuffer = await generateTTS(prepareVoiceText(replyText), audioLang);
-        console.log('[5/6] Audio TTS généré:', ttsBuffer.byteLength, 'bytes');
-        uploadResult = await uploadAudio(ttsBuffer, 'chatbot_audio');
-        console.log('[6/6] Cloudinary URL:', uploadResult.secure_url);
-    } catch (ttsErr) {
-        console.error(`[TTS] Échec génération audio (${audioLang}), fallback texte:`, ttsErr.message);
-    }
-
-    if (uploadResult) {
-        try {
-            await axios.post(
-                `https://graph.facebook.com/v22.0/${process.env.PHONE_ID}/messages`,
-                { messaging_product: 'whatsapp', to: userPhone, type: 'audio', audio: { link: uploadResult.secure_url } },
-                { headers: { Authorization: `Bearer ${process.env.META_TOKEN}`, 'Content-Type': 'application/json' } }
-            );
-            console.log(`[OK] Réponse audio envoyée à ${userPhone}`);
-        } catch (sendErr) {
-            const status = sendErr.response?.status;
-            console.error(`[AUDIO-SEND] Échec envoi audio (${status}), fallback texte:`, sendErr.response?.data?.error?.message ?? sendErr.message);
-            await sendWhatsAppText(userPhone, replyText);
-            console.log(`[AUDIO-SEND] Fallback texte envoyé à ${userPhone}`);
-        }
-    } else {
-        await sendWhatsAppText(userPhone, replyText);
-        console.log(`[AUDIO-SEND] Fallback texte envoyé à ${userPhone}`);
-    }
+    // Message entrant = audio → réponse TOUJOURS en audio (sendAudioReply gère le TTS
+    // et ne tombe en fallback texte qu'en dernier recours si le TTS est indisponible).
+    console.log(`[5-6/6] Envoi réponse audio (${audioLang})…`);
+    const uploadResult = await sendAudioReply(userPhone, replyText, audioLang);
 
     fs.unlink(inputFile, () => {});
 
