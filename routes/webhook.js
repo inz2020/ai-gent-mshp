@@ -12,7 +12,7 @@ import Message from '../db/models/Message.js';
 import Structure from '../db/models/Structure.js';
 import BroadcastMessage from '../db/models/BroadcastMessage.js';
 import Broadcast from '../db/models/Broadcast.js';
-import { generateTTS, prepareVoiceText, uploadAudio } from '../lib/audio.js';
+import { generateTTS, ttsElevenLabs, sttElevenLabs, prepareVoiceText, uploadAudio } from '../lib/audio.js';
 
 const router = express.Router();
 
@@ -339,22 +339,40 @@ async function sendWhatsAppText(to, text) {
     );
 }
 
-// Envoie toujours un message AUDIO (TTS). Retourne l'objet Cloudinary pour
-// les appelants qui ont besoin de l'URL (sauvegarde DB). Fallback texte uniquement
-// si la génération TTS elle-même échoue de façon irrémédiable.
+// Envoie TOUJOURS un message AUDIO (TTS).
+// Si le TTS principal échoue → ElevenLabs comme 2e tentative.
+// Texte uniquement si les deux TTS sont indisponibles (dernier recours absolu).
 async function sendAudioReply(to, text, lang = 'fr') {
+    let ttsBuffer;
+    const voiceText = prepareVoiceText(text);
+
+    // Tentative 1 : TTS principal (OpenAI pour FR, ElevenLabs pour HA)
     try {
-        const ttsBuffer = await generateTTS(prepareVoiceText(text), lang);
-        const uploaded  = await uploadAudio(ttsBuffer, 'chatbot_audio');
+        ttsBuffer = await generateTTS(voiceText, lang);
+    } catch (primaryErr) {
+        console.error(`[TTS] Échec TTS principal (${lang}), tentative ElevenLabs:`, primaryErr.message);
+        // Tentative 2 : ElevenLabs multilingue (supporte FR et HA)
+        try {
+            ttsBuffer = await ttsElevenLabs(voiceText);
+        } catch (fallbackErr) {
+            console.error('[TTS] Échec ElevenLabs aussi, dernier recours texte:', fallbackErr.message);
+            await sendWhatsAppText(to, text);
+            return null;
+        }
+    }
+
+    // Envoi audio
+    try {
+        const uploaded = await uploadAudio(ttsBuffer, 'chatbot_audio');
         await axios.post(
             `https://graph.facebook.com/v22.0/${process.env.PHONE_ID}/messages`,
             { messaging_product: 'whatsapp', to, type: 'audio', audio: { link: uploaded.secure_url } },
             { headers: { Authorization: `Bearer ${process.env.META_TOKEN}`, 'Content-Type': 'application/json' } }
         );
         console.log(`[TTS] Réponse audio envoyée à ${to} (${lang})`);
-        return uploaded; // { secure_url, public_id, … }
-    } catch (err) {
-        console.error('[TTS] Échec génération/envoi audio, fallback texte:', err.message);
+        return uploaded;
+    } catch (sendErr) {
+        console.error('[TTS] Échec upload/envoi audio, dernier recours texte:', sendErr.message);
         await sendWhatsAppText(to, text);
         return null;
     }
@@ -589,7 +607,7 @@ async function processAudio(mediaId, userPhone) {
     let transcription;
 
     if (knownLang === 'fr') {
-        // ── Français connu ───────────────────────────────────────
+        // ── Français connu → Whisper forcé FR ───────────────────
         transcription = await openai.audio.transcriptions.create({
             file: fs.createReadStream(inputFile),
             model: 'whisper-1',
@@ -599,28 +617,52 @@ async function processAudio(mediaId, userPhone) {
         });
         console.log('[3/6] Whisper FR | Texte:', transcription.text.slice(0, 80));
     } else if (knownLang === 'ha') {
-        // ── Hausa connu → auto-détection avec prompt Hausa ──────
-        // Ne PAS passer language:'ha' — non supporté par l'API Whisper.
-        transcription = await openai.audio.transcriptions.create({
-            file: fs.createReadStream(inputFile),
-            model: 'whisper-1',
-            response_format: 'verbose_json',
-            timestamp_granularities: ['segment'],
-            prompt: getHausaWhisperPrompt(),
-        });
-        console.log('[3/6] Whisper Hausa | lang détecté:', transcription.language, '| Texte:', transcription.text.slice(0, 80));
+        // ── Hausa connu → ElevenLabs Scribe (supporte hau nativement) ──
+        // Whisper ne supporte pas le Hausa — ElevenLabs Scribe donne
+        // une précision bien supérieure sur les langues africaines.
+        try {
+            transcription = await sttElevenLabs(inputFile, 'hau');
+            console.log('[3/6] ElevenLabs STT Hausa | Texte:', transcription.text.slice(0, 80));
+        } catch (elErr) {
+            console.warn('[3/6] ElevenLabs STT échoué, fallback Whisper:', elErr.message);
+            transcription = await openai.audio.transcriptions.create({
+                file: fs.createReadStream(inputFile),
+                model: 'whisper-1',
+                response_format: 'verbose_json',
+                timestamp_granularities: ['segment'],
+                prompt: getHausaWhisperPrompt(),
+            });
+            console.log('[3/6] Whisper Hausa fallback | Texte:', transcription.text.slice(0, 80));
+        }
     } else {
-        // ── Langue inconnue → auto-détection NEUTRE (sans prompt Hausa) ──
-        // IMPORTANT : le prompt Hausa biaise Whisper et lui fait confondre
-        // le français avec des langues slaves/arabes. On laisse Whisper
-        // auto-détecter librement pour les nouveaux contacts.
-        transcription = await openai.audio.transcriptions.create({
-            file: fs.createReadStream(inputFile),
-            model: 'whisper-1',
-            response_format: 'verbose_json',
-            timestamp_granularities: ['segment'],
-        });
-        console.log('[3/6] Whisper auto | lang détecté:', transcription.language, '| Texte:', transcription.text.slice(0, 80));
+        // ── Langue inconnue → Whisper auto-détection NEUTRE ─────
+        // On essaie d'abord ElevenLabs en auto-detect, fallback Whisper.
+        // IMPORTANT : pas de prompt Hausa ici — il biaise contre le français.
+        try {
+            transcription = await sttElevenLabs(inputFile, 'hau');
+            // ElevenLabs retourne la langue détectée — si c'est clairement
+            // du français (fra), on relance Whisper FR pour plus de précision.
+            if (transcription.language === 'fra' || transcription.language === 'fr') {
+                console.log('[3/6] ElevenLabs détecte FR → re-transcription Whisper FR');
+                transcription = await openai.audio.transcriptions.create({
+                    file: fs.createReadStream(inputFile),
+                    model: 'whisper-1',
+                    response_format: 'verbose_json',
+                    timestamp_granularities: ['segment'],
+                    language: 'fr',
+                });
+            }
+            console.log('[3/6] ElevenLabs STT auto | lang:', transcription.language, '| Texte:', transcription.text.slice(0, 80));
+        } catch (elErr) {
+            console.warn('[3/6] ElevenLabs STT échoué, fallback Whisper neutre:', elErr.message);
+            transcription = await openai.audio.transcriptions.create({
+                file: fs.createReadStream(inputFile),
+                model: 'whisper-1',
+                response_format: 'verbose_json',
+                timestamp_granularities: ['segment'],
+            });
+            console.log('[3/6] Whisper auto fallback | lang:', transcription.language, '| Texte:', transcription.text.slice(0, 80));
+        }
     }
 
     console.log(`[3/6] Whisper | lang: ${transcription.language} | "${transcription.text.slice(0, 60)}"`);
@@ -633,11 +675,11 @@ async function processAudio(mediaId, userPhone) {
     if (!quality.ok) {
         console.log('[AUDIO] Qualité insuffisante:', quality.reason);
         fs.unlink(inputFile, () => {});
-        const errLang = knownLang || 'fr';
-        const errMsg  = quality.reason.includes('bruité') || quality.reason.includes('silencieux')
-            ? AUDIO_ERRORS.quality[errLang]
-            : AUDIO_ERRORS.unclear[errLang];
-        await sendAudioReply(userPhone, errMsg, errLang);
+        // Erreur de qualité → toujours Hausa audio (même pour un locuteur FR)
+        const errMsg = quality.reason.includes('bruité') || quality.reason.includes('silencieux')
+            ? AUDIO_ERRORS.quality['ha']
+            : AUDIO_ERRORS.unclear['ha'];
+        await sendAudioReply(userPhone, errMsg, 'ha');
         // Sauvegarde : message audio + erreur visible dans le fil de discussion
         try {
             await saveMessages(contact._id, 'unknown', {
@@ -689,10 +731,9 @@ Réponds TOUJOURS avec un objet JSON valide :
 
 RÈGLES STRICTES :
 - La langue de l'audio est déjà identifiée : "${finalLang === 'ha' ? 'hausa' : 'français'}"
-- Tu dois répondre dans cette langue SAUF si la transcription montre clairement l'autre langue
+- Tu DOIS répondre dans cette langue sans exception — ne change PAS la langue même si certains mots semblent incertains
 - lang="ha" → reply en Hausa pur, zéro mot français, 2-3 phrases courtes orales
-- lang="fr" → reply en français, 2-3 phrases courtes orales
-- Si certains mots sont incertains, déduis le sens du contexte médical et réponds en Hausa
+- lang="fr" → reply en français uniquement, 2-3 phrases courtes orales, zéro mot Hausa
 - Pas de symboles, pas de listes, pas d'astérisques — texte oral uniquement (sera lu à voix haute)`;
 
     const response = await openai.chat.completions.create({

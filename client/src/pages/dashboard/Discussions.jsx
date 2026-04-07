@@ -49,10 +49,29 @@ export default function Discussions() {
     const [sending, setSending]     = useState(false);
     const [toggling, setToggling]   = useState(false);
     const [blocking, setBlocking]   = useState(false);
+    const [lastSync, setLastSync]   = useState(null);
     const threadEndRef              = useRef(null);
     const textareaRef               = useRef(null);
+    const selectedRef               = useRef(null);
+    const messagesRef               = useRef([]);
 
-    useEffect(() => { fetchConvs(); }, []);
+    // Garde les refs à jour pour les intervalles (closures)
+    useEffect(() => { selectedRef.current = selected; }, [selected]);
+    useEffect(() => { messagesRef.current = messages; }, [messages]);
+
+    // ── Polling conversations (8s) ──────────────────────────────
+    useEffect(() => {
+        fetchConvs();
+        const id = setInterval(fetchConvsSilent, 8000);
+        return () => clearInterval(id);
+    }, []);
+
+    // ── Polling messages du fil ouvert (4s) ────────────────────
+    useEffect(() => {
+        if (!selected) return;
+        const id = setInterval(pollMessages, 4000);
+        return () => clearInterval(id);
+    }, [selected?._id]);
 
     useEffect(() => {
         if (!msgLoad) {
@@ -62,9 +81,39 @@ export default function Discussions() {
 
     async function fetchConvs() {
         setLoading(true);
-        try { setConvs(await getConversations()); }
+        try {
+            const data = await getConversations();
+            setConvs(data);
+            setLastSync(new Date());
+        }
         catch (e) { setError(e.message); }
         finally { setLoading(false); }
+    }
+
+    async function fetchConvsSilent() {
+        try {
+            const data = await getConversations();
+            setConvs(data);
+            setLastSync(new Date());
+            // Met à jour la conversation sélectionnée si elle a changé
+            const sel = selectedRef.current;
+            if (sel) {
+                const updated = data.find(c => c._id === sel._id);
+                if (updated) setSelected(prev => ({ ...prev, statut: updated.statut, contactId: updated.contactId }));
+            }
+        } catch { /* silencieux */ }
+    }
+
+    async function pollMessages() {
+        const sel = selectedRef.current;
+        if (!sel) return;
+        try {
+            const fresh = await getConversationMessages(sel._id);
+            const current = messagesRef.current;
+            if (fresh.length > current.length) {
+                setMessages(fresh);
+            }
+        } catch { /* silencieux */ }
     }
 
     async function openThread(conv) {
@@ -176,7 +225,15 @@ export default function Discussions() {
                     value={search}
                     onChange={e => setSearch(e.target.value)}
                 />
-                <button className="dt-btn" onClick={fetchConvs}>↻ Actualiser</button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {lastSync && (
+                        <span style={{ fontSize: '0.75rem', color: '#16a34a', display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#16a34a', display: 'inline-block', animation: 'pulse-live 2s infinite' }} />
+                            Live · {lastSync.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                        </span>
+                    )}
+                    <button className="dt-btn" onClick={fetchConvs}>↻ Actualiser</button>
+                </div>
             </div>
 
             <div className="dt-wrapper">
