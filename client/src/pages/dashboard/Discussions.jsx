@@ -324,17 +324,6 @@ export default function Discussions() {
                             </div>
 
                             <div className="wa-header-actions">
-                                {contactIsUnknown && (
-                                    <button
-                                        className={`wa-mode-btn ${contactIsBlocked ? 'wa-mode-btn-ai' : 'wa-mode-btn-human'}`}
-                                        style={contactIsBlocked ? { background: '#16a34a' } : { background: '#dc2626' }}
-                                        onClick={() => handleToggleBlock(selected.contactId._id)}
-                                        disabled={blocking}
-                                        title={contactIsBlocked ? 'Débloquer ce contact' : 'Bloquer — stoppe toute réponse IA à ce numéro'}
-                                    >
-                                        {blocking ? '…' : contactIsBlocked ? '✓ Débloquer' : '⛔ Bloquer'}
-                                    </button>
-                                )}
                                 <button
                                     className={`wa-mode-btn ${isHuman ? 'wa-mode-btn-ai' : 'wa-mode-btn-human'}`}
                                     onClick={handleToggleMode}
