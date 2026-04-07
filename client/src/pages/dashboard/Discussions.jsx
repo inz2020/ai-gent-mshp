@@ -8,7 +8,7 @@ import {
 import { usePagination } from '../../hooks/usePagination.js';
 import Pagination from '../../components/Pagination.jsx';
 
-const LANG_LABEL   = { fr: 'Français', ha: 'Hausa', unknown: 'Inconnu' };
+const LANG_LABEL   = { fr: 'Français', ha: 'Hausa', hausa: 'Hausa', unknown: 'Inconnu' };
 const STATUT_COLOR = { ouvert: 'dt-badge-actif', ferme: 'dt-badge-inactif', escalade_humain: 'dt-badge-danger' };
 const STATUT_LABEL = { ouvert: 'Ouvert', ferme: 'Fermé', escalade_humain: 'Mode Humain' };
 
@@ -178,7 +178,7 @@ export default function Discussions() {
                                     <span className="dt-avatar">{(c.contactId?.nom?.[0] ?? '?').toUpperCase()}</span>
                                     {c.contactId?.nom ?? 'Inconnu'}
                                 </td>
-                                <td><span className="dt-mono">+{c.contactId?.whatsappId ?? '—'}</span></td>
+                                <td><span className="dt-mono">{c.contactId?.whatsappId ? `+${c.contactId.whatsappId}` : '—'}</span></td>
                                 <td>
                                     <span className={`dt-badge ${STATUT_COLOR[c.statut] ?? 'dt-badge-inactif'}`}>
                                         {STATUT_LABEL[c.statut] ?? c.statut}
@@ -222,7 +222,7 @@ export default function Discussions() {
                             <div className="wa-header-info">
                                 <span className="wa-header-name">{contactName}</span>
                                 <span className="wa-header-sub">
-                                    +{contactPhone} &nbsp;·&nbsp;
+                                    {contactPhone ? `+${contactPhone}` : '—'} &nbsp;·&nbsp;
                                     {isHuman ? '👨‍⚕️ Mode Humain' : '🤖 Mode IA'}
                                 </span>
                             </div>

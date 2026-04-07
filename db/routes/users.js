@@ -10,87 +10,103 @@ router.use(requireAuth, requireAdmin);
 
 // GET /api/users — liste tous les utilisateurs
 router.get('/', async (req, res) => {
-    const users = await User.find().select('-password').sort({ createdAt: -1 });
-    res.json(users);
+    try {
+        const users = await User.find().select('-password').sort({ createdAt: -1 });
+        res.json(users);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
 });
 
 // POST /api/users — créer un utilisateur
 router.post('/', async (req, res) => {
-    const { nom, email, password, role } = req.body;
+    try {
+        const { nom, email, password, role } = req.body;
 
-    if (!nom || !email || !password) {
-        return res.status(400).json({ message: 'Nom, email et mot de passe requis.' });
+        if (!nom || !email || !password) {
+            return res.status(400).json({ message: 'Nom, email et mot de passe requis.' });
+        }
+
+        const { valide, erreurs } = validerMotDePasse(password);
+        if (!valide) return res.status(400).json({ message: erreurs[0] });
+
+        const login = genererLogin(nom);
+
+        const [emailExiste, loginExiste] = await Promise.all([
+            User.findOne({ email }),
+            User.findOne({ login }),
+        ]);
+        if (emailExiste) return res.status(409).json({ message: 'Cet email est déjà utilisé.' });
+        if (loginExiste) return res.status(409).json({ message: `L'identifiant "${login}" est déjà utilisé. Choisissez un nom différent.` });
+
+        const user = await User.create({ nom, login, email, password, role });
+
+        res.status(201).json({
+            _id: user._id, nom: user.nom, login: user.login, email: user.email,
+            role: user.role, actif: user.actif, createdAt: user.createdAt
+        });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
     }
-
-    const { valide, erreurs } = validerMotDePasse(password);
-    if (!valide) return res.status(400).json({ message: erreurs[0] });
-
-    const login = genererLogin(nom);
-
-    const [emailExiste, loginExiste] = await Promise.all([
-        User.findOne({ email }),
-        User.findOne({ login }),
-    ]);
-    if (emailExiste) return res.status(409).json({ message: 'Cet email est déjà utilisé.' });
-    if (loginExiste) return res.status(409).json({ message: `L'identifiant "${login}" est déjà utilisé. Choisissez un nom différent.` });
-
-    const user = await User.create({ nom, login, email, password, role });
-    
-    res.status(201).json({
-        _id: user._id, nom: user.nom, login: user.login, email: user.email,
-        role: user.role, actif: user.actif, createdAt: user.createdAt
-    });
 });
 
 // PUT /api/users/:id — modifier un utilisateur
 router.put('/:id', async (req, res) => {
-    const { nom, email, password, role, actif } = req.body;
-    const user = await User.findById(req.params.id);
-    if (!user) return res.status(404).json({ message: 'Utilisateur introuvable.' });
+    try {
+        const { nom, email, password, role, actif } = req.body;
+        const user = await User.findById(req.params.id);
+        if (!user) return res.status(404).json({ message: 'Utilisateur introuvable.' });
 
-    // Empêcher de modifier le seul admin
-    if (user.role === 'admin' && role && role !== 'admin') {
-        const nbAdmins = await User.countDocuments({ role: 'admin', actif: true });
-        if (nbAdmins <= 1) {
-            return res.status(400).json({ message: 'Impossible de rétrograder le seul administrateur.' });
+        // Empêcher de modifier le seul admin
+        if (user.role === 'admin' && role && role !== 'admin') {
+            const nbAdmins = await User.countDocuments({ role: 'admin', actif: true });
+            if (nbAdmins <= 1) {
+                return res.status(400).json({ message: 'Impossible de rétrograder le seul administrateur.' });
+            }
         }
+
+        if (nom)   user.nom   = nom;
+        if (email) user.email = email;
+        if (role)  user.role  = role;
+        if (actif !== undefined) user.actif = actif;
+
+        if (password) {
+            const { valide, erreurs } = validerMotDePasse(password);
+            if (!valide) return res.status(400).json({ message: erreurs[0] });
+            user.password = password;
+        }
+
+        await user.save();
+        res.json({
+            _id: user._id, nom: user.nom, login: user.login, email: user.email,
+            role: user.role, actif: user.actif, createdAt: user.createdAt
+        });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
     }
-
-    if (nom)   user.nom   = nom;
-    if (email) user.email = email;
-    if (role)  user.role  = role;
-    if (actif !== undefined) user.actif = actif;
-
-    if (password) {
-        const { valide, erreurs } = validerMotDePasse(password);
-        if (!valide) return res.status(400).json({ message: erreurs[0] });
-        user.password = password;
-    }
-
-    await user.save();
-    res.json({
-        _id: user._id, nom: user.nom, login: user.login, email: user.email,
-        role: user.role, actif: user.actif, createdAt: user.createdAt
-    });
 });
 
 // DELETE /api/users/:id — supprimer un utilisateur
 router.delete('/:id', async (req, res) => {
-    if (req.user.id === req.params.id) {
-        return res.status(400).json({ message: 'Vous ne pouvez pas supprimer votre propre compte.' });
-    }
-    const user = await User.findById(req.params.id);
-    if (!user) return res.status(404).json({ message: 'Utilisateur introuvable.' });
-
-    if (user.role === 'admin') {
-        const nbAdmins = await User.countDocuments({ role: 'admin', actif: true });
-        if (nbAdmins <= 1) {
-            return res.status(400).json({ message: 'Impossible de supprimer le seul administrateur.' });
+    try {
+        if (req.user.id === req.params.id) {
+            return res.status(400).json({ message: 'Vous ne pouvez pas supprimer votre propre compte.' });
         }
-    }
+        const user = await User.findById(req.params.id);
+        if (!user) return res.status(404).json({ message: 'Utilisateur introuvable.' });
 
-    await user.deleteOne();
-    res.json({ message: 'Utilisateur supprimé.' });
+        if (user.role === 'admin') {
+            const nbAdmins = await User.countDocuments({ role: 'admin', actif: true });
+            if (nbAdmins <= 1) {
+                return res.status(400).json({ message: 'Impossible de supprimer le seul administrateur.' });
+            }
+        }
+
+        await user.deleteOne();
+        res.json({ message: 'Utilisateur supprimé.' });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
 });
 
 export default router;
