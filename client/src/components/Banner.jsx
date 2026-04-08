@@ -13,7 +13,7 @@ export default function Banner() {
         </p>
         <div className="banner-actions">
           <a
-            href="https://wa.me/22700000000"
+            href="https://wa.me/22799553514"
             target="_blank"
             rel="noreferrer"
             className="btn-primary"
