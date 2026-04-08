@@ -4,7 +4,7 @@ import fs from 'fs';
 import OpenAI from 'openai';
 import { franc } from 'franc';
 import SYSTEM_PROMPT from '../prompt.js';
-import { FRENCH_WORDS, VERIFY_TOKEN, GREETING_CONFIG } from '../constants/config.js';
+import { VERIFY_TOKEN, GREETING_CONFIG } from '../constants/config.js';
 import { getHausaWords, getHausaPhrases, getHausaWhisperPrompt } from '../lib/hausaVocab.js';
 import Contact from '../db/models/Contact.js';
 import Conversation from '../db/models/Conversations.js';
@@ -39,31 +39,21 @@ function detectTextLanguage(text) {
     if (getHausaPhrases().some(phrase => normalized.includes(phrase))) return 'ha';
 
     // 3. franc — détection statistique sur ~400 langues (supporte Hausa = 'hau')
-    //    Seulement si le texte est assez long pour être fiable (>= 10 chars)
-    if (text.trim().length >= 10) {
-        const francLang = franc(text, { minLength: 10 });
+    //    Seulement si le texte est assez long pour être fiable (>= 5 chars)
+    if (text.trim().length >= 5) {
+        const francLang = franc(text, { minLength: 5 });
         console.log(`[LANG] franc détecté: ${francLang}`);
         if (francLang === 'hau') return 'ha';
         if (francLang === 'fra') return 'fr';
     }
 
-    // 4. Dictionnaire mot par mot (fallback pour textes courts)
+    // 4. Dictionnaire Hausa mot par mot (fallback pour textes courts)
     const words = normalized.split(/\s+/);
-    let frScore = 0;
-    let haScore = 0;
+    const hasHausa = words.some(w => getHausaWords().has(w.replace(/[^a-z]/g, '')));
 
-    for (const word of words) {
-        const clean = word.replace(/[^a-z]/g, '');
-        if (FRENCH_WORDS.has(clean))       frScore++;
-        if (getHausaWords().has(clean))    haScore++;
-    }
+    console.log(`[LANG] Dictionnaire — HA: ${hasHausa}`);
 
-    console.log(`[LANG] Dictionnaire — FR: ${frScore}, HA: ${haScore}`);
-
-    if (frScore === 0 && haScore === 0) return 'unknown';
-    if (frScore > haScore) return 'fr';
-    if (haScore > frScore) return 'ha';
-    return 'unknown';
+    return hasHausa ? 'ha' : 'fr';
 }
 
 // ─── Contrôle qualité audio (via segments Whisper) ──────────
@@ -320,7 +310,7 @@ async function sendWhatsAppText(to, text) {
 //   HA : ElevenLabs     → OpenAI shimmer → texte (dernier recours)
 async function sendAudioReply(to, text, lang = 'fr') {
     let ttsBuffer;
-    const voiceText = prepareVoiceText(text);
+    const voiceText = prepareVoiceText(text, lang);
 
     if (lang === 'ha') {
         // Tentative 1 : ElevenLabs (meilleur pour Hausa)
@@ -548,12 +538,13 @@ async function processText(userText, userPhone) {
     console.log(`[TEXT] Langue finale: ${lang} | Réponse: ${reply}`);
 
     if (lang === 'unknown' || !reply) {
-        const errorMsg = ERROR_TEXTS.quality_ha;
-        await sendErrorAudio(userPhone, 'quality_ha');
-        // Sauvegarde quand même : le message humain + la réponse d'erreur doivent
-        // apparaître dans le fil de discussion (langue inconnue visible par l'opérateur)
+        // Utilise la langue connue du contact, sinon Hausa par défaut
+        const knownContactLang = contact.langue === 'fr' ? 'fr' : 'ha';
+        const errKey = `quality_${knownContactLang}`;
+        const errorMsg = ERROR_TEXTS[errKey];
+        await sendErrorAudio(userPhone, errKey);
         try {
-            await saveMessages(contact._id, 'unknown', { humanText: userText, aiText: errorMsg });
+            await saveMessages(contact._id, knownContactLang === 'fr' ? 'fr' : 'unknown', { humanText: userText, aiText: errorMsg });
         } catch (dbErr) {
             console.error('[DB] Erreur persistance message inconnu:', dbErr.message);
         }

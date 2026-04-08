@@ -56,16 +56,6 @@ export const HAUSA_WORDS = new Set([
     'inganta', 'kariya', 'hana', 'gwaji', 'gwajin',
     'numfashi', 'kasala', 'rauni', 'farfadiya', 'farfadiyya'
 ]);
-export const FRENCH_WORDS = new Set([
-    'je', 'tu', 'il', 'elle', 'nous', 'vous', 'ils', 'elles',
-    'le', 'la', 'les', 'un', 'une', 'des', 'du', 'au', 'aux',
-    'est', 'sont', 'avec', 'pour', 'sur', 'dans', 'par', 'pas',
-    'mon', 'ma', 'mes', 'ton', 'ta', 'son', 'ses', 'leur', 'leurs',
-    'que', 'qui', 'quoi', 'comment', 'pourquoi', 'quand',
-    'vaccin', 'vaccination', 'enfant', 'bebe', 'fievre', 'maladie',
-    'sante', 'dose', 'injection', 'centre', 'gratuit', 'danger',
-    'normal', 'medecin', 'docteur', 'hopital', 'grossesse', 'mere'
-]);
 
 
 // Phrases Hausa multi-mots (recherche dans le texte complet, pas mot par mot)

@@ -170,6 +170,10 @@ Watanni 9 (watanni tara): Kyanda 1 / Doussa 1 / Tounounoum 1 (rougeole) da Zazza
 Watanni 15 zuwa 18: Kyanda 2 / Doussa 2 / Tounounoum 2.
 Watanni 12 zuwa 23: MenAfriVac (meningitis A).
 
+LAMBOBI A HAUSA — WAJIBI: Idan kana amsa da Hausa, DOLE ka rubuta duk lambobi da haruffa, ba da adadi ba:
+1=ɗaya, 2=biyu, 3=uku, 4=hudu, 5=biyar, 6=shida, 7=bakwai, 8=takwas, 9=tara, 10=goma, 14=goma sha hudu, 15=goma sha biyar, 18=goma sha takwas, 23=ashirin da uku.
+Misali: "Pentavalent ɗaya" ba "Pentavalent 1", "VPO biyu" ba "VPO 2", "makon shida" ba "makon 6", "watanni tara" ba "watanni 9".
+
 YADDA AKE AMSA TAMBAYOYIN JADAWALI:
 
 Misali 1: Jariri ya sami BCG da VPO0 yau → watan na gaba (a mako 6) zai karbi: Pentavalent 1, VPO1, Pneumocoque 1, Rotavirus 1.
