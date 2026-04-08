@@ -667,32 +667,32 @@ async function processAudio(mediaId, userPhone) {
     // Si langue inconnue → Pass 1 Whisper neutre pour détecter, puis Pass 2 ciblé.
     // ══════════════════════════════════════════════════════════════
 
-    let detectedLang = knownLang ?? null; // 'fr' | 'ha' | null
+    // Pass 1 toujours exécuté — source de vérité pour la langue de CET audio.
+    // knownLang (DB) n'est plus utilisé comme court-circuit : un utilisateur peut
+    // parler français après avoir envoyé du Hausa, et vice-versa.
+    let detectedLang = null;
 
-    // ── PASS 1 : détection seulement si langue inconnue ─────────
-    if (!detectedLang) {
-        try {
-            const detect = await openai.audio.transcriptions.create({
-                file: fs.createReadStream(inputFile),
-                model: 'whisper-1',
-                response_format: 'verbose_json',
-                timestamp_granularities: ['segment'],
-            });
-            const wLang = detect.language?.toLowerCase() ?? '';
+    // ── PASS 1 : détection systématique ─────────────────────────
+    try {
+        const detect = await openai.audio.transcriptions.create({
+            file: fs.createReadStream(inputFile),
+            model: 'whisper-1',
+            response_format: 'verbose_json',
+            timestamp_granularities: ['segment'],
+        });
+        const wLang = detect.language?.toLowerCase() ?? '';
 
-            if (wLang === 'french') {
-                detectedLang = 'fr';
-            } else {
-                // Hausa, alias africain, script arabe → tout ça c'est du Hausa
-                detectedLang = 'ha';
-            }
-            console.log(`[3a/6] Détection langue — Whisper: "${wLang}" | Arabic: ${hasArabic} | → ${detectedLang}`);
-        } catch (detectErr) {
+        if (wLang === 'french') {
+            detectedLang = 'fr';
+        } else {
+            // Hausa, alias africain, script arabe → tout ça c'est du Hausa
             detectedLang = 'ha';
-            console.warn('[3a/6] Détection échouée, fallback ha:', detectErr.message);
         }
-    } else {
-        console.log(`[3a/6] Langue connue (DB): ${detectedLang} — détection sautée`);
+        console.log(`[3a/6] Détection langue — Whisper: "${wLang}" | → ${detectedLang}`);
+    } catch (detectErr) {
+        // Fallback sur knownLang si disponible, sinon Hausa
+        detectedLang = knownLang ?? 'ha';
+        console.warn('[3a/6] Détection échouée, fallback:', detectedLang, detectErr.message);
     }
 
     // ── PASS 2 : transcription ciblée selon la langue ───────────
