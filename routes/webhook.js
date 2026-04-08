@@ -758,11 +758,12 @@ async function processAudio(mediaId, userPhone) {
     if (!quality.ok) {
         console.log('[AUDIO] Qualité insuffisante:', quality.reason);
         fs.unlink(inputFile, () => {});
+        const langSuffix = detectedLang === 'fr' ? 'fr' : 'ha';
         const errKey = quality.reason.includes('bruité') || quality.reason.includes('silencieux')
-            ? 'quality_ha' : 'unclear_ha';
+            ? `quality_${langSuffix}` : `unclear_${langSuffix}`;
         await sendErrorAudio(userPhone, errKey);
         try {
-            await saveMessages(contact._id, 'unknown', {
+            await saveMessages(contact._id, detectedLang === 'fr' ? 'fr' : detectedLang === 'ha' ? 'ha' : 'unknown', {
                 humanText: transcription.text || '[Audio non transcrit]',
                 aiText: ERROR_TEXTS[errKey],
                 humanAudioUrl,
