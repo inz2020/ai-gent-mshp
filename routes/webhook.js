@@ -66,32 +66,6 @@ function detectTextLanguage(text) {
     return 'unknown';
 }
 
-// ─── Croiser Whisper + analyse texte ────────────────────────
-// Ce service est BINAIRE : uniquement Français ou Hausa.
-// Règle de décision : si pas clairement FR → on choisit HA.
-
-function resolveFinalLanguage(whisperLang, textLang) {
-    const WHISPER_HAUSA_ALIASES = [
-        'hausa', 'amharic', 'somali', 'swahili', 'yoruba', 'igbo', 'zulu',
-        'ukrainian', 'russian', 'polish', 'arabic', 'turkish', 'persian',
-        'azerbaijani', 'kazakh', 'uzbek', 'tajik'
-    ];
-
-    const whisperCode = whisperLang === 'french' ? 'fr'
-        : WHISPER_HAUSA_ALIASES.includes(whisperLang) ? 'ha'
-        : 'unknown';
-
-    // FR : au moins un signal fort FR, aucun signal Hausa
-    if (whisperCode === 'fr' && textLang !== 'ha') return 'fr';
-    if (textLang === 'fr' && whisperCode !== 'ha') return 'fr';
-
-    // HA : au moins un signal Hausa explicite
-    if (whisperCode === 'ha' || textLang === 'ha') return 'ha';
-
-    // Aucun signal clair des deux côtés → on ne sait pas encore
-    return 'unknown';
-}
-
 // ─── Contrôle qualité audio (via segments Whisper) ──────────
 // Seuils assouplis pour les langues africaines (Hausa, etc.)
 // Whisper est moins confiant sur ces langues → log_prob plus bas, no_speech plus élevé
@@ -705,7 +679,6 @@ async function processAudio(mediaId, userPhone) {
                 timestamp_granularities: ['segment'],
             });
             const wLang = detect.language?.toLowerCase() ?? '';
-            const hasArabic = /[\u0600-\u06FF]/.test(detect.text);
 
             if (wLang === 'french') {
                 detectedLang = 'fr';

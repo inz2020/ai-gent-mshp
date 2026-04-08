@@ -70,7 +70,9 @@ export const FRENCH_WORDS = new Set([
 
 // Phrases Hausa multi-mots (recherche dans le texte complet, pas mot par mot)
 export const HAUSA_PHRASES = [
-    'shan sha wa', 'ina kwana', 'ina wuni', 'ina lafia',
+    'shan ruwa', 'ina kwana', 'ina wuni', 'ina lafia',
     'barka da', 'assalamu alaikum', 'ya kamata', 'don allah',
-    'ina son', 'yaya ake', 'me ya kamata'
+    'ina son', 'yaya ake', 'me ya kamata',
+    'yaro na', 'jariri na', 'cibiyar lafiya', 'ina nema',
+    'allurar rigakafi', 'yi wa yaro', 'kai yaro'
 ];
