@@ -369,6 +369,22 @@ router.post('/hausa-prompt', async (req, res) => {
     } catch (e) { err(res, 500, e.message); }
 });
 
+router.put('/hausa-prompt/:id', async (req, res) => {
+    try {
+        const { valeur, traduction_fr, categorie } = req.body;
+        if (!valeur?.trim()) return err(res, 400, 'La valeur Hausa est obligatoire.');
+        const v = valeur.trim().toLowerCase();
+        const entry = await HausaVocabulaire.findByIdAndUpdate(
+            req.params.id,
+            { valeur: v, traduction_fr: traduction_fr?.trim() || '', categorie: categorie?.trim() || '' },
+            { new: true }
+        );
+        if (!entry) return err(res, 404, 'Entree introuvable.');
+        await reloadHausaVocab();
+        res.json(entry);
+    } catch (e) { err(res, 500, e.message); }
+});
+
 router.delete('/hausa-prompt/:id', async (req, res) => {
     try {
         const entry = await HausaVocabulaire.findByIdAndDelete(req.params.id);

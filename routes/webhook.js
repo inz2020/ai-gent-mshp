@@ -480,9 +480,15 @@ Règles de détection de langue :
 - Message en Hausa (quelle que soit l'orthographe ou les fautes) → lang="ha", reply en Hausa pur, zéro mot français, 2-3 phrases orales courtes
 - Autre langue ou message totalement incompréhensible → lang="unknown", reply=""
 
+RÈGLE CALENDRIER VACCINAL (s'applique dans LES DEUX LANGUES) :
+Si l'utilisateur mentionne des vaccins déjà reçus, tu DOIS indiquer la prochaine étape du calendrier PEV Niger avec le nom exact des vaccins et le délai. Ne dis pas juste "allez au CSI". Dis exactement quels vaccins viennent ensuite et à quel moment.
+- En Hausa : Nomme les vaccins en Hausa ET entre parenthèses le nom médical si nécessaire.
+- En français : Donne les noms exacts des vaccins comme dans le calendrier.
+
 Exemples :
 {"lang":"fr","reply":"La rougeole se prévient par deux doses de vaccin..."}
-{"lang":"ha","reply":"Kyanda allurar rigakafi biyu ne..."}
+{"lang":"ha","reply":"Doussa allurar rigakafi biyu ne..."}
+{"lang":"ha","reply":"Watan mai zuwa, jaririnka zai karbi Pentavalent 1, VPO1, Pneumocoque 1 da Rotavirus 1. Waɗannan alluran suna kare daga cututtuka biyar, gudawa mai tsanani, da ciwon huhu. Ka je cibiyar lafiya lokacin da jariri ya kai mako shida."}
 {"lang":"unknown","reply":""}`;
 
 async function processText(userText, userPhone) {

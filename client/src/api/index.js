@@ -160,6 +160,7 @@ export const importCalendrier = (rows)   => request(`${META}/calendrier/import`,
 
 export const getHausaVocab    = ()       => request(`${META}/hausa-prompt`,        { headers: authHeaders() });
 export const createHausaEntry = (data)   => request(`${META}/hausa-prompt`,        { method: 'POST',   headers: authHeaders(), body: JSON.stringify(data) });
+export const updateHausaEntry = (id, data) => request(`${META}/hausa-prompt/${id}`, { method: 'PUT',    headers: authHeaders(), body: JSON.stringify(data) });
 export const deleteHausaEntry = (id)     => request(`${META}/hausa-prompt/${id}`,  { method: 'DELETE', headers: authHeaders() });
 export const importHausaVocab = (rows)   => request(`${META}/hausa-prompt/import`, { method: 'POST',   headers: authHeaders(), body: JSON.stringify(rows) });
 

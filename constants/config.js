@@ -30,10 +30,10 @@ export const GREETING_CONFIG = {
 export const HAUSA_WORDS = new Set([
     // Pronoms et déterminants
     'ina', 'kai', 'kin', 'mun', 'sun', 'shi', 'ta', 'ni', 'mu', 'ku', 'su',
-    'na', 'ka', 'ki', 'ya', 'ta', 'ga', 'wannan', 'wancan', 'wadannan',
+    'na', 'ka', 'ki', 'ya', 'ga', 'wannan', 'wancan', 'wadannan',
     'wanda', 'wacce', 'wadanda', 'wata', 'wani', 'kowane', 'duk',
     // Verbes courants
-    'sai', 'tafi', 'zo', 'yi', 'yin', 'je', 'aje', 'kai', 'ba', 'bai',
+    'sai', 'tafi', 'zo', 'yi', 'yin', 'je', 'aje', 'ba', 'bai',
     'ce', 'ne', 'ake', 'yake', 'tana', 'kana', 'muna', 'suna', 'zai',
     'za', 'gani', 'ji', 'sani', 'fada', 'tambaya', 'nema', 'kare',
     'fara', 'gama', 'dawo', 'tashi', 'kwana', 'zauna', 'tsaya',
@@ -42,18 +42,18 @@ export const HAUSA_WORDS = new Set([
     'yanzu', 'yau', 'gobe', 'jiya', 'bayan', 'kafin', 'tun', 'har',
     'sosai', 'kawai', 'kuwa', 'ma', 'fa', 'to', 'ai',
     // Substantifs santé / vaccination
-    'mai', 'rigakafi', 'lafiya', 'cibiya', 'rashin', 'ciki', 'asibiti',
+    'mai', 'rigakafi', 'lafiya', 'cibiya', 'cibiyar', 'rashin', 'ciki', 'asibiti',
     'likita', 'zazzabi', 'jariri', 'haihuwa', 'allurar', 'magani',
+    'kyanda', 'doussa', 'tounounoum',
     'gida', 'aboki', 'abokai', 'yaro', 'yarinya', 'uwa', 'uba',
     'jiki', 'cuta', 'gudawa', 'tari', 'jini', 'ruwa', 'abinci',
-    'sauro', 'malamarta', 'kwaya', 'allurar', 'cibiyar', 'asibiti',
-    'ungozoma', 'yara', 'jarma', 'nono', 'shayarwa',
+    'sauro', 'malamarta', 'kwaya', 'ungozoma', 'yara', 'jarma', 'nono', 'shayarwa',
     // Salutations
-    'sannu', 'barka', 'yaya', 'ina',
+    'sannu', 'barka', 'yaya',
     // Divers
-    'nawa', 'wane', 'ina', 'cikin', 'chanchawa', 'shawa', 'chawa',
+    'nawa', 'wane', 'cikin', 'chanchawa', 'shawa', 'chawa',
     'kyauta', 'gaggawa', 'mataki', 'amsawa', 'tambayar', 'lafiyar',
-    'inganta', 'kariya', 'hana', 'kare', 'gwaji', 'gwajin', 'jini',
+    'inganta', 'kariya', 'hana', 'gwaji', 'gwajin',
     'numfashi', 'kasala', 'rauni', 'farfadiya', 'farfadiyya'
 ]);
 export const FRENCH_WORDS = new Set([

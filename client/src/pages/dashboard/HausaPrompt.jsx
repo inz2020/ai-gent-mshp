@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import * as XLSX from 'xlsx';
 import {
-    getHausaVocab, createHausaEntry, deleteHausaEntry, importHausaVocab
+    getHausaVocab, createHausaEntry, updateHausaEntry, deleteHausaEntry, importHausaVocab
 } from '../../api/index.js';
 import { usePagination } from '../../hooks/usePagination.js';
 import Pagination from '../../components/Pagination.jsx';
@@ -47,6 +47,26 @@ export default function HausaPrompt() {
     }
 
     function openDelete(row) { setSelected(row); setModal('delete'); }
+
+    function openEdit(row) {
+        setSelected(row);
+        setForm({ type: row.type, valeur: row.valeur, traduction_fr: row.traduction_fr || '', categorie: row.categorie || 'autre' });
+        setFormErr('');
+        setModal('edit');
+    }
+
+    async function handleEdit(e) {
+        e.preventDefault();
+        if (!form.valeur.trim()) { setFormErr('La valeur Hausa est obligatoire.'); return; }
+        setSaving(true);
+        try {
+            const updated = await updateHausaEntry(selected._id, form);
+            setRows(r => r.map(x => x._id === selected._id ? updated : x));
+            showToast('Entree modifiee.');
+            close();
+        } catch (e) { setFormErr(e.message); }
+        finally { setSaving(false); }
+    }
 
     async function handleSave(e) {
         e.preventDefault();
@@ -220,6 +240,9 @@ export default function HausaPrompt() {
                                     {new Date(row.createdAt).toLocaleDateString('fr-FR')}
                                 </td>
                                 <td className="dt-actions">
+                                    <button className="dt-btn" onClick={() => openEdit(row)}>
+                                        Modifier
+                                    </button>
                                     <button className="dt-btn dt-btn-danger" onClick={() => openDelete(row)}>
                                         Supprimer
                                     </button>
@@ -275,6 +298,53 @@ export default function HausaPrompt() {
                                 <button type="button" className="dt-btn" onClick={close}>Annuler</button>
                                 <button type="submit" className="dt-btn dt-btn-primary" disabled={saving}>
                                     {saving ? 'Ajout...' : 'Ajouter'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Modification */}
+            {modal === 'edit' && (
+                <div className="modal-overlay" onClick={close}>
+                    <div className="modal" onClick={e => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h2>Modifier le {selected?.type} Hausa</h2>
+                            <button className="modal-close" onClick={close}>X</button>
+                        </div>
+                        <form onSubmit={handleEdit} className="modal-form">
+                            {formErr && <div className="modal-error">⚠️ {formErr}</div>}
+                            <div className="form-group">
+                                <label>Valeur Hausa</label>
+                                <input
+                                    value={form.valeur}
+                                    onChange={e => setForm(f => ({ ...f, valeur: e.target.value }))}
+                                    placeholder={selected?.type === 'mot' ? 'ex: rigakafi' : 'ex: ina son yi wa yaro allurar'}
+                                    required autoFocus
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label>Traduction francaise (optionnel)</label>
+                                <input
+                                    value={form.traduction_fr}
+                                    onChange={e => setForm(f => ({ ...f, traduction_fr: e.target.value }))}
+                                    placeholder={selected?.type === 'mot' ? 'ex: vaccin' : 'ex: je veux vacciner mon enfant'}
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label>Categorie</label>
+                                <select
+                                    value={form.categorie}
+                                    onChange={e => setForm(f => ({ ...f, categorie: e.target.value }))}
+                                >
+                                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+                            </div>
+                            <div className="modal-footer">
+                                <button type="button" className="dt-btn" onClick={close}>Annuler</button>
+                                <button type="submit" className="dt-btn dt-btn-primary" disabled={saving}>
+                                    {saving ? 'Enregistrement...' : 'Enregistrer'}
                                 </button>
                             </div>
                         </form>
