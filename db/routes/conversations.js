@@ -6,11 +6,26 @@ import { requireAuth, requireRole } from '../../middlewares/auth.js';
 
 const router = express.Router();
 
+// GET /api/conversations/stats — chiffres clés pour le dashboard
+router.get('/stats', requireAuth, async (req, res) => {
+    try {
+        const [total, audio, texte, contacts] = await Promise.all([
+            Message.countDocuments({ emetteurType: 'humain' }),
+            Message.countDocuments({ emetteurType: 'humain', typeContenu: 'audio' }),
+            Message.countDocuments({ emetteurType: 'humain', typeContenu: 'text' }),
+            Conversation.distinct('contactId'),
+        ]);
+        res.json({ total, audio, texte, contacts: contacts.length });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
 // GET /api/conversations — liste avec infos contact
 router.get('/', requireAuth, async (req, res) => {
     try {
         const conversations = await Conversation.find()
-            .populate('contactId', 'whatsappId nom langue source bloque')
+            .populate('contactId', 'whatsappId nom langue source bloque dernierePosition')
             .sort({ derniereMiseAJour: -1 });
         res.json(conversations);
     } catch (err) {

@@ -52,12 +52,12 @@ export default function Home() {
           <h2>Commencez dès maintenant</h2>
           <p>Envoyez un message à Hawa sur WhatsApp et obtenez des réponses instantanées sur la vaccination.</p>
           <a
-            href="https://wa.me/22700000000"
+            href="https://wa.me/22799553514"
             target="_blank"
             rel="noreferrer"
             className="btn-primary"
           >
-            💬 Contacter Hawa sur WhatsApp
+            <i className="bi bi-chat-dots-fill" style={{ animation: "pulse 1.5s infinite" }}></i> Contacter Hawa sur WhatsApp
           </a>
         </div>
       </section>

@@ -32,7 +32,7 @@ app.use('/webhook', webhookRouter);
 
 // Sert le frontend React (build) et gère le rechargement SPA
 app.use(express.static(clientDist));
-app.get('*', (req, res) => {
+app.use((_req, res) => {
     res.sendFile(path.join(clientDist, 'index.html'));
 });
 

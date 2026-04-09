@@ -253,16 +253,66 @@ async function sendGreetingResponse(userPhone) {
         { headers }
     );
 
-    // Demande automatique de localisation après le message de bienvenue
-    await sendLocationRequest(userPhone);
+}
+
+// Mots-clés indiquant que l'utilisateur cherche un centre de santé proche
+const NEARBY_CENTER_KEYWORDS = [
+    // Français
+    'csi', 'centre', 'santé', 'sante', 'sanitaire',
+    'vaccination', 'vaccin', 'vacciner', 'vaccins',
+    'proche', 'prox', 'plus proche', 'trouver',
+    'où vacciner', 'où se vacciner', 'adresse',
+    // Hausa
+    'kusa', 'cibiyar', 'rigakafi', 'lafiya',
+];
+
+/**
+ * Retourne true si le texte indique que l'utilisateur cherche un centre de santé.
+ */
+function wantsNearbyCenter(text) {
+    const lower = text.toLowerCase();
+    return NEARBY_CENTER_KEYWORDS.some(kw => lower.includes(kw));
 }
 
 /**
- * Envoie un message interactif avec le bouton natif WhatsApp "Envoyer ma position".
- * Quand l'utilisateur appuie dessus, WhatsApp envoie un message de type 'location'
- * que processLocation() traite déjà pour trouver les centres les plus proches.
+ * Retourne true si le contact a une position GPS récente (moins de 30 jours).
  */
-async function sendLocationRequest(userPhone) {
+function isPositionFresh(contact) {
+    const pos = contact.dernierePosition;
+    if (!pos?.latitude || !pos?.longitude || !pos?.updatedAt) return false;
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    return new Date(pos.updatedAt) > thirtyDaysAgo;
+}
+
+// Cooldown anti-spam : évite de redemander la position plus d'une fois par heure
+const locationOfferedAt = new Map(); // phone → timestamp
+
+function canOfferLocation(userPhone) {
+    const last = locationOfferedAt.get(userPhone);
+    return !last || Date.now() - last > 3_600_000; // 1h
+}
+
+function markLocationOffered(userPhone) {
+    locationOfferedAt.set(userPhone, Date.now());
+}
+
+/**
+ * Envoie d'abord un message audio en Hausa expliquant ce qu'il faut faire,
+ * puis le bouton natif WhatsApp "Envoyer ma position".
+ * Conçu pour des utilisateurs analphabètes qui ne lisent pas le texte.
+ * lang : 'ha' (défaut) ou 'fr'
+ */
+async function sendLocationRequest(userPhone, lang = 'ha') {
+    // Audio explicatif AVANT le bouton (pour les analphabètes)
+    const introText = lang === 'fr'
+        ? 'Pour trouver le centre de vaccination le plus proche de chez vous, appuyez sur le bouton ci-dessous pour partager votre position.'
+        : 'Don nemo cibiyar rigakafi mafi kusa da kai, danna maballin da ke kasa don raba wurin ka.';
+
+    await sendAudioReply(userPhone, introText, lang).catch(e =>
+        console.warn('[LOC-REQ] Audio intro échoué (non bloquant):', e.message)
+    );
+
+    // Bouton natif WhatsApp de partage de position
     try {
         await axios.post(
             `https://graph.facebook.com/v22.0/${process.env.PHONE_ID}/messages`,
@@ -272,25 +322,16 @@ async function sendLocationRequest(userPhone) {
                 type: 'interactive',
                 interactive: {
                     type: 'location_request_message',
-                    body: {
-                        text: '📍 Partagez votre position pour trouver le centre de vaccination le plus proche de chez vous.\n\nKayi rabawa da wurin ka don nemo cibiyar rigakafi mafi kusa da kai.',
-                    },
-                    action: {
-                        name: 'send_location',
-                    },
+                    body: { text: '📍' },
+                    action: { name: 'send_location' },
                 },
             },
-            {
-                headers: {
-                    Authorization: `Bearer ${process.env.META_TOKEN}`,
-                    'Content-Type': 'application/json',
-                },
-            }
+            { headers: { Authorization: `Bearer ${process.env.META_TOKEN}`, 'Content-Type': 'application/json' } }
         );
-        console.log(`[LOC-REQ] Demande de localisation envoyée à ${userPhone}`);
+        markLocationOffered(userPhone);
+        console.log(`[LOC-REQ] Demande de localisation (${lang}) envoyée à ${userPhone}`);
     } catch (err) {
-        // Non bloquant — l'utilisateur peut toujours partager manuellement
-        console.warn(`[LOC-REQ] Échec envoi location_request à ${userPhone}:`, err.response?.data?.error?.message ?? err.message);
+        console.warn(`[LOC-REQ] Échec bouton location à ${userPhone}:`, err.response?.data?.error?.message ?? err.message);
     }
 }
 
@@ -537,6 +578,16 @@ async function processText(userText, userPhone) {
 
     console.log(`[TEXT] Langue finale: ${lang} | Réponse: ${reply}`);
 
+    // Persistance de la langue détectée — même logique que processAudio
+    if (lang !== 'unknown') {
+        const dbLang = lang === 'ha' ? 'hausa' : 'fr';
+        if (contact.langue !== dbLang) {
+            contact.langue = dbLang;
+            await contact.save();
+            console.log(`[CONTACT] Langue texte mémorisée: ${dbLang}`);
+        }
+    }
+
     if (lang === 'unknown' || !reply) {
         // Utilise la langue connue du contact, sinon Hausa par défaut
         const knownContactLang = contact.langue === 'fr' ? 'fr' : 'ha';
@@ -544,7 +595,7 @@ async function processText(userText, userPhone) {
         const errorMsg = ERROR_TEXTS[errKey];
         await sendErrorAudio(userPhone, errKey);
         try {
-            await saveMessages(contact._id, knownContactLang === 'fr' ? 'fr' : 'unknown', { humanText: userText, aiText: errorMsg });
+            await saveMessages(contact._id, knownContactLang, { humanText: userText, aiText: errorMsg });
         } catch (dbErr) {
             console.error('[DB] Erreur persistance message inconnu:', dbErr.message);
         }
@@ -563,6 +614,18 @@ async function processText(userText, userPhone) {
         await saveMessages(contact._id, lang, { humanText: userText, aiText: reply });
     } catch (dbErr) {
         console.error('[DB] Erreur persistance text:', dbErr.message);
+    }
+
+    // Détection contextuelle (texte) : si l'utilisateur OU la réponse IA mentionne un centre proche
+    if ((wantsNearbyCenter(userText) || wantsNearbyCenter(reply)) && canOfferLocation(userPhone)) {
+        const contactLangForLoc = lang === 'ha' ? 'ha' : 'fr';
+        if (isPositionFresh(contact)) {
+            console.log(`[TEXT] Centre mentionné (user/IA), position fraîche → centres proches envoyés directement`);
+            await processLocation(contact.dernierePosition.latitude, contact.dernierePosition.longitude, userPhone);
+        } else {
+            console.log(`[TEXT] Centre mentionné (user/IA), position absente → demande géoloc (${contactLangForLoc})`);
+            await sendLocationRequest(userPhone, contactLangForLoc);
+        }
     }
 }
 
@@ -610,6 +673,8 @@ async function processAudio(mediaId, userPhone) {
     fs.writeFileSync(inputFile, audioBuffer);
     console.log('[2/6] Audio téléchargé:', audioBuffer.byteLength, 'bytes');
 
+    // try/finally garantit la suppression du fichier temp même en cas d'exception
+    try {
     // Upload de l'audio utilisateur sur Cloudinary pour l'affichage dans le dashboard
     let humanAudioUrl = '';
     try {
@@ -631,12 +696,6 @@ async function processAudio(mediaId, userPhone) {
     //          FR → language:'fr' + prompt médical FR
     //          Hausa → ElevenLabs STT (natif) ou Whisper + prompt Hausa
     // ══════════════════════════════════════════════════════════════
-
-    const WHISPER_HAUSA_LANGS = new Set([
-        'arabic', 'persian', 'ukrainian', 'russian', 'polish', 'turkish',
-        'azerbaijani', 'kazakh', 'uzbek', 'tajik', 'amharic', 'somali',
-        'swahili', 'yoruba', 'igbo', 'zulu', 'hausa',
-    ]);
 
     const FR_WHISPER_PROMPT =
         'Qu\'est-ce que la rougeole ? La rougeole est une maladie évitable par le vaccin. ' +
@@ -739,6 +798,14 @@ async function processAudio(mediaId, userPhone) {
             language: 'fr',
         });
         detectedLang = 'fr';
+    }
+
+    // Guard : si tous les STT ont échoué, transcription reste undefined
+    if (!transcription) {
+        console.error('[AUDIO] Toutes les tentatives de transcription ont échoué');
+        fs.unlink(inputFile, () => {});
+        await sendErrorAudio(userPhone, contact.langue === 'fr' ? 'quality_fr' : 'quality_ha');
+        return;
     }
 
     console.log(`[3/6] Transcription finale | lang: ${detectedLang} | "${transcription.text.slice(0, 60)}"`);
@@ -875,6 +942,23 @@ DOKOKI MASU WAJIBI :
     } catch (dbErr) {
         console.error('[DB] Erreur persistance audio:', dbErr.message);
     }
+
+    // Demande géolocalisation uniquement si la réponse IA mentionne un centre de santé.
+    // (évite le spam de localisation après chaque audio)
+    if (wantsNearbyCenter(replyText) && canOfferLocation(userPhone)) {
+        const contactLangForLoc = (contact.langue === 'hausa' || contact.langue === 'ha') ? 'ha' : 'fr';
+        if (isPositionFresh(contact)) {
+            console.log(`[AUDIO] Réponse IA → centre mentionné, position fraîche → centres proches envoyés directement`);
+            await processLocation(contact.dernierePosition.latitude, contact.dernierePosition.longitude, userPhone);
+        } else {
+            console.log(`[AUDIO] Réponse IA → centre mentionné, position absente → demande géoloc (${contactLangForLoc})`);
+            await sendLocationRequest(userPhone, contactLangForLoc);
+        }
+    }
+    } finally {
+        // Nettoyage garanti du fichier temporaire, même en cas d'exception
+        fs.unlink(inputFile, () => {});
+    }
 }
 
 // ─── Localisation ────────────────────────────────────────────
@@ -929,8 +1013,11 @@ async function processLocation(lat, lng, userPhone) {
         .populate({ path: 'districtId', populate: { path: 'regionId' } });
 
     if (!structures.length) {
-        await sendWhatsAppText(userPhone,
-            'Aucune structure sanitaire trouvée dans notre base. / Babu cibiyar kiwon lafiya a cikin bayananmu.');
+        const noStructLang = (contactLoc.langue === 'hausa' || contactLoc.langue === 'ha') ? 'ha' : 'fr';
+        const noStructText = noStructLang === 'ha'
+            ? 'Ba a sami cibiyar rigakafi a yankin ka ba. Ka tuntubi ma\'aikatar lafiya ta gari.'
+            : 'Aucune structure sanitaire trouvée près de vous. Contactez votre centre de santé local.';
+        await sendAudioReply(userPhone, noStructText, noStructLang);
         return;
     }
 
@@ -944,20 +1031,22 @@ async function processLocation(lat, lng, userPhone) {
     // Retourne les 3 plus proches
     const nearest = withDistance.slice(0, 3);
 
-    const lines = nearest.map((s, i) => {
-        const district = s.districtId?.nom ?? '';
-        const region   = s.districtId?.regionId?.nom ?? '';
-        const km       = s.distance.toFixed(1);
-        const contact  = s.contactUrgence ? `📞 ${s.contactUrgence}` : '';
-        return `${i + 1}. *${s.nom}* (${s.type})\n   📍 ${district}, ${region} — ${km} km\n   ${contact}`;
+    // Détecte la langue du contact pour adapter la réponse audio
+    const contactLang = (contactLoc.langue === 'hausa' || contactLoc.langue === 'ha') ? 'ha' : 'fr';
+
+    const audioLines = nearest.map((s, i) => {
+        const km = s.distance.toFixed(1);
+        return contactLang === 'ha'
+            ? `Cibiya ta ${i + 1}: ${s.nom}, kilomita ${km} daga gare ka.`
+            : `Centre ${i + 1} : ${s.nom}, à ${km} km de chez vous.`;
     });
 
-    const message =
-        `🏥 *Centres de vaccination les plus proches :*\n\n${lines.join('\n\n')}\n\n` +
-        `_Envoyez votre position pour actualiser. / Aika wurin ka don sabuntawa._`;
+    const audioText = contactLang === 'ha'
+        ? `Cibiyoyin rigakafi mafi kusa da kai su ne: ${audioLines.join(' ')}`
+        : `Les centres de vaccination les plus proches sont : ${audioLines.join(' ')}`;
 
-    await sendWhatsAppText(userPhone, message);
-    console.log(`[LOC] ${nearest.length} structures envoyées à ${userPhone}`);
+    await sendAudioReply(userPhone, audioText, contactLang);
+    console.log(`[LOC] ${nearest.length} structures envoyées (audio ${contactLang}) à ${userPhone}`);
 
     // Persistance — réutilise contactLoc/convLoc déjà récupérés plus haut
     try {
@@ -975,9 +1064,9 @@ async function processLocation(lat, lng, userPhone) {
         await Message.create({
             conversationId: convLoc._id,
             emetteurType: 'agent_ia',
-            typeContenu: 'text',
-            texteBrut: message,
-            langue: 'fr'
+            typeContenu: 'audio',
+            texteBrut: audioText,
+            langue: contactLang
         });
         convLoc.nbMessages += 2;
         convLoc.derniereMiseAJour = new Date();

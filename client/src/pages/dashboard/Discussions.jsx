@@ -5,6 +5,7 @@ import {
     toggleConversationMode,
     sendOperatorMessage,
     toggleContactBlock,
+    enregistrerContact,
 } from '../../api/index.js';
 import { usePagination } from '../../hooks/usePagination.js';
 import Pagination from '../../components/Pagination.jsx';
@@ -50,6 +51,11 @@ export default function Discussions() {
     const [toggling, setToggling]   = useState(false);
     const [blocking, setBlocking]   = useState(false);
     const [lastSync, setLastSync]   = useState(null);
+    const [saveModal, setSaveModal] = useState(null);   // { contactId, whatsappId, nom }
+    const [saveName, setSaveName]   = useState('');
+    const [saving, setSaving]       = useState(false);
+    const [savedIds, setSavedIds]   = useState(new Set());
+    const [gpsModal, setGpsModal]   = useState(null);   // { nom, whatsappId, dernierePosition }
     const threadEndRef              = useRef(null);
     const textareaRef               = useRef(null);
     const selectedRef               = useRef(null);
@@ -127,6 +133,40 @@ export default function Discussions() {
     }
 
     function closeThread() { setSelected(null); setMessages([]); setOpText(''); }
+
+    function openGpsModal(c) {
+        setGpsModal({
+            nom: c.contactId?.nom ?? 'Inconnu',
+            whatsappId: c.contactId?.whatsappId,
+            dernierePosition: c.contactId?.dernierePosition ?? null,
+        });
+    }
+
+    function openSaveModal(c) {
+        setSaveModal({ contactId: c.contactId._id, whatsappId: c.contactId.whatsappId });
+        setSaveName(c.contactId.nom && c.contactId.nom !== 'Utilisateur Inconnu' ? c.contactId.nom : '');
+    }
+
+    async function handleSaveContact() {
+        if (!saveModal || saving) return;
+        const nom = saveName.trim();
+        if (!nom) return;
+        setSaving(true);
+        try {
+            await enregistrerContact(saveModal.contactId, nom);
+            setSavedIds(prev => new Set([...prev, saveModal.contactId]));
+            setConvs(prev => prev.map(c =>
+                c.contactId?._id === saveModal.contactId
+                    ? { ...c, contactId: { ...c.contactId, nom, source: 'dashboard' } }
+                    : c
+            ));
+            setSaveModal(null);
+        } catch (e) {
+            alert('Erreur : ' + e.message);
+        } finally {
+            setSaving(false);
+        }
+    }
 
     async function handleToggleBlock(contactId) {
         if (blocking) return;
@@ -279,7 +319,22 @@ export default function Discussions() {
                                     <button className="dt-btn dt-btn-edit" onClick={() => openThread(c)}>
                                         Ouvrir
                                     </button>
-                                    
+                                    <button
+                                        className="dt-btn"
+                                        onClick={() => openGpsModal(c)}
+                                        title="Voir la dernière position GPS"
+                                        style={{ fontSize: '0.8rem' }}
+                                    >
+                                        📍 GPS
+                                    </button>
+                                    {c.contactId?.source === 'webhook' && !savedIds.has(c.contactId?._id) && (
+                                        <button className="dt-btn dt-btn-primary" onClick={() => openSaveModal(c)} title="Enregistrer dans les contacts">
+                                            + Contact
+                                        </button>
+                                    )}
+                                    {(c.contactId?.source === 'dashboard' || savedIds.has(c.contactId?._id)) && (
+                                        <span className="dt-badge dt-badge-actif" style={{ fontSize: '0.7rem' }}>✓ Enregistré</span>
+                                    )}
                                 </td>
                             </tr>
                             );
@@ -292,6 +347,102 @@ export default function Discussions() {
                 <span>{filtered.length} conversation{filtered.length !== 1 ? 's' : ''}</span>
                 <Pagination page={page} totalPages={totalPages} onChange={setPage} />
             </div>
+
+            {/* ══════════ MODAL GPS ══════════ */}
+            {gpsModal && (() => {
+                const pos = gpsModal.dernierePosition;
+                const hasPos = pos?.latitude != null && pos?.longitude != null;
+                const mapsUrl = hasPos
+                    ? `https://www.google.com/maps?q=${pos.latitude},${pos.longitude}`
+                    : null;
+                return (
+                    <div className="modal-overlay" onClick={() => setGpsModal(null)}>
+                        <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
+                            <div className="modal-header">
+                                <h2>📍 Position GPS</h2>
+                                <button className="modal-close" onClick={() => setGpsModal(null)}>✕</button>
+                            </div>
+                            <div className="modal-form">
+                                <p style={{ fontWeight: 600, marginBottom: 4 }}>{gpsModal.nom}</p>
+                                <p style={{ fontSize: '0.82rem', color: '#6b7280', marginBottom: 12 }}>
+                                    {gpsModal.whatsappId ? `+${gpsModal.whatsappId}` : '—'}
+                                </p>
+                                {hasPos ? (
+                                    <>
+                                        <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '12px 14px', marginBottom: 12 }}>
+                                            <p style={{ margin: 0, fontSize: '0.85rem', color: '#166534' }}>
+                                                <strong>Latitude :</strong> {pos.latitude.toFixed(6)}<br />
+                                                <strong>Longitude :</strong> {pos.longitude.toFixed(6)}
+                                            </p>
+                                            {pos.updatedAt && (
+                                                <p style={{ margin: '8px 0 0', fontSize: '0.75rem', color: '#6b7280' }}>
+                                                    Mise à jour le {new Date(pos.updatedAt).toLocaleString('fr-FR')}
+                                                </p>
+                                            )}
+                                        </div>
+                                        <a
+                                            href={mapsUrl}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="dt-btn dt-btn-primary"
+                                            style={{ display: 'inline-block', textDecoration: 'none', textAlign: 'center' }}
+                                        >
+                                            🗺️ Ouvrir dans Google Maps
+                                        </a>
+                                    </>
+                                ) : (
+                                    <div style={{ background: '#fafafa', border: '1px solid #e5e7eb', borderRadius: 8, padding: '16px', textAlign: 'center', color: '#9ca3af', fontSize: '0.85rem' }}>
+                                        Aucune position GPS disponible.<br />
+                                        <small>Le contact n'a pas encore partagé sa localisation.</small>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="modal-footer">
+                                <button className="dt-btn" onClick={() => setGpsModal(null)}>Fermer</button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
+
+            {/* ══════════ MODAL SAVE CONTACT ══════════ */}
+            {saveModal && (
+                <div className="modal-overlay" onClick={() => setSaveModal(null)}>
+                    <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h2>Enregistrer le contact</h2>
+                            <button className="modal-close" onClick={() => setSaveModal(null)}>✕</button>
+                        </div>
+                        <div className="modal-form">
+                            <p style={{ fontSize: '0.85rem', color: '#6b7280', margin: 0 }}>
+                                +{saveModal.whatsappId}
+                            </p>
+                            <div className="form-group">
+                                <label>Nom du contact</label>
+                                <input
+                                    value={saveName}
+                                    onChange={e => setSaveName(e.target.value)}
+                                    onKeyDown={e => e.key === 'Enter' && handleSaveContact()}
+                                    placeholder="Ex : Aminata Diallo"
+                                    autoFocus
+                                />
+                            </div>
+                        </div>
+                        <div className="modal-footer">
+                            <button className="dt-btn" onClick={() => setSaveModal(null)} disabled={saving}>
+                                Annuler
+                            </button>
+                            <button
+                                className="dt-btn dt-btn-primary"
+                                onClick={handleSaveContact}
+                                disabled={saving || !saveName.trim()}
+                            >
+                                {saving ? 'Enregistrement...' : 'Enregistrer'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* ══════════ FENÊTRE WHATSAPP ══════════ */}
             {selected && (

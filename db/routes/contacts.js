@@ -92,6 +92,26 @@ router.post('/import', requireAuth, requireRole('admin', 'staff'), async (req, r
     res.json(results);
 });
 
+// PATCH /api/contacts/:id/enregistrer — enregistre un contact webhook dans le tableau de bord
+// Met à jour le nom et passe la source à 'dashboard'. Crée le contact s'il n'existe pas.
+router.patch('/:id/enregistrer', requireAuth, requireRole('admin', 'staff'), async (req, res) => {
+    const { nom } = req.body;
+    if (!nom?.trim()) return res.status(400).json({ message: 'Le nom est requis.' });
+
+    try {
+        const contact = await Contact.findByIdAndUpdate(
+            req.params.id,
+            { nom: nom.trim(), source: 'dashboard' },
+            { new: true }
+        ).populate('region', 'nom').populate('district', 'nom');
+
+        if (!contact) return res.status(404).json({ message: 'Contact introuvable.' });
+        res.json(contact);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
 // PATCH /api/contacts/:id/bloquer — bloquer ou débloquer un contact
 router.patch('/:id/bloquer', requireAuth, requireRole('admin', 'staff'), async (req, res) => {
     try {

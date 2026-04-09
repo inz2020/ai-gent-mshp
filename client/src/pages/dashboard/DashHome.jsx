@@ -1,24 +1,35 @@
-import React from 'react';
+import { useEffect, useState } from 'react';
+import { getConversationStats } from '../../api/index.js';
 
-const STATS = [
-    { icon: '💬', label: 'Messages reçus',     value: '—', color: '#0a7c4e' },
-    { icon: '🎙️', label: 'Messages audio',      value: '—', color: '#6366f1' },
-    { icon: '📝', label: 'Messages texte',      value: '—', color: '#f59e0b' },
-    { icon: '👥', label: 'Contacts uniques',    value: '—', color: '#ec4899' },
+const STAT_DEFS = [
+    { icon: '💬', label: 'Messages reçus',  key: 'total',    color: '#0a7c4e' },
+    { icon: '🎙️', label: 'Messages audio',  key: 'audio',    color: '#6366f1' },
+    { icon: '📝', label: 'Messages texte',  key: 'texte',    color: '#f59e0b' },
+    { icon: '👥', label: 'Contacts uniques', key: 'contacts', color: '#ec4899' },
 ];
 
 export default function DashHome() {
+    const [stats, setStats] = useState(null);
+
+    useEffect(() => {
+        getConversationStats()
+            .then(setStats)
+            .catch(() => setStats(null));
+    }, []);
+
     return (
         <div className="dash-page">
             <h1 className="dash-page-title">Dashboard</h1>
             <p className="dash-page-sub">Bienvenue sur l'espace de gestion du chatbot Hawa 🇳🇪</p>
 
             <div className="dash-stats-grid">
-                {STATS.map(s => (
+                {STAT_DEFS.map(s => (
                     <div key={s.label} className="stat-card" style={{ borderTopColor: s.color }}>
                         <span className="stat-icon">{s.icon}</span>
                         <div>
-                            <p className="stat-value">{s.value}</p>
+                            <p className="stat-value">
+                                {stats === null ? '…' : (stats[s.key] ?? 0).toLocaleString()}
+                            </p>
                             <p className="stat-label">{s.label}</p>
                         </div>
                     </div>

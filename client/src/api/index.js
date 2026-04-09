@@ -94,6 +94,14 @@ export function toggleContactBlock(id) {
     });
 }
 
+export function enregistrerContact(id, nom) {
+    return request(`/api/contacts/${id}/enregistrer`, {
+        method: 'PATCH',
+        headers: authHeaders(),
+        body: JSON.stringify({ nom }),
+    });
+}
+
 export function inviterContact(id) {
     return request(`/api/contacts/${id}/inviter`, {
         method: 'POST',
@@ -102,6 +110,10 @@ export function inviterContact(id) {
 }
 
 // ── Conversations ─────────────────────────────────────────────
+export function getConversationStats() {
+    return request('/api/conversations/stats', { headers: authHeaders() });
+}
+
 export function getConversations() {
     return request('/api/conversations', { headers: authHeaders() });
 }
