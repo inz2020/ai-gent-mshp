@@ -33,7 +33,9 @@ export default function Utilisateurs() {
     const [formError, setFormError]   = useState('');
     const [saving, setSaving]         = useState(false);
 
-    useEffect(() => { fetchUsers(); }, []);
+    useEffect(() => { fetchUsers(); 
+        if(modal=='create'){setForm(EMPTY_FORM)}
+    }, [modal]);
 
     async function fetchUsers() {
         setLoading(true);
@@ -60,7 +62,9 @@ export default function Utilisateurs() {
         setModal('delete');
     }
 
-    function closeModal() { setModal(null); setSelected(null); setFormError(''); }
+    function closeModal() { setModal(null); setSelected(null); setFormError('');
+        setForm(EMPTY_FORM)
+     }
 
     function handleFormChange(e) {
         const { name, value, type, checked } = e.target;
@@ -178,7 +182,7 @@ export default function Utilisateurs() {
 
             {/* Modal Créer / Modifier */}
             {(modal === 'create' || modal === 'edit') && (
-                <div className="modal-overlay" onClick={closeModal}>
+                <div className="modal-overlay">
                     <div className="modal" onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2>{modal === 'create' ? 'Créer un utilisateur' : 'Modifier l\'utilisateur'}</h2>
