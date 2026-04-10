@@ -117,6 +117,13 @@ export function inviterContact(id) {
     });
 }
 
+export function deleteContact(id) {
+    return request(`/api/contacts/${id}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+    });
+}
+
 // ── Conversations ─────────────────────────────────────────────
 export function getConversationStats() {
     return request('/api/conversations/stats', { headers: authHeaders() });

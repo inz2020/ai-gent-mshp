@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
-import { getContacts, createContact, importContacts, getContactConversations, inviterContact } from '../../api/index.js';
+import { getContacts, createContact, importContacts, getContactConversations, inviterContact, deleteContact } from '../../api/index.js';
 import { usePagination } from '../../hooks/usePagination.js';
 import Pagination from '../../components/Pagination.jsx';
 
@@ -93,6 +93,8 @@ export default function Contacts() {
     const [convs, setConvs]         = useState([]);
     const [convLoad, setConvLoad]   = useState(false);
     const [inviting, setInviting]   = useState(null); // id du contact en cours d'envoi
+    const [deleting, setDeleting]   = useState(null); // id du contact en cours de suppression
+    const [confirmDelete, setConfirmDelete] = useState(null); // contact à confirmer
 
     // Creation
     const [modal, setModal]         = useState(false);
@@ -153,6 +155,22 @@ export default function Contacts() {
             setFormError(err.message);
         } finally {
             setSaving(false);
+        }
+    }
+
+    async function handleDelete(contact) {
+        setDeleting(contact._id);
+        try {
+            await deleteContact(contact._id);
+            setContacts(prev => prev.filter(c => c._id !== contact._id));
+            setSuccess(`Contact +${contact.whatsappId} supprimé.`);
+            setTimeout(() => setSuccess(''), 4000);
+        } catch (err) {
+            setError('Suppression échouée : ' + err.message);
+            setTimeout(() => setError(''), 5000);
+        } finally {
+            setDeleting(null);
+            setConfirmDelete(null);
         }
     }
 
@@ -336,18 +354,15 @@ export default function Contacts() {
                                     </span>
                                 </td>
                                 <td>{new Date(c.dateInscription).toLocaleDateString('fr-FR')}</td>
-                                        <td style={{ display: 'flex', gap: 6 }}>
+                                                <td style={{ display: 'flex', gap: 6 }}>
                                     <button className="dt-btn dt-btn-edit" onClick={() => openDetail(c)}>Voir</button>
+                                    <button className="dt-btn dt-btn-primary" onClick={openModal}>+ Ajouter</button>
                                     <button
-                                        className="dt-btn dt-btn-primary"
-                                        style={{ fontSize: '0.78rem', padding: '4px 10px' }}
-                                        onClick={() => handleInvite(c)}
-                                        disabled={inviting === c._id}
-                                        title={c.derniereInvitation
-                                            ? `Dernière invitation : ${new Date(c.derniereInvitation).toLocaleString('fr-FR')}`
-                                            : 'Envoyer un message WhatsApp pour initier le contact'}
+                                        className="dt-btn dt-btn-danger"
+                                        onClick={() => setConfirmDelete(c)}
+                                        disabled={deleting === c._id}
                                     >
-                                        {inviting === c._id ? '…' : c.derniereInvitation ? '✓ Ré-inviter' : '📲 Inviter'}
+                                        {deleting === c._id ? '…' : 'Supprimer'}
                                     </button>
                                 </td>
                             </tr>
@@ -495,6 +510,32 @@ export default function Contacts() {
                         </div>
                         <div className="modal-footer">
                             <button className="dt-btn dt-btn-primary" onClick={() => setImportResult(null)}>OK</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ══ Modal confirmation suppression ══ */}
+            {confirmDelete && (
+                <div className="modal-overlay" onClick={() => setConfirmDelete(null)}>
+                    <div className="modal" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h2>Confirmer la suppression</h2>
+                            <button className="modal-close" onClick={() => setConfirmDelete(null)}>&#10005;</button>
+                        </div>
+                        <div className="modal-body" style={{ padding: '20px 24px' }}>
+                            <p>Voulez-vous vraiment supprimer le contact <strong>+{confirmDelete.whatsappId}</strong>{confirmDelete.nom ? ` (${confirmDelete.nom})` : ''} ?</p>
+                            <p style={{ color: 'var(--red, #dc2626)', fontSize: '0.88rem', marginTop: 8 }}>Cette action est irreversible.</p>
+                        </div>
+                        <div className="modal-footer">
+                            <button className="dt-btn" onClick={() => setConfirmDelete(null)}>Annuler</button>
+                            <button
+                                className="dt-btn dt-btn-danger"
+                                disabled={deleting === confirmDelete._id}
+                                onClick={() => handleDelete(confirmDelete)}
+                            >
+                                {deleting === confirmDelete._id ? 'Suppression...' : 'Supprimer'}
+                            </button>
                         </div>
                     </div>
                 </div>

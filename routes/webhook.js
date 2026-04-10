@@ -2,7 +2,6 @@ import express from 'express';
 import axios from 'axios';
 import fs from 'fs';
 import OpenAI from 'openai';
-import { franc } from 'franc';
 import SYSTEM_PROMPT from '../prompt.js';
 import { VERIFY_TOKEN, GREETING_CONFIG } from '../constants/config.js';
 import { getHausaWords, getHausaPhrases, getHausaWhisperPrompt } from '../lib/hausaVocab.js';
@@ -38,16 +37,7 @@ function detectTextLanguage(text) {
     // 2. Phrases multi-mots Hausa (signal fort)
     if (getHausaPhrases().some(phrase => normalized.includes(phrase))) return 'ha';
 
-    // 3. franc — détection statistique sur ~400 langues (supporte Hausa = 'hau')
-    //    Seulement si le texte est assez long pour être fiable (>= 5 chars)
-    if (text.trim().length >= 5) {
-        const francLang = franc(text, { minLength: 5 });
-        console.log(`[LANG] franc détecté: ${francLang}`);
-        if (francLang === 'hau') return 'ha';
-        if (francLang === 'fra') return 'fr';
-    }
-
-    // 4. Dictionnaire Hausa mot par mot (fallback pour textes courts)
+    // 3. Dictionnaire Hausa mot par mot
     const words = normalized.split(/\s+/);
     const hasHausa = words.some(w => getHausaWords().has(w.replace(/[^a-z]/g, '')));
 
