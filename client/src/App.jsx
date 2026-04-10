@@ -1,4 +1,5 @@
-import { Routes, Route, Outlet } from 'react-router-dom';
+import { Routes, Route, Outlet, useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import Navbar from './components/Navbar.jsx';
 import Footer from './components/Footer.jsx';
 import Home from './pages/Home.jsx';
@@ -21,6 +22,7 @@ import PrivateRoute from './components/PrivateRoute.jsx';
 import NotFound from './pages/NotFound.jsx';
 import ErrorPage from './pages/ErrorPage.jsx';
 import SessionExpired from './pages/SessionExpired.jsx';
+import { setNavigate } from './utils/navigate.js';
 
 function PublicLayout() {
   return (
@@ -33,6 +35,12 @@ function PublicLayout() {
 }
 
 export default function App() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    setNavigate(navigate);
+  }, [navigate]);
+
   return (
     <Routes>
       {/* Pages publiques */}
@@ -61,7 +69,7 @@ export default function App() {
       </Route>
       {/* Pages d'erreur */}
       <Route path="/erreur"           element={<ErrorPage />} />
-      <Route path="/session-expiree"  element={<SessionExpired />} />
+      <Route path="/session-expired"  element={<SessionExpired />} />
       <Route path="*"                 element={<NotFound />} />
     </Routes>
   );

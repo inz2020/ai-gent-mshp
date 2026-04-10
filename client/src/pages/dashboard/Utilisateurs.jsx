@@ -33,9 +33,8 @@ export default function Utilisateurs() {
     const [formError, setFormError]   = useState('');
     const [saving, setSaving]         = useState(false);
 
-    useEffect(() => { fetchUsers(); 
-        if(modal=='create'){setForm(EMPTY_FORM)}
-    }, [modal]);
+    useEffect(() => { fetchUsers(); }, []);
+    useEffect(() => { if (modal === 'create') setForm(EMPTY_FORM); }, [modal]);
 
     async function fetchUsers() {
         setLoading(true);
@@ -52,7 +51,9 @@ export default function Utilisateurs() {
 
     function openEdit(user) {
         setSelected(user);
-        setForm({ nom: user.nom, email: user.email, password: '', role: user.role, actif: user.actif });
+        setForm({ 
+           ...user, 
+             password: '' });
         setFormError('');
         setModal('edit');
     }

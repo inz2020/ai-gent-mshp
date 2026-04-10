@@ -1,5 +1,13 @@
+import { navigateTo } from '../utils/navigate.js';
+
 const BASE_URL = import.meta.env.VITE_API_URL || '';
 
+/*  Whrapper autour de fetch  qui :
+
+Préfixe automatiquement l'URL de l'API
+Injecte le bon Content-Type
+Gère la déconnexion automatique si la session expire (401)
+Uniformise la gestion des erreurs  */
 async function request(path, options = {}) {
     const res = await fetch(`${BASE_URL}${path}`, {
         ...options,
@@ -9,7 +17,7 @@ async function request(path, options = {}) {
         localStorage.removeItem('token');
         localStorage.removeItem('user_nom');
         localStorage.removeItem('user_role');
-        window.location.replace('/session-expiree');
+        navigateTo('/session-expired');
         return;
     }
     const data = await res.json();
