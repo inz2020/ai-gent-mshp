@@ -101,22 +101,23 @@ async function getOrCreateConversation(contactId) {
     return conv;
 }
 
-async function isFirstConversation(userPhone) {
-    const contact = await Contact.findOne({ whatsappId: userPhone });
-    if (!contact) return true;
-    const convCount = await Conversation.countDocuments({ contactId: contact._id });
-    return convCount === 0;
-}
+// async function isFirstConversation(userPhone) {
+//     const contact = await Contact.findOne({ whatsappId: userPhone });
+//     if (!contact) return true;
+//     const convCount = await Conversation.countDocuments({ contactId: contact._id });
+//     return convCount === 0;
+// }
 
-async function saveMessages(contactId, langue, { humanText, aiText, humanAudioUrl = '', audioUrl = '', cloudinaryId = '' }) {
+async function saveMessages(contactId, langue, { humanText, aiText, humanAudioUrl = '', audioUrl = '', cloudinaryId = '', aiIsAudio = false }) {
     const conv = await getOrCreateConversation(contactId);
 
-    const isAudio = !!(humanAudioUrl || audioUrl);
+    const humanIsAudio = !!humanAudioUrl;
+    const agentIsAudio = aiIsAudio || !!audioUrl;
 
     await Message.create({
         conversationId: conv._id,
         emetteurType: 'humain',
-        typeContenu: isAudio ? 'audio' : 'text',
+        typeContenu: humanIsAudio ? 'audio' : 'text',
         texteBrut: humanText,
         audioUrl: humanAudioUrl,
         langue
@@ -125,8 +126,8 @@ async function saveMessages(contactId, langue, { humanText, aiText, humanAudioUr
     await Message.create({
         conversationId: conv._id,
         emetteurType: 'agent_ia',
-        typeContenu: isAudio ? 'audio' : 'text',
-        texteBrut: aiText,
+        typeContenu: agentIsAudio ? 'audio' : 'text',
+        texteBrut: agentIsAudio ? '' : aiText,
         audioUrl,
         cloudinaryId,
         langue
@@ -496,17 +497,6 @@ async function processText(userText, userPhone) {
         return;
     }
 
-    if (isGreeting(userText)) {
-        const firstTime = await isFirstConversation(userPhone);
-        if (firstTime) {
-            console.log('[TEXT] Première salutation → bienvenue');
-            await getOrCreateContact(userPhone);
-            await sendGreetingResponse(userPhone);
-            return;
-        }
-        console.log('[TEXT] Salutation mais contact existant → traitement normal');
-    }
-
     const contact = await getOrCreateContact(userPhone);
     const conv    = await getOrCreateConversation(contact._id);
 
@@ -560,7 +550,13 @@ async function processText(userText, userPhone) {
         console.error('[TEXT] Échec parsing JSON GPT:', parseErr.message);
     }
 
-    // Si dictionnaire a détecté Hausa mais GPT ne l'a pas confirmé → on force Hausa
+    // Si GPT retourne unknown → on utilise le dictionnaire comme source de vérité
+    // Le dictionnaire retourne toujours 'fr' ou 'ha', jamais unknown
+    if (lang === 'unknown') {
+        console.log(`[TEXT] GPT=unknown, fallback dictionnaire → ${dictLang}`);
+        lang = dictLang; // 'fr' ou 'ha'
+    }
+    // Si dictionnaire a détecté Hausa mais GPT dit autre chose → on force Hausa
     if (dictLang === 'ha' && lang !== 'ha') {
         console.log(`[TEXT] Forçage Hausa (dictionnaire=ha, GPT=${lang})`);
         lang = 'ha';
@@ -578,14 +574,37 @@ async function processText(userText, userPhone) {
         }
     }
 
-    if (lang === 'unknown' || !reply) {
-        // Utilise la langue connue du contact, sinon Hausa par défaut
-        const knownContactLang = contact.langue === 'fr' ? 'fr' : 'ha';
-        const errKey = `quality_${knownContactLang}`;
+    // Si reply vide : relance GPT en forçant la langue détectée
+    if (!reply) {
+        console.log(`[TEXT] reply vide → relance GPT avec langue forcée: ${lang}`);
+        const forceLangHint = lang === 'ha'
+            ? `[FORCE: réponds OBLIGATOIREMENT en Hausa, lang="ha"] `
+            : `[FORCE: réponds OBLIGATOIREMENT en français, lang="fr"] `;
+        try {
+            const retryResponse = await openai.chat.completions.create({
+                model: 'gpt-4o-mini',
+                max_tokens: 250,
+                response_format: { type: 'json_object' },
+                messages: [
+                    { role: 'system', content: SYSTEM_PROMPT + TEXT_LANG_DETECT_INSTRUCTION },
+                    ...history,
+                    { role: 'user', content: forceLangHint + userText }
+                ]
+            });
+            const retryParsed = JSON.parse(retryResponse.choices[0].message.content);
+            reply = (retryParsed.reply ?? '').trim();
+            if (retryParsed.lang && ['fr', 'ha'].includes(retryParsed.lang)) lang = retryParsed.lang;
+        } catch (retryErr) {
+            console.error('[TEXT] Échec retry GPT:', retryErr.message);
+        }
+    }
+
+    if (!reply) {
+        const errKey = `quality_${lang === 'fr' ? 'fr' : 'ha'}`;
         const errorMsg = ERROR_TEXTS[errKey];
         await sendErrorAudio(userPhone, errKey);
         try {
-            await saveMessages(contact._id, knownContactLang, { humanText: userText, aiText: errorMsg });
+            await saveMessages(contact._id, lang, { humanText: userText, aiText: errorMsg, aiIsAudio: true });
         } catch (dbErr) {
             console.error('[DB] Erreur persistance message inconnu:', dbErr.message);
         }
@@ -771,6 +790,7 @@ async function processAudio(mediaId, userPhone) {
                             humanText: '[Audio Hausa — transcription échouée]',
                             aiText: ERROR_TEXTS.repeat_ha,
                             humanAudioUrl,
+                            aiIsAudio: true,
                         });
                     } catch { /* non bloquant */ }
                     return;
@@ -812,6 +832,7 @@ async function processAudio(mediaId, userPhone) {
                 humanText: transcription.text || '[Audio non transcrit]',
                 aiText: ERROR_TEXTS[errKey],
                 humanAudioUrl,
+                aiIsAudio: true,
             });
         } catch (dbErr) {
             console.error('[DB] Erreur persistance audio qualité:', dbErr.message);
@@ -819,16 +840,7 @@ async function processAudio(mediaId, userPhone) {
         return;
     }
 
-    // Salutation ?
-    if (isGreeting(transcription.text)) {
-        const firstTime = await isFirstConversation(userPhone);
-        if (firstTime) {
-            console.log('[AUDIO] Première salutation → bienvenue');
-            await sendGreetingResponse(userPhone);
-            return;
-        }
-        console.log('[AUDIO] Salutation mais contact existant → traitement normal');
-    }
+   
 
     // La langue est celle détectée au Pass 1 (source de vérité).
     // knownLang est ignoré — on se fie à ce que l'utilisateur parle MAINTENANT.
