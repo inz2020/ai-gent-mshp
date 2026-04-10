@@ -143,6 +143,7 @@ export default function Discussions() {
     }
 
     function openSaveModal(c) {
+        if (!c.contactId?._id) return;
         setSaveModal({ contactId: c.contactId._id, whatsappId: c.contactId.whatsappId });
         setSaveName(c.contactId.nom && c.contactId.nom !== 'Utilisateur Inconnu' ? c.contactId.nom : '');
     }

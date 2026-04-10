@@ -118,7 +118,7 @@ export default function HausaPrompt() {
         }));
         const ws = XLSX.utils.json_to_sheet(data);
         ws['!cols'] = [{ wch: 8 }, { wch: 44 }, { wch: 44 }, { wch: 16 }];
-        const wb = XLSX.utils.book_new();
+        const wb = XLSX.utils.book_new(); wb.Props = { CreatedDate: new Date() };
         XLSX.utils.book_append_sheet(wb, ws, 'HausaVocab');
         XLSX.writeFile(wb, `hausa_vocabulaire_${new Date().toISOString().slice(0, 10)}.xlsx`);
     }
@@ -133,7 +133,7 @@ export default function HausaPrompt() {
         ];
         const ws = XLSX.utils.json_to_sheet(data);
         ws['!cols'] = [{ wch: 8 }, { wch: 44 }, { wch: 44 }, { wch: 16 }];
-        const wb = XLSX.utils.book_new();
+        const wb = XLSX.utils.book_new(); wb.Props = { CreatedDate: new Date() };
         XLSX.utils.book_append_sheet(wb, ws, 'HausaVocab');
         XLSX.writeFile(wb, 'modele_hausa_vocabulaire.xlsx');
     }

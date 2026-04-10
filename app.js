@@ -38,7 +38,7 @@ app.use((_req, res) => {
 
 const PORT = process.env.PORT || 50000;
 app.listen(PORT, () => console.log(`Serveur actif sur port ${PORT}`));
-connectDB().then(() => {
-    reloadHausaVocab();
-    preloadErrorAudios();
+connectDB().then(async () => {
+    await reloadHausaVocab().catch(e => console.error('[INIT] reloadHausaVocab échoué:', e.message));
+    await preloadErrorAudios().catch(e => console.error('[INIT] preloadErrorAudios échoué:', e.message));
 });

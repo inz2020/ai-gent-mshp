@@ -107,7 +107,7 @@ export default function CalendrierVaccinal() {
             notes: r.notes || ''
         })));
         ws['!cols'] = [10, 28, 20, 14, 16, 30].map(w => ({ wch: w }));
-        const wb = XLSX.utils.book_new();
+        const wb = XLSX.utils.book_new(); wb.Props = { CreatedDate: new Date() };
         XLSX.utils.book_append_sheet(wb, ws, 'Calendrier');
         XLSX.writeFile(wb, `calendrier_vaccinal_${new Date().toISOString().slice(0, 10)}.xlsx`);
     }

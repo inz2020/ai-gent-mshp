@@ -644,7 +644,7 @@ async function processAudio(mediaId, userPhone) {
 
     // Récupérer le contact et la conversation pour vérifier le mode
     const contact = await getOrCreateContact(userPhone);
-    const knownLang = contact.langue === 'hausa' ? 'ha' : contact.langue === 'fr' ? 'fr' : null;
+    const knownLang = contact.langue === 'ha' ? 'ha' : contact.langue === 'fr' ? 'fr' : null;
     const convCheck = await getOrCreateConversation(contact._id);
 
     // Mode humain → enregistre sans réponse IA
@@ -775,7 +775,6 @@ async function processAudio(mediaId, userPhone) {
                 // Script arabe résiduel après Whisper → GPT ne peut pas l'exploiter
                 if (/[\u0600-\u06FF]/.test(transcription.text)) {
                     console.log('[3b/6] Script arabe résiduel après tous les STT — audio répétition');
-                    fs.unlink(inputFile, () => {});
                     await sendErrorAudio(userPhone, 'repeat_ha');
                     try {
                         await saveMessages(contact._id, 'ha', {
@@ -803,7 +802,6 @@ async function processAudio(mediaId, userPhone) {
     // Guard : si tous les STT ont échoué, transcription reste undefined
     if (!transcription) {
         console.error('[AUDIO] Toutes les tentatives de transcription ont échoué');
-        fs.unlink(inputFile, () => {});
         await sendErrorAudio(userPhone, contact.langue === 'fr' ? 'quality_fr' : 'quality_ha');
         return;
     }
@@ -815,7 +813,6 @@ async function processAudio(mediaId, userPhone) {
     const quality = checkAudioQuality(transcription, isLikelyHausa);
     if (!quality.ok) {
         console.log('[AUDIO] Qualité insuffisante:', quality.reason);
-        fs.unlink(inputFile, () => {});
         const langSuffix = detectedLang === 'fr' ? 'fr' : 'ha';
         const errKey = quality.reason.includes('bruité') || quality.reason.includes('silencieux')
             ? `quality_${langSuffix}` : `unclear_${langSuffix}`;
@@ -837,7 +834,6 @@ async function processAudio(mediaId, userPhone) {
         const firstTime = await isFirstConversation(userPhone);
         if (firstTime) {
             console.log('[AUDIO] Première salutation → bienvenue');
-            fs.unlink(inputFile, () => {});
             await sendGreetingResponse(userPhone);
             return;
         }
@@ -850,11 +846,11 @@ async function processAudio(mediaId, userPhone) {
 
     if (knownLang && knownLang !== finalLang) {
         // L'utilisateur a changé de langue → mise à jour du contact en DB
-        contact.langue = finalLang === 'ha' ? 'hausa' : 'fr';
+        contact.langue = finalLang === 'ha' ? 'ha' : 'fr';
         await contact.save();
         console.log(`[CONTACT] Changement de langue: ${knownLang} → ${finalLang}`);
     } else if (!knownLang) {
-        contact.langue = finalLang === 'ha' ? 'hausa' : 'fr';
+        contact.langue = finalLang === 'ha' ? 'ha' : 'fr';
         await contact.save();
         console.log(`[CONTACT] Langue mémorisée: ${contact.langue}`);
     }
@@ -929,8 +925,6 @@ DOKOKI MASU WAJIBI :
     console.log(`[5-6/6] Envoi réponse audio (${audioLang})…`);
     const uploadResult = await sendAudioReply(userPhone, replyText, audioLang);
 
-    fs.unlink(inputFile, () => {});
-
     try {
         await saveMessages(contact._id, audioLang, {
             humanText: transcription.text,
@@ -946,7 +940,7 @@ DOKOKI MASU WAJIBI :
     // Demande géolocalisation uniquement si la réponse IA mentionne un centre de santé.
     // (évite le spam de localisation après chaque audio)
     if (wantsNearbyCenter(replyText) && canOfferLocation(userPhone)) {
-        const contactLangForLoc = (contact.langue === 'hausa' || contact.langue === 'ha') ? 'ha' : 'fr';
+        const contactLangForLoc = contact.langue === 'ha' ? 'ha' : 'fr';
         if (isPositionFresh(contact)) {
             console.log(`[AUDIO] Réponse IA → centre mentionné, position fraîche → centres proches envoyés directement`);
             await processLocation(contact.dernierePosition.latitude, contact.dernierePosition.longitude, userPhone);
@@ -1013,7 +1007,7 @@ async function processLocation(lat, lng, userPhone) {
         .populate({ path: 'districtId', populate: { path: 'regionId' } });
 
     if (!structures.length) {
-        const noStructLang = (contactLoc.langue === 'hausa' || contactLoc.langue === 'ha') ? 'ha' : 'fr';
+        const noStructLang = contactLoc.langue === 'ha' ? 'ha' : 'fr';
         const noStructText = noStructLang === 'ha'
             ? 'Ba a sami cibiyar rigakafi a yankin ka ba. Ka tuntubi ma\'aikatar lafiya ta gari.'
             : 'Aucune structure sanitaire trouvée près de vous. Contactez votre centre de santé local.';
@@ -1032,7 +1026,7 @@ async function processLocation(lat, lng, userPhone) {
     const nearest = withDistance.slice(0, 3);
 
     // Détecte la langue du contact pour adapter la réponse audio
-    const contactLang = (contactLoc.langue === 'hausa' || contactLoc.langue === 'ha') ? 'ha' : 'fr';
+    const contactLang = contactLoc.langue === 'ha' ? 'ha' : 'fr';
 
     const audioLines = nearest.map((s, i) => {
         const km = s.distance.toFixed(1);

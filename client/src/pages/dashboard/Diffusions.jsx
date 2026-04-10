@@ -65,6 +65,8 @@ export default function Diffusions() {
 
     const fileRefs = useRef({});
     const pollingRef = useRef(null);
+    const mountedRef = useRef(true);
+    useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
 
     const { paged, page, setPage, totalPages } = usePagination(broadcasts, 10);
 
@@ -84,6 +86,7 @@ export default function Diffusions() {
                     }
                     Promise.all(active.map(b => getBroadcastById(b._id).catch(() => b)))
                         .then(updated => {
+                            if (!mountedRef.current) return;
                             setBroadcasts(p => p.map(b => updated.find(u => u._id === b._id) ?? b));
                             if (!updated.some(u => u.statut === 'en_cours')) {
                                 clearInterval(pollingRef.current); pollingRef.current = null;

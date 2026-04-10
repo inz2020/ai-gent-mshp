@@ -184,7 +184,7 @@ export default function Contacts() {
             { 'N° WhatsApp': '22791234567', 'Nom': 'Ibrahim Malam', 'Langue': 'ha' },
         ]);
         ws['!cols'] = [{ wch: 18 }, { wch: 24 }, { wch: 10 }];
-        const wb = XLSX.utils.book_new();
+        const wb = XLSX.utils.book_new(); wb.Props = { CreatedDate: new Date() };
         XLSX.utils.book_append_sheet(wb, ws, 'Contacts');
         XLSX.writeFile(wb, 'modele_import_contacts.xlsx');
     }
@@ -221,8 +221,8 @@ export default function Contacts() {
     }
 
     const filtered = contacts.filter(c =>
-        c.whatsappId.includes(search) ||
-        c.nom.toLowerCase().includes(search.toLowerCase()) ||
+        (c.whatsappId ?? '').includes(search) ||
+        (c.nom ?? '').toLowerCase().includes(search.toLowerCase()) ||
         (c.region?.nom ?? '').toLowerCase().includes(search.toLowerCase())
     );
 
@@ -251,7 +251,7 @@ export default function Contacts() {
         }));
         const ws = XLSX.utils.json_to_sheet(rows);
         ws['!cols'] = [18,24,16,16,12,16,24,16].map(w => ({ wch: w }));
-        const wb = XLSX.utils.book_new();
+        const wb = XLSX.utils.book_new(); wb.Props = { CreatedDate: new Date() };
         XLSX.utils.book_append_sheet(wb, ws, 'Contacts');
         XLSX.writeFile(wb, `contacts_esante_${new Date().toISOString().slice(0,10)}.xlsx`);
     }

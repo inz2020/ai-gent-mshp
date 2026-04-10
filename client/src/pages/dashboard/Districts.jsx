@@ -70,7 +70,7 @@ export default function Districts() {
     function exportExcel() {
         const ws = XLSX.utils.json_to_sheet(filtered.map(r => ({ nom: r.nom, region: r.regionId?.nom ?? '' })));
         ws['!cols'] = [{ wch: 30 }, { wch: 20 }];
-        const wb = XLSX.utils.book_new();
+        const wb = XLSX.utils.book_new(); wb.Props = { CreatedDate: new Date() };
         XLSX.utils.book_append_sheet(wb, ws, 'Districts');
         XLSX.writeFile(wb, `districts_${new Date().toISOString().slice(0, 10)}.xlsx`);
     }

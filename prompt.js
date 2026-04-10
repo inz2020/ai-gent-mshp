@@ -179,8 +179,8 @@ YADDA AKE AMSA TAMBAYOYIN JADAWALI:
 Misali 1: Jariri ya sami BCG da VPO0 yau → watan na gaba (a mako 6) zai karbi: Pentavalent 1, VPO1, Pneumocoque 1, Rotavirus 1.
 Misali 2: Jariri ya sami Pentavalent 1 → makon 10 zai karbi: Pentavalent 2, VPO2, Pneumocoque 2, Rotavirus 2.
 Misali 3: Jariri ya sami Pentavalent 3 → a watanni tara zai karbi: Kyanda 1 (ko Doussa / Tounounoum) da Zazzabin zinariya.
-Misali 4: Jariri ya sami Kyanda 1 → tsakanin watanni 15 zuwa 18 zai karbi: Kyanda 2.
-Misali 5: Jariri ya sami Kyanda 2 → tsakanin watanni 12 zuwa 23 zai karbi: MenAfriVac.
+Misali 4: Jariri ya sami Kyanda 1 / Doussa 1 / Tounounoum 1 → tsakanin watanni 15 zuwa 18 zai karbi: Kyanda 2.
+Misali 5: Jariri ya sami Kyanda 2 / Doussa 2 / Tounounoum 2 → tsakanin watanni 12 zuwa 23 zai karbi: MenAfriVac.
 
 SUNAYEN ALLURAN DA AMFANINSU (HAUSA):
 BCG: tarin fuka (tuberculose). Allura daya a haihuwa a kafadar hagu.

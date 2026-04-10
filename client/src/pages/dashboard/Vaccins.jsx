@@ -76,7 +76,7 @@ export default function Vaccins() {
             actif: v.actif ? 'Oui' : 'Non'
         })));
         ws['!cols'] = [10, 28, 36, 8, 16, 8].map(w => ({ wch: w }));
-        const wb = XLSX.utils.book_new();
+        const wb = XLSX.utils.book_new(); wb.Props = { CreatedDate: new Date() };
         XLSX.utils.book_append_sheet(wb, ws, 'Vaccins');
         XLSX.writeFile(wb, `vaccins_${new Date().toISOString().slice(0, 10)}.xlsx`);
     }

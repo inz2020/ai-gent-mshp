@@ -109,8 +109,8 @@ export default function Utilisateurs() {
     }
 
     const filtered = users.filter(u =>
-        u.nom.toLowerCase().includes(search.toLowerCase()) ||
-        u.email.toLowerCase().includes(search.toLowerCase())
+        (u.nom ?? '').toLowerCase().includes(search.toLowerCase()) ||
+        (u.email ?? '').toLowerCase().includes(search.toLowerCase())
     );
     const { paged, page, setPage, totalPages } = usePagination(filtered);
 

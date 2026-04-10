@@ -104,7 +104,7 @@ export default function Structures() {
             statutVaccination: s.statutVaccination ? 'Oui' : 'Non'
         })));
         ws['!cols'] = [28, 14, 24, 18, 12, 12, 18, 16].map(w => ({ wch: w }));
-        const wb = XLSX.utils.book_new();
+        const wb = XLSX.utils.book_new(); wb.Props = { CreatedDate: new Date() };
         XLSX.utils.book_append_sheet(wb, ws, 'Structures');
         XLSX.writeFile(wb, `structures_${new Date().toISOString().slice(0, 10)}.xlsx`);
     }
