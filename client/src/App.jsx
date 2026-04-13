@@ -18,6 +18,7 @@ import Structures from './pages/dashboard/Structures.jsx';
 import Vaccins from './pages/dashboard/Vaccins.jsx';
 import CalendrierVaccinal from './pages/dashboard/CalendrierVaccinal.jsx';
 import HausaPrompt from './pages/dashboard/HausaPrompt.jsx';
+import Campagnes from './pages/dashboard/Campagnes.jsx';
 import PrivateRoute from './components/PrivateRoute.jsx';
 import NotFound from './pages/NotFound.jsx';
 import ErrorPage from './pages/ErrorPage.jsx';
@@ -58,6 +59,7 @@ export default function App() {
           <Route path="utilisateurs"       element={<Utilisateurs />} />
           <Route path="utilisateurs/roles" element={<RolesPermissions />} />
           <Route path="diffusions"                    element={<Diffusions />} />
+          <Route path="campagnes"                    element={<Campagnes />} />
           <Route path="metadonnees/regions"          element={<Regions />} />
           <Route path="metadonnees/districts"        element={<Districts />} />
           <Route path="metadonnees/structures"       element={<Structures />} />

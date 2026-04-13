@@ -2,14 +2,29 @@ import express from 'express';
 import axios from 'axios';
 import Contact from '../models/Contact.js';
 import Conversation from '../models/Conversations.js';
+import Structure from '../models/Structure.js';
 import { requireAuth, requireRole } from '../../middlewares/auth.js';
+
+function haversine(lat1, lng1, lat2, lng2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2 +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 const router = express.Router();
 
 // GET /api/contacts
+// Paramètre optionnel : ?phoneNumberId=XXXX pour filtrer par numéro WA Business
 router.get('/', requireAuth, async (req, res) => {
     try {
-        const contacts = await Contact.find()
+        const filter = {};
+        if (req.query.phoneNumberId) filter.phoneNumberId = req.query.phoneNumberId;
+
+        const contacts = await Contact.find(filter)
             .populate('region', 'nom')
             .populate('district', 'nom')
             .sort({ dateInscription: -1 });
@@ -134,6 +149,88 @@ router.get('/:id/conversations', requireAuth, async (req, res) => {
         const conversations = await Conversation.find({ contactId: req.params.id })
             .sort({ derniereMiseAJour: -1 });
         res.json(conversations);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// POST /api/contacts/:id/detect-location — détecte région/district depuis la dernière position GPS
+router.post('/:id/detect-location', requireAuth, requireRole('admin', 'staff'), async (req, res) => {
+    try {
+        const contact = await Contact.findById(req.params.id);
+        if (!contact) return res.status(404).json({ message: 'Contact introuvable.' });
+
+        const { latitude: lat, longitude: lng } = contact.dernierePosition ?? {};
+        if (!lat || !lng) {
+            return res.status(400).json({ message: 'Ce contact n\'a pas de position GPS enregistrée.' });
+        }
+
+        const structures = await Structure.find()
+            .populate({ path: 'districtId', populate: { path: 'regionId' } });
+
+        if (!structures.length) {
+            return res.status(400).json({ message: 'Aucune structure en base pour effectuer la détection.' });
+        }
+
+        const sorted = structures
+            .filter(s => s.coordonnees?.latitude && s.coordonnees?.longitude)
+            .map(s => ({ ...s.toObject(), distance: haversine(lat, lng, s.coordonnees.latitude, s.coordonnees.longitude) }))
+            .sort((a, b) => a.distance - b.distance);
+
+        const closest = sorted[0];
+        if (!closest?.districtId?._id) {
+            return res.status(400).json({ message: 'Impossible de détecter la zone depuis les structures disponibles.' });
+        }
+
+        contact.district = closest.districtId._id;
+        contact.region   = closest.districtId.regionId?._id ?? contact.region;
+        await contact.save();
+
+        const updated = await Contact.findById(contact._id)
+            .populate('region', 'nom')
+            .populate('district', 'nom');
+
+        res.json({
+            message: `Région et district détectés (structure la plus proche : ${closest.nom}, ${closest.distance.toFixed(1)} km).`,
+            region:   updated.region,
+            district: updated.district,
+            contact:  updated,
+        });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// PUT /api/contacts/:id — mise à jour du contact (nom, langue, statutVaxEnfants)
+router.put('/:id', requireAuth, requireRole('admin', 'staff'), async (req, res) => {
+    try {
+        const contact = await Contact.findById(req.params.id);
+        if (!contact) return res.status(404).json({ message: 'Contact introuvable.' });
+
+        const { nom, langue } = req.body;
+        if (nom !== undefined) contact.nom = nom.trim();
+        if (langue !== undefined) contact.langue = langue;
+        await contact.save();
+
+        const updated = await Contact.findById(contact._id)
+            .populate('region', 'nom')
+            .populate('district', 'nom');
+        res.json(updated);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// DELETE /api/contacts/:id — supprime un contact et ses conversations
+router.delete('/:id', requireAuth, requireRole('admin'), async (req, res) => {
+    try {
+        const contact = await Contact.findById(req.params.id);
+        if (!contact) return res.status(404).json({ message: 'Contact introuvable.' });
+
+        await Conversation.updateMany({ contactId: contact._id }, { archivee: true });
+        await contact.deleteOne();
+
+        res.json({ message: 'Contact supprimé.' });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }

@@ -194,7 +194,7 @@ export default function HausaPrompt() {
                     Export ({filtered.length})
                 </button>
                 <button className="dt-btn" onClick={downloadTemplate}>
-                    Modele Excel
+                    Modèle Excel
                 </button>
             </div>
 

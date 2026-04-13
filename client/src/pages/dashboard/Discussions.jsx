@@ -6,6 +6,7 @@ import {
     sendOperatorMessage,
     toggleContactBlock,
     enregistrerContact,
+    deleteConversation,
 } from '../../api/index.js';
 import { usePagination } from '../../hooks/usePagination.js';
 import Pagination from '../../components/Pagination.jsx';
@@ -56,6 +57,8 @@ export default function Discussions() {
     const [saving, setSaving]       = useState(false);
     const [savedIds, setSavedIds]   = useState(new Set());
     const [gpsModal, setGpsModal]   = useState(null);   // { nom, whatsappId, dernierePosition }
+    const [deleteModal, setDeleteModal] = useState(null); // conversation à supprimer
+    const [deleting, setDeleting]       = useState(false);
     const threadEndRef              = useRef(null);
     const textareaRef               = useRef(null);
     const selectedRef               = useRef(null);
@@ -133,6 +136,21 @@ export default function Discussions() {
     }
 
     function closeThread() { setSelected(null); setMessages([]); setOpText(''); }
+
+    async function handleDeleteConversation() {
+        setDeleting(true);
+        try {
+            await deleteConversation(deleteModal._id);
+            setConvs(prev => prev.filter(c => c._id !== deleteModal._id));
+            if (selected?._id === deleteModal._id) closeThread();
+            setDeleteModal(null);
+        } catch (e) {
+            setError(e.message);
+            setTimeout(() => setError(''), 5000);
+        } finally {
+            setDeleting(false);
+        }
+    }
 
     function openGpsModal(c) {
         setGpsModal({
@@ -320,6 +338,9 @@ export default function Discussions() {
                                     <button className="dt-btn dt-btn-edit" onClick={() => openThread(c)}>
                                         Ouvrir
                                     </button>
+                                    <button className="dt-btn dt-btn-danger" onClick={() => setDeleteModal(c)} title="Supprimer cette conversation">
+                                        🗑️ Supprimer
+                                    </button>
                                     <button
                                         className="dt-btn"
                                         onClick={() => openGpsModal(c)}
@@ -348,6 +369,30 @@ export default function Discussions() {
                 <span>{filtered.length} conversation{filtered.length !== 1 ? 's' : ''}</span>
                 <Pagination page={page} totalPages={totalPages} onChange={setPage} />
             </div>
+
+            {/* ══════════ MODAL SUPPRESSION CONVERSATION ══════════ */}
+            {deleteModal && (
+                <div className="modal-overlay" onClick={() => setDeleteModal(null)}>
+                    <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h2>Supprimer la conversation</h2>
+                            <button className="modal-close" onClick={() => setDeleteModal(null)}>✕</button>
+                        </div>
+                        <div className="modal-body" style={{ padding: '20px 24px' }}>
+                            <p>Voulez-vous supprimer la conversation de <strong>+{deleteModal.contactId?.whatsappId}</strong>{deleteModal.contactId?.nom ? ` (${deleteModal.contactId.nom})` : ''} ?</p>
+                            <p style={{ color: 'var(--red, #dc2626)', fontSize: '0.88rem', marginTop: 8 }}>
+                                Tous les messages seront definitivement supprimés.
+                            </p>
+                        </div>
+                        <div className="modal-footer">
+                            <button className="dt-btn" onClick={() => setDeleteModal(null)}>Annuler</button>
+                            <button className="dt-btn dt-btn-danger" onClick={handleDeleteConversation} disabled={deleting}>
+                                {deleting ? 'Suppression...' : 'Supprimer'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* ══════════ MODAL GPS ══════════ */}
             {gpsModal && (() => {
@@ -551,16 +596,18 @@ export default function Discussions() {
                                                     </a>
                                                 ) : m.typeContenu === 'audio' ? (
                                                     <div className="wa-audio-block">
-                                                        {m.audioUrl && (
+                                                        {m.audioUrl ? (
                                                             <audio controls src={m.audioUrl} className="wa-audio" />
+                                                        ) : (
+                                                            <em className="wa-text-empty">🎵 Message audio</em>
                                                         )}
-                                                        {m.texteBrut && m.texteBrut !== '[Audio reçu en mode humain]' ? (
+                                                        {m.texteBrut && m.texteBrut !== '[Audio reçu en mode humain]' && (
                                                             <div className="wa-audio-transcript">
-                                                                <span className="wa-transcript-label">🎙️ Transcription</span>
+                                                                <span className="wa-transcript-label">
+                                                                    {m.emetteurType === 'agent_ia' ? '📝 Réponse' : '🎙️ Transcription'}
+                                                                </span>
                                                                 <em>"{m.texteBrut}"</em>
                                                             </div>
-                                                        ) : !m.audioUrl && (
-                                                            <em className="wa-text-empty">🎵 Message audio</em>
                                                         )}
                                                     </div>
                                                 ) : (

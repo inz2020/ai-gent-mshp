@@ -15,6 +15,7 @@ const NAV_ITEMS = [
         ]
     },
     { to: '/dashboard/diffusions',  icon: '📣', label: 'Diffusions' },
+    { to: '/dashboard/campagnes',   icon: '📢', label: 'Campagnes' },
     {
         key: 'metadonnees',
         icon: '🗂️', label: 'Métadonnées',

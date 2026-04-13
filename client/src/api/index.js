@@ -95,6 +95,14 @@ export function getContactConversations(id) {
     return request(`/api/contacts/${id}/conversations`, { headers: authHeaders() });
 }
 
+export function updateContact(id, data) {
+    return request(`/api/contacts/${id}`, {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: JSON.stringify(data),
+    });
+}
+
 export function toggleContactBlock(id) {
     return request(`/api/contacts/${id}/bloquer`, {
         method: 'PATCH',
@@ -124,6 +132,13 @@ export function deleteContact(id) {
     });
 }
 
+export function detectContactLocation(id) {
+    return request(`/api/contacts/${id}/detect-location`, {
+        method: 'POST',
+        headers: authHeaders(),
+    });
+}
+
 // ── Conversations ─────────────────────────────────────────────
 export function getConversationStats() {
     return request('/api/conversations/stats', { headers: authHeaders() });
@@ -131,6 +146,13 @@ export function getConversationStats() {
 
 export function getConversations() {
     return request('/api/conversations', { headers: authHeaders() });
+}
+
+export function deleteConversation(id) {
+    return request(`/api/conversations/${id}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+    });
 }
 
 export function getConversationMessages(id) {
@@ -220,4 +242,26 @@ export function sendBroadcast(data) {
         headers: authHeaders(),
         body: JSON.stringify(data)
     });
+}
+
+// ── Campagnes ─────────────────────────────────────────────────
+export const getCampagnes    = ()       => request('/api/campagnes', { headers: authHeaders() });
+export const getCampagneById = (id)    => request(`/api/campagnes/${id}`, { headers: authHeaders() });
+export const createCampagne  = (data)  => request('/api/campagnes', { method: 'POST', headers: authHeaders(), body: JSON.stringify(data) });
+export const updateCampagne  = (id, d) => request(`/api/campagnes/${id}`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(d) });
+export const deleteCampagne  = (id)    => request(`/api/campagnes/${id}`, { method: 'DELETE', headers: authHeaders() });
+export const lancerCampagne  = (id)    => request(`/api/campagnes/${id}/envoyer`, { method: 'POST', headers: authHeaders() });
+
+export async function uploadCampagneMedia(file, mediaType) {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('mediaType', mediaType);
+    const res = await fetch(`${BASE_URL}/api/campagnes/upload`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        body: form,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Erreur upload.');
+    return data; // { url, nom, mediaType }
 }

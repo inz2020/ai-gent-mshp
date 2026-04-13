@@ -24,7 +24,7 @@ router.get('/stats', requireAuth, async (req, res) => {
 // GET /api/conversations — liste avec infos contact
 router.get('/', requireAuth, async (req, res) => {
     try {
-        const conversations = await Conversation.find()
+        const conversations = await Conversation.find({ archivee: { $ne: true } })
             .populate('contactId', 'whatsappId nom langue source bloque dernierePosition')
             .sort({ derniereMiseAJour: -1 });
         res.json(conversations);
@@ -107,6 +107,19 @@ router.post('/:id/send', requireAuth, requireRole('admin', 'staff'), async (req,
     } catch (err) {
         console.error('[SEND-OP]', err.message);
         res.status(500).json({ message: err.response?.data?.error?.message ?? err.message });
+    }
+});
+
+// DELETE /api/conversations/:id — supprime une conversation et tous ses messages
+router.delete('/:id', requireAuth, requireRole('admin', 'staff'), async (req, res) => {
+    try {
+        const conv = await Conversation.findById(req.params.id);
+        if (!conv) return res.status(404).json({ message: 'Conversation introuvable.' });
+        await Message.deleteMany({ conversationId: conv._id });
+        await conv.deleteOne();
+        res.json({ message: 'Conversation supprimée.' });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
     }
 });
 

@@ -1,13 +1,13 @@
 import mongoose from 'mongoose';
 
 const ContactSchema = new mongoose.Schema({
-    whatsappId: { type: String, unique: true, required: true }, // ex: "22790000000"
+    whatsappId:    { type: String, unique: true, required: true }, // ex: "22790000000"
+    phoneNumberId: { type: String, default: null },              // ID numéro WA Business (PHONE_ID Meta)
     nom: { type: String, default: "Utilisateur Inconnu" },
     region: { type: mongoose.Schema.Types.ObjectId, ref: 'Region' },
     district: { type: mongoose.Schema.Types.ObjectId, ref: 'District' },
     langue: { type: String, default: 'fr' },
     dateInscription: { type: Date, default: Date.now },
-    statutVaxEnfants: { type: String, enum: ['A jour', 'En retard', 'Inconnu'], default: 'Inconnu' },
     dernierePosition: {
         latitude:  { type: Number, default: null },
         longitude: { type: Number, default: null },

@@ -11,7 +11,7 @@ import Message from '../db/models/Message.js';
 import Structure from '../db/models/Structure.js';
 import BroadcastMessage from '../db/models/BroadcastMessage.js';
 import Broadcast from '../db/models/Broadcast.js';
-import { generateTTS, ttsOpenAI, ttsElevenLabs, sttElevenLabs, prepareVoiceText, uploadAudio } from '../lib/audio.js';
+import { generateTTS, ttsOpenAI, ttsElevenLabs, sttElevenLabs, prepareVoiceText, uploadAudio, preprocessAudio } from '../lib/audio.js';
 import { getErrorAudioUrl, ERROR_TEXTS } from '../lib/errorAudio.js';
 
 const router = express.Router();
@@ -37,13 +37,19 @@ function detectTextLanguage(text) {
     // 2. Phrases multi-mots Hausa (signal fort)
     if (getHausaPhrases().some(phrase => normalized.includes(phrase))) return 'ha';
 
-    // 3. Dictionnaire Hausa mot par mot
-    const words = normalized.split(/\s+/);
-    const hasHausa = words.some(w => getHausaWords().has(w.replace(/[^a-z]/g, '')));
+    // 3. Dictionnaire Hausa — score de proportion (pas de jugement sur un seul mot)
+    const words = normalized.split(/\s+/).map(w => w.replace(/[^a-z]/g, '')).filter(w => w.length >= 2);
+    if (words.length === 0) return 'fr';
 
-    console.log(`[LANG] Dictionnaire — HA: ${hasHausa}`);
+    const hausaCount = words.filter(w => getHausaWords().has(w)).length;
+    const ratio = hausaCount / words.length;
 
-    return hasHausa ? 'ha' : 'fr';
+    // Seuil : au moins 2 mots Hausa ET 30% des mots de la phrase
+    const isHausa = hausaCount >= 2 && ratio >= 0.30;
+
+    console.log(`[LANG] Dictionnaire — HA: ${hausaCount}/${words.length} mots (${Math.round(ratio * 100)}%) → ${isHausa ? 'ha' : 'fr'}`);
+
+    return isHausa ? 'ha' : 'fr';
 }
 
 // ─── Contrôle qualité audio (via segments Whisper) ──────────
@@ -59,7 +65,21 @@ function checkAudioQuality(transcription, isLikelyHausa = false) {
     }
 
     const segments = transcription.segments ?? [];
-    if (segments.length === 0) return { ok: true };
+
+    // Contrôle qualité ElevenLabs : pas de segments Whisper, mais on a confidence + wordCount
+    if (segments.length === 0) {
+        if (transcription._source === 'elevenlabs') {
+            const wordCount = transcription._wordCount ?? 0;
+            const conf      = transcription._avgConfidence;
+            if (wordCount < 2) {
+                return { ok: false, reason: 'Audio trop court ou aucune parole détectée. / Murya ba ta bayyana ba.' };
+            }
+            if (conf !== null && conf < 0.35) {
+                return { ok: false, reason: 'Audio peu clair, veuillez réessayer. / Murya ba ta fito sosai.' };
+            }
+        }
+        return { ok: true };
+    }
 
     const avgNoSpeech   = segments.reduce((s, seg) => s + seg.no_speech_prob, 0) / segments.length;
     const avgLogProb    = segments.reduce((s, seg) => s + seg.avg_logprob, 0) / segments.length;
@@ -84,10 +104,13 @@ function checkAudioQuality(transcription, isLikelyHausa = false) {
 
 // ─── Persistance DB ──────────────────────────────────────────
 
-async function getOrCreateContact(whatsappId) {
+async function getOrCreateContact(whatsappId, phoneNumberId = null) {
     let contact = await Contact.findOne({ whatsappId });
     if (!contact) {
-        contact = await Contact.create({ whatsappId, source: 'webhook' });
+        contact = await Contact.create({ whatsappId, source: 'webhook', phoneNumberId });
+    } else if (phoneNumberId && !contact.phoneNumberId) {
+        contact.phoneNumberId = phoneNumberId;
+        await contact.save();
     }
     return contact;
 }
@@ -127,7 +150,7 @@ async function saveMessages(contactId, langue, { humanText, aiText, humanAudioUr
         conversationId: conv._id,
         emetteurType: 'agent_ia',
         typeContenu: agentIsAudio ? 'audio' : 'text',
-        texteBrut: agentIsAudio ? '' : aiText,
+        texteBrut: aiText,
         audioUrl,
         cloudinaryId,
         langue
@@ -171,20 +194,21 @@ router.post('/', (req, res) => {
     // ── Messages entrants ─────────────────────────────────────
     if (!value.messages?.[0]) return;
 
-    const message = value.messages[0];
-    const from    = message.from;
+    const message     = value.messages[0];
+    const from        = message.from;
+    const phoneNumId  = value.metadata?.phone_number_id ?? null;
     console.log(`Message de ${from}, type: ${message.type}`);
 
     if (message.type === 'audio') {
-        processAudio(message.audio.id, from).catch(err =>
+        processAudio(message.audio.id, from, phoneNumId).catch(err =>
             console.error("Erreur traitement audio:", err.message)
         );
     } else if (message.type === 'text') {
-        processText(message.text.body, from).catch(err =>
+        processText(message.text.body, from, phoneNumId).catch(err =>
             console.error("Erreur traitement texte:", err.message)
         );
     } else if (message.type === 'location') {
-        processLocation(message.location.latitude, message.location.longitude, from).catch(err =>
+        processLocation(message.location.latitude, message.location.longitude, from, phoneNumId).catch(err =>
             console.error("Erreur traitement localisation:", err.message)
         );
     } else {
@@ -217,33 +241,6 @@ async function processStatuses(statuses) {
         await Broadcast.findByIdAndUpdate(bm.broadcastId, { $inc: inc });
         console.log(`[STATUS] ${messageId} → ${newStatut}`);
     }
-}
-
-// ─── Helpers communs ─────────────────────────────────────────
-
-function isGreeting(text) {
-    const normalized = text.toLowerCase().trim();
-    return GREETING_CONFIG.keywords.some(kw => normalized.includes(kw));
-}
-
-async function sendGreetingResponse(userPhone) {
-    const hasImage = GREETING_CONFIG.image_url?.startsWith('http');
-    const headers = { Authorization: `Bearer ${process.env.META_TOKEN}`, 'Content-Type': 'application/json' };
-    const base = { messaging_product: "whatsapp", to: userPhone };
-
-    if (hasImage) {
-        await axios.post(
-            `https://graph.facebook.com/v22.0/${process.env.PHONE_ID}/messages`,
-            { ...base, type: "image", image: { link: GREETING_CONFIG.image_url, caption: GREETING_CONFIG.image_caption } },
-            { headers }
-        );
-    }
-    await axios.post(
-        `https://graph.facebook.com/v22.0/${process.env.PHONE_ID}/messages`,
-        { ...base, type: "text", text: { body: GREETING_CONFIG.message } },
-        { headers }
-    );
-
 }
 
 // Mots-clés indiquant que l'utilisateur cherche un centre de santé proche
@@ -487,17 +484,16 @@ Exemples :
 {"lang":"ha","reply":"Watan mai zuwa, jaririnka zai karbi Pentavalent 1, VPO1, Pneumocoque 1 da Rotavirus 1. Waɗannan alluran suna kare daga cututtuka biyar, gudawa mai tsanani, da ciwon huhu. Ka je cibiyar lafiya lokacin da jariri ya kai mako shida."}
 {"lang":"unknown","reply":""}`;
 
-async function processText(userText, userPhone) {
+async function processText(userText, userPhone, phoneNumId = null) {
     console.log(`[TEXT] Message reçu: "${userText}"`);
 
+    const contact = await getOrCreateContact(userPhone, phoneNumId);
+
     // Vérification blocage — contact bloqué = silence total (pas de réponse)
-    const contactCheck = await Contact.findOne({ whatsappId: userPhone });
-    if (contactCheck?.bloque) {
+    if (contact.bloque) {
         console.log(`[BLOCKED] ${userPhone} — message texte ignoré (contact bloqué)`);
         return;
     }
-
-    const contact = await getOrCreateContact(userPhone);
     const conv    = await getOrCreateConversation(contact._id);
 
     // Mode humain → enregistre sans réponse IA (détection légère suffisante ici)
@@ -564,9 +560,9 @@ async function processText(userText, userPhone) {
 
     console.log(`[TEXT] Langue finale: ${lang} | Réponse: ${reply}`);
 
-    // Persistance de la langue détectée — même logique que processAudio
+    // Persistance de la langue détectée — même valeur que processAudio ('ha' ou 'fr')
     if (lang !== 'unknown') {
-        const dbLang = lang === 'ha' ? 'hausa' : 'fr';
+        const dbLang = lang === 'ha' ? 'ha' : 'fr';
         if (contact.langue !== dbLang) {
             contact.langue = dbLang;
             await contact.save();
@@ -613,14 +609,20 @@ async function processText(userText, userPhone) {
 
     // Hausa → réponse audio (meilleure expérience pour locuteurs Hausa)
     // Français → réponse texte
+    let aiAudioUpload = null;
     if (lang === 'ha') {
-        await sendAudioReply(userPhone, reply, 'ha');
+        aiAudioUpload = await sendAudioReply(userPhone, reply, 'ha');
     } else {
         await sendWhatsAppText(userPhone, reply);
     }
 
     try {
-        await saveMessages(contact._id, lang, { humanText: userText, aiText: reply });
+        await saveMessages(contact._id, lang, {
+            humanText: userText,
+            aiText: reply,
+            audioUrl: aiAudioUpload?.secure_url ?? '',
+            cloudinaryId: aiAudioUpload?.public_id ?? '',
+        });
     } catch (dbErr) {
         console.error('[DB] Erreur persistance text:', dbErr.message);
     }
@@ -640,19 +642,17 @@ async function processText(userText, userPhone) {
 
 // ─── Traitement audio ────────────────────────────────────────
 
-async function processAudio(mediaId, userPhone) {
+async function processAudio(mediaId, userPhone, phoneNumId = null) {
     const metaHeaders = { Authorization: `Bearer ${process.env.META_TOKEN}` };
     console.log('[1/6] Téléchargement audio, mediaId:', mediaId);
 
-    // Vérification blocage
-    const contactCheck = await Contact.findOne({ whatsappId: userPhone });
-    if (contactCheck?.bloque) {
+    // Récupérer le contact (une seule requête DB — vérifie aussi le blocage)
+    const contact = await getOrCreateContact(userPhone, phoneNumId);
+    if (contact.bloque) {
         console.log(`[BLOCKED] ${userPhone} — message audio ignoré (contact bloqué)`);
         return;
     }
 
-    // Récupérer le contact et la conversation pour vérifier le mode
-    const contact = await getOrCreateContact(userPhone);
     const knownLang = contact.langue === 'ha' ? 'ha' : contact.langue === 'fr' ? 'fr' : null;
     const convCheck = await getOrCreateConversation(contact._id);
 
@@ -682,6 +682,16 @@ async function processAudio(mediaId, userPhone) {
     fs.writeFileSync(inputFile, audioBuffer);
     console.log('[2/6] Audio téléchargé:', audioBuffer.byteLength, 'bytes');
 
+    // Prétraitement FFmpeg : OGG → WAV 16 kHz mono (optimal pour Whisper)
+    let sttFile = inputFile;
+    try {
+        sttFile = await preprocessAudio(inputFile);
+        console.log('[2b/6] Audio prétraité (WAV 16kHz mono):', sttFile);
+    } catch (ffErr) {
+        console.warn('[2b/6] Prétraitement FFmpeg échoué, audio brut utilisé:', ffErr.message);
+        sttFile = inputFile;
+    }
+
     // try/finally garantit la suppression du fichier temp même en cas d'exception
     try {
     // Upload de l'audio utilisateur sur Cloudinary pour l'affichage dans le dashboard
@@ -707,11 +717,15 @@ async function processAudio(mediaId, userPhone) {
     // ══════════════════════════════════════════════════════════════
 
     const FR_WHISPER_PROMPT =
-        'Qu\'est-ce que la rougeole ? La rougeole est une maladie évitable par le vaccin. ' +
-        'La vaccination protège les enfants contre la poliomyélite, la coqueluche, le tétanos, ' +
-        'la diphtérie, l\'hépatite B, la méningite et la fièvre jaune. ' +
-        'Le centre de santé propose des vaccins gratuits pour les nourrissons. ' +
-        'Quels sont les effets secondaires du vaccin ? Où puis-je me faire vacciner au Niger ?';
+        'La vaccination protège les enfants contre la rougeole, la poliomyélite, la coqueluche, ' +
+        'le tétanos, la diphtérie, l\'hépatite B, la méningite et la fièvre jaune. ' +
+        'Le centre de santé intégré propose des vaccins gratuits pour les nourrissons et les femmes enceintes. ' +
+        'Quels sont les effets secondaires du vaccin ? Où puis-je me faire vacciner au Niger ? ' +
+        'Mon enfant a de la fièvre après le vaccin. Quel est le calendrier vaccinal ? ' +
+        'Le BCG, le DTC, le VAT, le VAR, le VPO sont des vaccins essentiels. ' +
+        'La malnutrition, le paludisme, la diarrhée, la pneumonie touchent les enfants. ' +
+        'Consultation prénatale, accouchement assisté, allaitement maternel, planification familiale. ' +
+        'Le district sanitaire, l\'agent de santé communautaire, la case de santé, le CSI.';
 
     let transcription;
 
@@ -734,10 +748,11 @@ async function processAudio(mediaId, userPhone) {
     // ── PASS 1 : détection systématique ─────────────────────────
     try {
         const detect = await openai.audio.transcriptions.create({
-            file: fs.createReadStream(inputFile),
+            file: fs.createReadStream(sttFile),
             model: 'whisper-1',
             response_format: 'verbose_json',
             timestamp_granularities: ['segment'],
+            temperature: 0,
         });
         const wLang = detect.language?.toLowerCase() ?? '';
 
@@ -747,7 +762,11 @@ async function processAudio(mediaId, userPhone) {
             // Hausa, alias africain, script arabe → tout ça c'est du Hausa
             detectedLang = 'ha';
         }
-        console.log(`[3a/6] Détection langue — Whisper: "${wLang}" | → ${detectedLang}`);
+        if (wLang !== 'french' && wLang !== 'hausa') {
+            console.log(`[3a/6] Whisper: "${wLang}" (alias Hausa probable — Whisper confond Hausa avec ${wLang}) → ha`);
+        } else {
+            console.log(`[3a/6] Détection langue — Whisper: "${wLang}" | → ${detectedLang}`);
+        }
     } catch (detectErr) {
         // Fallback sur knownLang si disponible, sinon Hausa
         detectedLang = knownLang ?? 'ha';
@@ -758,26 +777,28 @@ async function processAudio(mediaId, userPhone) {
     try {
         if (detectedLang === 'fr') {
             transcription = await openai.audio.transcriptions.create({
-                file: fs.createReadStream(inputFile),
+                file: fs.createReadStream(sttFile),
                 model: 'whisper-1',
                 response_format: 'verbose_json',
                 timestamp_granularities: ['segment'],
                 language: 'fr',
+                temperature: 0,
                 prompt: FR_WHISPER_PROMPT,
             });
             console.log('[3b/6] Whisper FR | Texte:', transcription.text.slice(0, 80));
         } else {
             // Hausa → ElevenLabs STT en priorité absolue (supporte hau nativement)
             try {
-                transcription = await sttElevenLabs(inputFile, 'hau');
+                transcription = await sttElevenLabs(sttFile, 'hau');
                 console.log('[3b/6] ElevenLabs STT Hausa | Texte:', transcription.text.slice(0, 80));
             } catch (elErr) {
                 console.warn('[3b/6] ElevenLabs STT échoué, fallback Whisper + prompt Hausa:', elErr.message);
                 transcription = await openai.audio.transcriptions.create({
-                    file: fs.createReadStream(inputFile),
+                    file: fs.createReadStream(sttFile),
                     model: 'whisper-1',
                     response_format: 'verbose_json',
                     timestamp_granularities: ['segment'],
+                    temperature: 0,
                     prompt: getHausaWhisperPrompt(),
                 });
                 console.log('[3b/6] Whisper Hausa fallback | Texte:', transcription.text.slice(0, 80));
@@ -800,11 +821,12 @@ async function processAudio(mediaId, userPhone) {
     } catch (err) {
         console.warn('[3b/6] Transcription ciblée échouée, fallback FR:', err.message);
         transcription = await openai.audio.transcriptions.create({
-            file: fs.createReadStream(inputFile),
+            file: fs.createReadStream(sttFile),
             model: 'whisper-1',
             response_format: 'verbose_json',
             timestamp_granularities: ['segment'],
             language: 'fr',
+            temperature: 0,
         });
         detectedLang = 'fr';
     }
@@ -901,8 +923,8 @@ DOKOKI MASU WAJIBI :
 - HARAMUN : kada ka ce "ban fahimci" ko "wace harshe" — idan rubutun ba cikakke ba ne, yi amfani da mahallin lafiya/rigakafi ka amsa da Hausa kullum`;
 
     const response = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        max_tokens: 250,
+        model: 'gpt-4o',
+        max_tokens: 300,
         response_format: { type: 'json_object' },
         messages: [
             { role: 'system', content: SYSTEM_PROMPT + AUDIO_REPLY_INSTRUCTION },
@@ -952,8 +974,9 @@ DOKOKI MASU WAJIBI :
         }
     }
     } finally {
-        // Nettoyage garanti du fichier temporaire, même en cas d'exception
+        // Nettoyage garanti des fichiers temporaires, même en cas d'exception
         fs.unlink(inputFile, () => {});
+        if (sttFile !== inputFile) fs.unlink(sttFile, () => {});
     }
 }
 
@@ -973,18 +996,15 @@ function haversine(lat1, lng1, lat2, lng2) {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-async function processLocation(lat, lng, userPhone) {
+async function processLocation(lat, lng, userPhone, phoneNumId = null) {
     console.log(`[LOC] Position reçue de ${userPhone}: lat=${lat}, lng=${lng}`);
 
-    // Vérification blocage
-    const contactCheck = await Contact.findOne({ whatsappId: userPhone });
-    if (contactCheck?.bloque) {
+    // Une seule requête DB — vérifie aussi le blocage
+    const contactLoc = await getOrCreateContact(userPhone, phoneNumId);
+    if (contactLoc.bloque) {
         console.log(`[BLOCKED] ${userPhone} — localisation ignorée (contact bloqué)`);
         return;
     }
-
-    // Mode humain → enregistre la position sans réponse IA
-    const contactLoc = await getOrCreateContact(userPhone);
     const convLoc    = await getOrCreateConversation(contactLoc._id);
     if (convLoc.statut === 'escalade_humain') {
         console.log(`[LOC] Mode humain — position stockée sans réponse IA`);
@@ -1047,6 +1067,17 @@ async function processLocation(lat, lng, userPhone) {
     // Persistance — réutilise contactLoc/convLoc déjà récupérés plus haut
     try {
         contactLoc.dernierePosition = { latitude: lat, longitude: lng, updatedAt: new Date() };
+
+        // Détection région/district depuis la structure la plus proche
+        const closest = nearest[0];
+        if (closest?.districtId?._id) {
+            contactLoc.district = closest.districtId._id;
+            if (closest.districtId.regionId?._id) {
+                contactLoc.region = closest.districtId.regionId._id;
+                console.log(`[LOC] Région/District assignés: ${closest.districtId.regionId.nom} / ${closest.districtId.nom}`);
+            }
+        }
+
         await contactLoc.save();
 
         await Message.create({

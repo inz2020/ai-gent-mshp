@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
-import { getContacts, createContact, importContacts, getContactConversations, inviterContact, deleteContact } from '../../api/index.js';
+import { getContacts, createContact, updateContact, importContacts, getContactConversations, inviterContact, deleteContact, detectContactLocation } from '../../api/index.js';
 import { usePagination } from '../../hooks/usePagination.js';
 import Pagination from '../../components/Pagination.jsx';
 
@@ -79,7 +79,6 @@ const COUNTRY_CODES = [
 ];
 
 const LANG_LABEL = { fr: 'Francais', ha: 'Hausa', hausa: 'Hausa', unknown: 'Inconnu' };
-const VAX_BADGE  = { 'A jour': 'dt-badge-actif', 'En retard': 'dt-badge-danger', 'Inconnu': 'dt-badge-inactif' };
 
 const DEFAULT_FORM = { countryCode: '227', localNumber: '', nom: '', langue: 'fr' };
 
@@ -95,6 +94,13 @@ export default function Contacts() {
     const [inviting, setInviting]   = useState(null); // id du contact en cours d'envoi
     const [deleting, setDeleting]   = useState(null); // id du contact en cours de suppression
     const [confirmDelete, setConfirmDelete] = useState(null); // contact à confirmer
+    const [detecting, setDetecting] = useState(false); // détection région/district en cours
+
+    // Edition
+    const [editModal, setEditModal]   = useState(null); // contact en cours d'édition
+    const [editForm, setEditForm]     = useState({ nom: '', langue: 'fr' });
+    const [editSaving, setEditSaving] = useState(false);
+    const [editError, setEditError]   = useState('');
 
     // Creation
     const [modal, setModal]         = useState(false);
@@ -174,6 +180,22 @@ export default function Contacts() {
         }
     }
 
+    async function handleDetectLocation(contact) {
+        setDetecting(true);
+        try {
+            const res = await detectContactLocation(contact._id);
+            setSelected(prev => ({ ...prev, region: res.region, district: res.district }));
+            setContacts(prev => prev.map(c => c._id === contact._id ? { ...c, region: res.region, district: res.district } : c));
+            setSuccess(res.message);
+            setTimeout(() => setSuccess(''), 5000);
+        } catch (err) {
+            setError(err.message);
+            setTimeout(() => setError(''), 5000);
+        } finally {
+            setDetecting(false);
+        }
+    }
+
     async function handleInvite(contact) {
         if (inviting) return;
         setInviting(contact._id);
@@ -190,6 +212,30 @@ export default function Contacts() {
             setTimeout(() => setError(''), 5000);
         } finally {
             setInviting(null);
+        }
+    }
+
+    function openEditModal(contact) {
+        setEditForm({ nom: contact.nom ?? '', langue: contact.langue ?? 'fr' });
+        setEditError('');
+        setEditModal(contact);
+    }
+
+    async function handleUpdate(e) {
+        e.preventDefault();
+        if (!editForm.nom.trim()) { setEditError('Le nom est requis.'); return; }
+        setEditSaving(true); setEditError('');
+        try {
+            const updated = await updateContact(editModal._id, editForm);
+            setContacts(prev => prev.map(c => c._id === updated._id ? updated : c));
+            if (selected?._id === updated._id) setSelected(updated);
+            setSuccess(`Contact +${updated.whatsappId} mis à jour.`);
+            setTimeout(() => setSuccess(''), 4000);
+            setEditModal(null);
+        } catch (err) {
+            setEditError(err.message);
+        } finally {
+            setEditSaving(false);
         }
     }
 
@@ -261,7 +307,6 @@ export default function Contacts() {
             'Region':           c.region?.nom ?? '',
             'District':         c.district?.nom ?? '',
             'Langue':           LANG_LABEL[c.langue] ?? c.langue,
-            'Statut vaccin':    c.statutVaxEnfants,
             'Derniere position':c.dernierePosition?.latitude != null
                                     ? `${c.dernierePosition.latitude}, ${c.dernierePosition.longitude}`
                                     : '',
@@ -324,7 +369,6 @@ export default function Contacts() {
                             <th>Region</th>
                             <th>District</th>
                             <th>Langue</th>
-                            <th>Statut vaccin</th>
                             <th>Inscrit le</th>
                             <th>Detail</th>
                         </tr>
@@ -348,15 +392,10 @@ export default function Contacts() {
                                         {LANG_LABEL[c.langue] ?? c.langue}
                                     </span>
                                 </td>
-                                <td>
-                                    <span className={`dt-badge ${VAX_BADGE[c.statutVaxEnfants] ?? 'dt-badge-inactif'}`}>
-                                        {c.statutVaxEnfants}
-                                    </span>
-                                </td>
                                 <td>{new Date(c.dateInscription).toLocaleDateString('fr-FR')}</td>
                                                 <td style={{ display: 'flex', gap: 6 }}>
                                     <button className="dt-btn dt-btn-edit" onClick={() => openDetail(c)}>Voir</button>
-                                    <button className="dt-btn dt-btn-primary" onClick={openModal}>+ Ajouter</button>
+                                    <button className="dt-btn dt-btn-primary" onClick={() => openEditModal(c)}>✏️ Modifier</button>
                                     <button
                                         className="dt-btn dt-btn-danger"
                                         onClick={() => setConfirmDelete(c)}
@@ -471,6 +510,50 @@ export default function Contacts() {
                 </div>
             )}
 
+            {/* ══ Modal édition contact ══ */}
+            {editModal && (
+                <div className="modal-overlay" onClick={() => setEditModal(null)}>
+                    <div className="modal" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h2>Modifier le contact</h2>
+                            <button className="modal-close" onClick={() => setEditModal(null)}>&#10005;</button>
+                        </div>
+                        <form onSubmit={handleUpdate} className="modal-form">
+                            {editError && <div className="modal-error">&#9888; {editError}</div>}
+
+                            <p style={{ fontSize: '0.82rem', color: '#6b7280', marginBottom: 12 }}>
+                                +{editModal.whatsappId}
+                            </p>
+
+                            <div className="form-group">
+                                <label>Nom complet</label>
+                                <input
+                                    value={editForm.nom}
+                                    onChange={e => setEditForm(f => ({ ...f, nom: e.target.value }))}
+                                    placeholder="Ex : Amina Moussa"
+                                    required
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label>Langue</label>
+                                <select value={editForm.langue} onChange={e => setEditForm(f => ({ ...f, langue: e.target.value }))}>
+                                    <option value="fr">Francais</option>
+                                    <option value="ha">Hausa</option>
+                                </select>
+                            </div>
+
+                            <div className="modal-footer">
+                                <button type="button" className="dt-btn" onClick={() => setEditModal(null)}>Annuler</button>
+                                <button type="submit" className="dt-btn dt-btn-primary" disabled={editSaving}>
+                                    {editSaving ? 'Enregistrement...' : 'Enregistrer'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
             {/* ══ Modal résultat import ══ */}
             {importResult && (
                 <div className="modal-overlay" onClick={() => setImportResult(null)}>
@@ -553,9 +636,8 @@ export default function Contacts() {
                             <div className="detail-grid">
                                 <div><strong>Nom</strong><span>{selected.nom}</span></div>
                                 <div><strong>Langue</strong><span>{LANG_LABEL[selected.langue] ?? selected.langue}</span></div>
-                                <div><strong>Region</strong><span>{selected.region?.nom ?? '—'}</span></div>
+                                <div><strong>Région</strong><span>{selected.region?.nom ?? '—'}</span></div>
                                 <div><strong>District</strong><span>{selected.district?.nom ?? '—'}</span></div>
-                                <div><strong>Statut vaccin</strong><span>{selected.statutVaxEnfants}</span></div>
                                 <div><strong>Inscrit le</strong><span>{new Date(selected.dateInscription).toLocaleDateString('fr-FR')}</span></div>
                                 <div>
                                     <strong>Derniere position</strong>
@@ -602,7 +684,17 @@ export default function Contacts() {
                         </div>
                         <div className="modal-footer">
                             <button className="dt-btn" onClick={() => { setSelected(null); setConvs([]); }}>Fermer</button>
-                            <button
+                            {selected.dernierePosition?.latitude != null && (
+                                <button
+                                    className="dt-btn dt-btn-primary"
+                                    onClick={() => handleDetectLocation(selected)}
+                                    disabled={detecting}
+                                    title="Detecter la region et le district depuis la position GPS"
+                                >
+                                    {detecting ? 'Detection...' : '📍 Detecter region/district'}
+                                </button>
+                            )}
+                         {/*    <button
                                 className="dt-btn dt-btn-primary"
                                 onClick={() => handleInvite(selected)}
                                 disabled={inviting === selected._id}
@@ -611,7 +703,7 @@ export default function Contacts() {
                                 {inviting === selected._id ? 'Envoi...' : selected.derniereInvitation
                                     ? `📲 Ré-inviter (dernier : ${new Date(selected.derniereInvitation).toLocaleDateString('fr-FR')})`
                                     : '📲 Envoyer invitation WhatsApp'}
-                            </button>
+                            </button> */}
                         </div>
                     </div>
                 </div>

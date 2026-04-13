@@ -33,14 +33,14 @@ export const HAUSA_WORDS = new Set([
     'na', 'ka', 'ki', 'ya', 'ga', 'wannan', 'wancan', 'wadannan',
     'wanda', 'wacce', 'wadanda', 'wata', 'wani', 'kowane', 'duk',
     // Verbes courants
-    'sai', 'tafi', 'zo', 'yi', 'yin', 'je', 'aje', 'ba', 'bai',
-    'ce', 'ne', 'ake', 'yake', 'tana', 'kana', 'muna', 'suna', 'zai',
-    'za', 'gani', 'ji', 'sani', 'fada', 'tambaya', 'nema', 'kare',
+    'sai', 'tafi', 'zo', 'yi', 'yin', 'aje', 'bai',
+    'ake', 'yake', 'tana', 'kana', 'muna', 'suna', 'zai',
+    'za', 'gani', 'sani', 'fada', 'tambaya', 'nema', 'kare',
     'fara', 'gama', 'dawo', 'tashi', 'kwana', 'zauna', 'tsaya',
     // Conjonctions / adverbes
     'don', 'da', 'ko', 'nan', 'wai', 'kuma', 'amma', 'saboda', 'lokaci',
     'yanzu', 'yau', 'gobe', 'jiya', 'bayan', 'kafin', 'tun', 'har',
-    'sosai', 'kawai', 'kuwa', 'ma', 'fa', 'to', 'ai',
+    'sosai', 'kawai', 'kuwa', 'fa', 'to',
     // Substantifs santé / vaccination
     'mai', 'rigakafi', 'lafiya', 'cibiya', 'cibiyar', 'rashin', 'ciki', 'asibiti',
     'likita', 'zazzabi', 'jariri', 'haihuwa', 'allurar', 'magani',

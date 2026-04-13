@@ -1,7 +1,15 @@
 {
   "permissions": {
     "allow": [
-      "Bash(wc -l \"c:/Users/ABOU/Desktop/e-sante/project-node-chatbot\"/**/*.jsx)"
+      "Bash(wc -l \"c:/Users/ABOU/Desktop/e-sante/project-node-chatbot\"/**/*.jsx)",
+      "Bash(2>&1)",
+      "Bash(node --check db/routes/contacts.js)",
+      "Bash(node --check db/routes/conversations.js)",
+      "Bash(node --check db/routes/metadata.js)",
+      "Bash(node --check db/routes/campagnes.js)",
+      "Bash(node --check db/models/Campagne.js)",
+      "Bash(node --check db/models/MobilisationSociale.js)",
+      "Bash(node --check db/routes/MobilisationSociale.js)"
     ]
   }
 }

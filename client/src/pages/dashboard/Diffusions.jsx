@@ -339,7 +339,7 @@ export default function Diffusions() {
                                     ))}
                                 </datalist>
                                 <small style={{ color:'#94a3b8', fontSize:'0.78rem' }}>
-                                    Doit correspondre exactement au nom approuve dans Meta Business Manager.
+                                    Doit correspondre exactement au nom approuvé dans Meta Business Manager.
                                 </small>
                             </div>
 

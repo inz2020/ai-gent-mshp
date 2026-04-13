@@ -278,7 +278,7 @@ router.post('/vaccins/import', async (req, res) => {
 // ═══════════════════════════════════════════════════════
 // CALENDRIER VACCINAL
 // ═══════════════════════════════════════════════════════
-
+//Get route calendrier vaccinal
 router.get('/calendrier', async (req, res) => {
     try {
         const entrees = await CalendrierVaccinal.find()
@@ -288,6 +288,7 @@ router.get('/calendrier', async (req, res) => {
     } catch (e) { err(res, 500, e.message); }
 });
 
+//Ajouter une ligne de calendrier vaccinal
 router.post('/calendrier', async (req, res) => {
     try {
         const { vaccinId, ageLabel, ageEnSemaines, cible, notes } = req.body;
@@ -299,6 +300,7 @@ router.post('/calendrier', async (req, res) => {
     } catch (e) { err(res, 500, e.message); }
 });
 
+//Modifier une ligne de calendrier vaccinal
 router.put('/calendrier/:id', async (req, res) => {
     try {
         const { vaccinId, ageLabel, ageEnSemaines, cible, notes } = req.body;
@@ -313,6 +315,7 @@ router.put('/calendrier/:id', async (req, res) => {
     } catch (e) { err(res, 500, e.message); }
 });
 
+//Supprimer une ligne de calendrier vaccinal
 router.delete('/calendrier/:id', async (req, res) => {
     try {
         const entree = await CalendrierVaccinal.findByIdAndDelete(req.params.id);
@@ -321,6 +324,7 @@ router.delete('/calendrier/:id', async (req, res) => {
     } catch (e) { err(res, 500, e.message); }
 });
 
+// importer le fichier excel calendrier vaccinal
 router.post('/calendrier/import', async (req, res) => {
     try {
         const rows = req.body;

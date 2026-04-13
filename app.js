@@ -10,6 +10,8 @@ import usersRouter from './db/routes/users.js';
 import contactsRouter from './db/routes/contacts.js';
 import conversationsRouter from './db/routes/conversations.js';
 import broadcastsRouter from './db/routes/broadcasts.js';
+import campagnesRouter from './db/routes/campagnes.js';
+import mobilisationSocialeRouter from './db/routes/MobilisationSociale.js';
 import metadataRouter from './db/routes/metadata.js';
 import { reloadHausaVocab } from './lib/hausaVocab.js';
 import { preloadErrorAudios } from './lib/errorAudio.js';
@@ -27,6 +29,8 @@ app.use('/api/users', usersRouter);
 app.use('/api/contacts', contactsRouter);
 app.use('/api/conversations', conversationsRouter);
 app.use('/api/broadcasts', broadcastsRouter);
+app.use('/api/campagnes', campagnesRouter);
+app.use('/api/mobilisationsociales', mobilisationSocialeRouter);
 app.use('/api/metadata', metadataRouter);
 app.use('/webhook', webhookRouter);
 

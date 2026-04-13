@@ -70,7 +70,7 @@ export default function Login() {
 
           <form onSubmit={handleSubmit} className="login-form">
             <div className="form-group">
-              <label htmlFor="login">Adresse e-mail</label>
+              <label htmlFor="login">Identifiant</label>
               <input
                 id="login"
                 name="login"

@@ -6,7 +6,8 @@ const ConversationSchema = new mongoose.Schema({
     statut:            { type: String, enum: ['ouvert', 'ferme', 'escalade_humain'], default: 'ouvert' },
 
     nbMessages:        { type: Number, default: 0 },
-    derniereMiseAJour: { type: Date, default: Date.now }
+    derniereMiseAJour: { type: Date, default: Date.now },
+    archivee:          { type: Boolean, default: false },
 }, { timestamps: true });
 
 export default mongoose.model('Conversation', ConversationSchema);
