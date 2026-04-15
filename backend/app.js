@@ -17,7 +17,7 @@ import { reloadHausaVocab } from './lib/hausaVocab.js';
 import { preloadErrorAudios } from './lib/errorAudio.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const clientDist = path.join(__dirname, 'client', 'dist');
+const clientDist = path.join(__dirname, '..', 'frontend', 'dist');
 
 const app = express();
 app.use(cors({ origin: process.env.FRONTEND_URL || '*' }));

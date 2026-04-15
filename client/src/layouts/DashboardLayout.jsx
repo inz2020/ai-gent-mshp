@@ -14,7 +14,7 @@ const NAV_ITEMS = [
             { to: '/dashboard/utilisateurs/roles',  label: 'Rôles & permissions' },
         ]
     },
-    { to: '/dashboard/diffusions',  icon: 'bi bi-megaphone-fill',  label: 'Diffusions' },
+    // { to: '/dashboard/diffusions',  icon: 'bi bi-megaphone-fill',  label: 'Diffusions' },
     { to: '/dashboard/campagnes',   icon: 'bi bi-broadcast',       label: 'Campagnes' },
     {
         key: 'metadonnees',

@@ -19,12 +19,12 @@ import { connectDB } from '../config/database.js';
 import HausaVocabulaire from '../models/HausaVocabulaire.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '..', '..');
+const FILES_DIR = path.resolve(__dirname, '..', '..', '..', 'files');
 
 // ─── Lecture des deux fichiers Excel ────────────────────────────────────────
 
 function loadExcel(filename) {
-    const wb = XLSX.readFile(path.join(ROOT, filename));
+    const wb = XLSX.readFile(path.join(FILES_DIR, filename));
     return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
 }
 

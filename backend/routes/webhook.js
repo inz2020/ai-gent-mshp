@@ -996,18 +996,66 @@ function haversine(lat1, lng1, lat2, lng2) {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+/**
+ * Détecte le district et la région à partir de coordonnées GPS.
+ * Cherche parmi TOUTES les structures (actives ou non) la plus proche
+ * et en déduit la zone géographique du contact.
+ *
+ * @returns {{ district: ObjectId, region: ObjectId|null, districtNom: string, regionNom: string|null } | null}
+ */
+async function detectDistrictFromGPS(lat, lng) {
+    const all = await Structure.find()
+        .populate({ path: 'districtId', populate: { path: 'regionId' } })
+        .lean();
+
+    if (!all.length) return null;
+
+    const sorted = all
+        .filter(s => s.coordonnees?.latitude && s.coordonnees?.longitude)
+        .map(s => ({ ...s, distance: haversine(lat, lng, s.coordonnees.latitude, s.coordonnees.longitude) }))
+        .sort((a, b) => a.distance - b.distance);
+
+    const closest = sorted[0];
+    if (!closest?.districtId?._id) return null;
+
+    return {
+        district:    closest.districtId._id,
+        region:      closest.districtId.regionId?._id ?? null,
+        districtNom: closest.districtId.nom,
+        regionNom:   closest.districtId.regionId?.nom ?? null,
+    };
+}
+
 async function processLocation(lat, lng, userPhone, phoneNumId = null) {
     console.log(`[LOC] Position reçue de ${userPhone}: lat=${lat}, lng=${lng}`);
 
-    // Une seule requête DB — vérifie aussi le blocage
     const contactLoc = await getOrCreateContact(userPhone, phoneNumId);
     if (contactLoc.bloque) {
         console.log(`[BLOCKED] ${userPhone} — localisation ignorée (contact bloqué)`);
         return;
     }
-    const convLoc    = await getOrCreateConversation(contactLoc._id);
+
+    // ── Mise à jour contact : position + district + région (tous les cas) ──
+    try {
+        const zone = await detectDistrictFromGPS(lat, lng);
+        contactLoc.dernierePosition = { latitude: lat, longitude: lng, updatedAt: new Date() };
+        if (zone) {
+            contactLoc.district = zone.district;
+            if (zone.region) contactLoc.region = zone.region;
+            console.log(`[LOC] Contact mis à jour → District: ${zone.districtNom}, Région: ${zone.regionNom ?? '—'}`);
+        } else {
+            console.warn('[LOC] Aucune structure en base — district/région non détectés');
+        }
+        await contactLoc.save();
+    } catch (geoErr) {
+        console.error('[LOC] Erreur détection zone géographique:', geoErr.message);
+    }
+
+    const convLoc = await getOrCreateConversation(contactLoc._id);
+
+    // ── Mode humain : stocker le message, pas de réponse IA ──
     if (convLoc.statut === 'escalade_humain') {
-        console.log(`[LOC] Mode humain — position stockée sans réponse IA`);
+        console.log(`[LOC] Mode humain — position et zone stockées`);
         await Message.create({
             conversationId: convLoc._id,
             emetteurType:   'humain',
@@ -1016,39 +1064,44 @@ async function processLocation(lat, lng, userPhone, phoneNumId = null) {
             coordonnees:    { latitude: lat, longitude: lng },
             langue:         'unknown',
         });
-        contactLoc.dernierePosition = { latitude: lat, longitude: lng, updatedAt: new Date() };
-        await contactLoc.save();
         convLoc.nbMessages += 1;
         convLoc.derniereMiseAJour = new Date();
         await convLoc.save();
         return;
     }
 
-    // Récupère toutes les structures actives
+    // ── Recherche des structures actives les plus proches ──
     const structures = await Structure.find({ statutVaccination: true })
-        .populate({ path: 'districtId', populate: { path: 'regionId' } });
+        .populate({ path: 'districtId', populate: { path: 'regionId' } })
+        .lean();
+
+    const contactLang = contactLoc.langue === 'ha' ? 'ha' : 'fr';
 
     if (!structures.length) {
-        const noStructLang = contactLoc.langue === 'ha' ? 'ha' : 'fr';
-        const noStructText = noStructLang === 'ha'
+        const noStructText = contactLang === 'ha'
             ? 'Ba a sami cibiyar rigakafi a yankin ka ba. Ka tuntubi ma\'aikatar lafiya ta gari.'
             : 'Aucune structure sanitaire trouvée près de vous. Contactez votre centre de santé local.';
-        await sendAudioReply(userPhone, noStructText, noStructLang);
+        await sendAudioReply(userPhone, noStructText, contactLang);
+        await Message.create({
+            conversationId: convLoc._id,
+            emetteurType: 'humain',
+            typeContenu: 'location',
+            texteBrut: `[LOCALISATION] lat:${lat}, lng:${lng}`,
+            coordonnees: { latitude: lat, longitude: lng },
+            langue: 'unknown',
+        });
+        convLoc.nbMessages += 1;
+        convLoc.derniereMiseAJour = new Date();
+        await convLoc.save();
         return;
     }
 
-    // Calcule la distance pour chaque structure et trie par proximité
-    const withDistance = structures.map(s => ({
-        ...s.toObject(),
-        distance: haversine(lat, lng, s.coordonnees.latitude, s.coordonnees.longitude)
-    }));
-    withDistance.sort((a, b) => a.distance - b.distance);
-
-    // Retourne les 3 plus proches
-    const nearest = withDistance.slice(0, 3);
-
-    // Détecte la langue du contact pour adapter la réponse audio
-    const contactLang = contactLoc.langue === 'ha' ? 'ha' : 'fr';
+    // Tri par distance — 3 plus proches
+    const nearest = structures
+        .filter(s => s.coordonnees?.latitude && s.coordonnees?.longitude)
+        .map(s => ({ ...s, distance: haversine(lat, lng, s.coordonnees.latitude, s.coordonnees.longitude) }))
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, 3);
 
     const audioLines = nearest.map((s, i) => {
         const km = s.distance.toFixed(1);
@@ -1061,44 +1114,50 @@ async function processLocation(lat, lng, userPhone, phoneNumId = null) {
         ? `Cibiyoyin rigakafi mafi kusa da kai su ne: ${audioLines.join(' ')}`
         : `Les centres de vaccination les plus proches sont : ${audioLines.join(' ')}`;
 
+    // Texte structuré avec emoji pour la lisibilité
+    const textLines = nearest.map((s, i) => {
+        const km = s.distance.toFixed(1);
+        return contactLang === 'ha'
+            ? `${i + 1}. ${s.nom} — ${km} km`
+            : `${i + 1}. ${s.nom} — ${km} km`;
+    });
+
+    const textMessage = contactLang === 'ha'
+        ? `📍 *Cibiyoyin rigakafi mafi kusa:*\n\n${textLines.join('\n')}`
+        : `📍 *Centres de vaccination les plus proches :*\n\n${textLines.join('\n')}`;
+
     await sendAudioReply(userPhone, audioText, contactLang);
-    console.log(`[LOC] ${nearest.length} structures envoyées (audio ${contactLang}) à ${userPhone}`);
+    await sendWhatsAppText(userPhone, textMessage);
+    console.log(`[LOC] ${nearest.length} structures envoyées (audio + texte, ${contactLang}) à ${userPhone}`);
 
-    // Persistance — réutilise contactLoc/convLoc déjà récupérés plus haut
+    // ── Persistance des messages ──
     try {
-        contactLoc.dernierePosition = { latitude: lat, longitude: lng, updatedAt: new Date() };
-
-        // Détection région/district depuis la structure la plus proche
-        const closest = nearest[0];
-        if (closest?.districtId?._id) {
-            contactLoc.district = closest.districtId._id;
-            if (closest.districtId.regionId?._id) {
-                contactLoc.region = closest.districtId.regionId._id;
-                console.log(`[LOC] Région/District assignés: ${closest.districtId.regionId.nom} / ${closest.districtId.nom}`);
-            }
-        }
-
-        await contactLoc.save();
-
         await Message.create({
             conversationId: convLoc._id,
             emetteurType: 'humain',
             typeContenu: 'location',
             texteBrut: `[LOCALISATION] lat:${lat}, lng:${lng}`,
             coordonnees: { latitude: lat, longitude: lng },
-            langue: 'unknown'
+            langue: 'unknown',
         });
         await Message.create({
             conversationId: convLoc._id,
             emetteurType: 'agent_ia',
             typeContenu: 'audio',
             texteBrut: audioText,
-            langue: contactLang
+            langue: contactLang,
         });
-        convLoc.nbMessages += 2;
+        await Message.create({
+            conversationId: convLoc._id,
+            emetteurType: 'agent_ia',
+            typeContenu: 'text',
+            texteBrut: textMessage,
+            langue: contactLang,
+        });
+        convLoc.nbMessages += 3;
         convLoc.derniereMiseAJour = new Date();
         await convLoc.save();
-        console.log(`[DB] Position sauvegardée pour ${userPhone}: lat=${lat}, lng=${lng}`);
+        console.log(`[DB] Position + zone sauvegardées pour ${userPhone}`);
     } catch (dbErr) {
         console.error('[DB] Erreur persistance localisation:', dbErr.message);
     }

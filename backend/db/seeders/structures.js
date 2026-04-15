@@ -39,6 +39,21 @@ const DATA = [
     { district: 'Illéla',   nom: 'CSI Illéla',             type: 'CSI', lat: 14.4696, lng: 4.9987, contact: '+22720640005' },
     { district: 'Keïta',    nom: 'CSI Keïta',              type: 'CSI', lat: 14.7603, lng: 5.7701, contact: '+22720640006' },
 
+    // ── TAHOUA Département ───────────────────────────────────────────────────────────────
+    
+  { "district": "Tahoua Dept", "nom": "Takanamat", "type": "CENTRE DE SANTE INTEGRE", "lat": 4.77715, "lng": 15.137066666666666, "contact": "+22790000001" },
+  { "district": "Tahoua Dept", "nom": "Bilingué", "type": "CENTRE DE SANTE INTEGRE", "lat": 4.163866666666667, "lng": 14.904583333333333, "contact": "+22790000002" },
+  { "district": "Tahoua Dept", "nom": "Guidan Méli", "type": "CENTRE DE SANTE INTEGRE", "lat": 4.5734, "lng": 14.9966, "contact": "+22790000003" },
+  { "district": "Tahoua Dept", "nom": "Tébaram", "type": "CENTRE DE SANTE INTEGRE", "lat": 4.453983333333333, "lng": 14.835833333333333, "contact": "+22790000004" },
+  { "district": "Tahoua Dept", "nom": "Toudoun Taramna", "type": "CENTRE DE SANTE INTEGRE", "lat": null, "lng": null, "contact": "+22790000005" },
+  { "district": "Tahoua Dept", "nom": "Amaloul Guidiss", "type": "CENTRE DE SANTE INTEGRE", "lat": 4.645383333333333, "lng": 15.253633333333333, "contact": "+22790000006" },
+  { "district": "Tahoua Dept", "nom": "Adoua", "type": "CASE DE SANTE", "lat": 4.565333333333333, "lng": 14.939633333333333, "contact": "+22790000007" },
+  { "district": "Tahoua Dept", "nom": "Kouka Kammé", "type": "CASE DE SANTE", "lat": 4.365766666666667, "lng": 14.749783333333333, "contact": "+22790000008" },
+  { "district": "Tahoua Dept", "nom": "Maissoungoumi", "type": "CASE DE SANTE", "lat": 4.243566666666667, "lng": 14.7801, "contact": "+22790000009" },
+  { "district": "Tahoua Dept", "nom": "Innélou", "type": "CASE DE SANTE", "lat": 4.3418, "lng": 15.057266666666667, "contact": "+22790000010" },
+
+
+
     // ── ZINDER ───────────────────────────────────────────────────────────────
     { district: 'Zinder',   nom: 'CSI Zinder Centre',      type: 'CSI', lat: 13.8069, lng: 8.9881, contact: '+22720510001' },
     { district: 'Zinder',   nom: 'Hôpital District Zinder',type: 'Hôpital District', lat: 13.8006, lng: 8.9900, contact: '+22720510010' },
