@@ -35,9 +35,9 @@ export default function Footer() {
 
         <div className="footer-contact">
           <h4>Contact</h4>
-          <p>📞 +227 XX XX XX XX</p>
-          <p>📧 pev@sante.gouv.ne</p>
-          <p>📍 Niamey, Niger</p>
+          <p><i className="bi bi-telephone-fill"></i> +227 XX XX XX XX</p>
+          <p><i className="bi bi-envelope-fill"></i> pev@sante.gouv.ne</p>
+          <p><i className="bi bi-geo-alt-fill"></i> Niamey, Niger</p>
         </div>
       </div>
 

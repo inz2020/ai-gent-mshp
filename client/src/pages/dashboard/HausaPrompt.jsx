@@ -156,7 +156,7 @@ export default function HausaPrompt() {
                 française pour faciliter la maintenance.
             </p>
 
-            {error && <div className="dt-error">⚠️ {error}</div>}
+            {error && <div className="dt-error"><i className="bi bi-exclamation-triangle-fill"></i> {error}</div>}
             {toast && <div className="dt-toast">{toast}</div>}
 
             {/* Onglets */}
@@ -184,7 +184,7 @@ export default function HausaPrompt() {
                     onChange={e => setSearch(e.target.value)}
                 />
                 <button className="dt-btn dt-btn-primary" onClick={openAdd}>
-                    + Ajouter
+                    <i className="bi bi-plus-lg"></i> Ajouter
                 </button>
                 <label className="dt-btn dt-btn-import">
                     Import Excel
@@ -264,10 +264,10 @@ export default function HausaPrompt() {
                     <div className="modal" onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2>Ajouter un {tab} Hausa</h2>
-                            <button className="modal-close" onClick={close}>X</button>
+                            <button className="modal-close" onClick={close}><i className="bi bi-x-lg"></i></button>
                         </div>
                         <form onSubmit={handleSave} className="modal-form">
-                            {formErr && <div className="modal-error">⚠️ {formErr}</div>}
+                            {formErr && <div className="modal-error"><i className="bi bi-exclamation-triangle-fill"></i> {formErr}</div>}
                             <div className="form-group">
                                 <label>Valeur Hausa</label>
                                 <input
@@ -311,10 +311,10 @@ export default function HausaPrompt() {
                     <div className="modal" onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2>Modifier le {selected?.type} Hausa</h2>
-                            <button className="modal-close" onClick={close}>X</button>
+                            <button className="modal-close" onClick={close}><i className="bi bi-x-lg"></i></button>
                         </div>
                         <form onSubmit={handleEdit} className="modal-form">
-                            {formErr && <div className="modal-error">⚠️ {formErr}</div>}
+                            {formErr && <div className="modal-error"><i className="bi bi-exclamation-triangle-fill"></i> {formErr}</div>}
                             <div className="form-group">
                                 <label>Valeur Hausa</label>
                                 <input
@@ -358,10 +358,10 @@ export default function HausaPrompt() {
                     <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2>Supprimer</h2>
-                            <button className="modal-close" onClick={close}>X</button>
+                            <button className="modal-close" onClick={close}><i className="bi bi-x-lg"></i></button>
                         </div>
                         <div className="modal-body">
-                            {formErr && <div className="modal-error">⚠️ {formErr}</div>}
+                            {formErr && <div className="modal-error"><i className="bi bi-exclamation-triangle-fill"></i> {formErr}</div>}
                             <p>
                                 Supprimer le {tab} <strong>"{selected?.valeur}"</strong>
                                 {selected?.traduction_fr ? ` (${selected.traduction_fr})` : ''} ?

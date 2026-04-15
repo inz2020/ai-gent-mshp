@@ -326,7 +326,7 @@ export default function Contacts() {
             <h1 className="dash-page-title">Contacts</h1>
             <p className="dash-page-sub">Liste des numéros ayant contacté le chatbot Hawa.</p>
 
-            {error   && <div className="dt-error">&#9888; {error}</div>}
+            {error   && <div className="dt-error"><i className="bi bi-exclamation-triangle-fill"></i> {error}</div>}
             {success && <div className="dt-success">&#10003; {success}</div>}
 
             {/* Input caché pour import */}
@@ -342,21 +342,21 @@ export default function Contacts() {
                 <input className="dt-search"
                     placeholder="Rechercher par numero, nom ou region..."
                     value={search} onChange={e => setSearch(e.target.value)} />
-                <button className="dt-btn dt-btn-primary" onClick={openModal}>+ Nouveau contact</button>
+                <button className="dt-btn dt-btn-primary" onClick={openModal}><i className="bi bi-plus-lg"></i> Nouveau contact</button>
                 <button
                     className="dt-btn dt-btn-import"
                     onClick={() => importInputRef.current?.click()}
                     disabled={importing}
                     title="Importer des contacts depuis un fichier Excel"
                 >
-                    {importing ? '⏳ Import...' : '⬆ Importer Excel'}
+                    {importing ? <><i className="bi bi-hourglass-split"></i> Import...</> : <><i className="bi bi-upload"></i> Importer Excel</>}
                 </button>
                 <button className="dt-btn dt-btn-template" onClick={downloadTemplate} title="Telecharger le modele Excel">
-                    ⬇ Modele
+                    <i className="bi bi-download"></i> Modele
                 </button>
-                <button className="dt-btn" onClick={fetchContacts}>&#8635; Actualiser</button>
+                <button className="dt-btn" onClick={fetchContacts}><i className="bi bi-arrow-clockwise"></i> Actualiser</button>
                 <button className="dt-btn dt-btn-export" onClick={exportExcel} disabled={filtered.length === 0}>
-                    &#11015; Exporter ({filtered.length})
+                    <i className="bi bi-download"></i> Exporter ({filtered.length})
                 </button>
             </div>
 
@@ -395,7 +395,7 @@ export default function Contacts() {
                                 <td>{new Date(c.dateInscription).toLocaleDateString('fr-FR')}</td>
                                                 <td style={{ display: 'flex', gap: 6 }}>
                                     <button className="dt-btn dt-btn-edit" onClick={() => openDetail(c)}>Voir</button>
-                                    <button className="dt-btn dt-btn-primary" onClick={() => openEditModal(c)}>✏️ Modifier</button>
+                                    <button className="dt-btn dt-btn-primary" onClick={() => openEditModal(c)}><i className="bi bi-pencil-fill"></i> Modifier</button>
                                     <button
                                         className="dt-btn dt-btn-danger"
                                         onClick={() => setConfirmDelete(c)}
@@ -421,10 +421,10 @@ export default function Contacts() {
                     <div className="modal" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2>Nouveau contact</h2>
-                            <button className="modal-close" onClick={() => setModal(false)}>&#10005;</button>
+                            <button className="modal-close" onClick={() => setModal(false)}><i className="bi bi-x-lg"></i></button>
                         </div>
                         <form onSubmit={handleCreate} className="modal-form">
-                            {formError && <div className="modal-error">&#9888; {formError}</div>}
+                            {formError && <div className="modal-error"><i className="bi bi-exclamation-triangle-fill"></i> {formError}</div>}
 
                             {/* Nom */}
                             <div className="form-group">
@@ -516,10 +516,10 @@ export default function Contacts() {
                     <div className="modal" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2>Modifier le contact</h2>
-                            <button className="modal-close" onClick={() => setEditModal(null)}>&#10005;</button>
+                            <button className="modal-close" onClick={() => setEditModal(null)}><i className="bi bi-x-lg"></i></button>
                         </div>
                         <form onSubmit={handleUpdate} className="modal-form">
-                            {editError && <div className="modal-error">&#9888; {editError}</div>}
+                            {editError && <div className="modal-error"><i className="bi bi-exclamation-triangle-fill"></i> {editError}</div>}
 
                             <p style={{ fontSize: '0.82rem', color: '#6b7280', marginBottom: 12 }}>
                                 +{editModal.whatsappId}
@@ -560,7 +560,7 @@ export default function Contacts() {
                     <div className="modal" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2>Résultat de l'import</h2>
-                            <button className="modal-close" onClick={() => setImportResult(null)}>✕</button>
+                            <button className="modal-close" onClick={() => setImportResult(null)}><i className="bi bi-x-lg"></i></button>
                         </div>
                         <div className="modal-body" style={{ padding: '20px 24px' }}>
                             <div className="import-stats">
@@ -576,7 +576,7 @@ export default function Contacts() {
 
                             {importResult.erreurs?.length > 0 && (
                                 <div className="import-errors">
-                                    <p className="import-errors-title">⚠ Détails des erreurs :</p>
+                                    <p className="import-errors-title"><i className="bi bi-exclamation-triangle-fill"></i> Détails des erreurs :</p>
                                     <ul className="import-errors-list">
                                         {importResult.erreurs.map((e, i) => (
                                             <li key={i}>{e}</li>
@@ -604,7 +604,7 @@ export default function Contacts() {
                     <div className="modal" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2>Confirmer la suppression</h2>
-                            <button className="modal-close" onClick={() => setConfirmDelete(null)}>&#10005;</button>
+                            <button className="modal-close" onClick={() => setConfirmDelete(null)}><i className="bi bi-x-lg"></i></button>
                         </div>
                         <div className="modal-body" style={{ padding: '20px 24px' }}>
                             <p>Voulez-vous vraiment supprimer le contact <strong>+{confirmDelete.whatsappId}</strong>{confirmDelete.nom ? ` (${confirmDelete.nom})` : ''} ?</p>
@@ -630,7 +630,7 @@ export default function Contacts() {
                     <div className="modal" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2>Contact — +{selected.whatsappId}</h2>
-                            <button className="modal-close" onClick={() => { setSelected(null); setConvs([]); }}>&#10005;</button>
+                            <button className="modal-close" onClick={() => { setSelected(null); setConvs([]); }}><i className="bi bi-x-lg"></i></button>
                         </div>
                         <div className="modal-body">
                             <div className="detail-grid">
@@ -646,7 +646,7 @@ export default function Contacts() {
                                             <a href={`https://www.openstreetmap.org/?mlat=${selected.dernierePosition.latitude}&mlon=${selected.dernierePosition.longitude}&zoom=14`}
                                                 target="_blank" rel="noreferrer"
                                                 style={{ color:'#0a7c4e', fontFamily:'monospace', fontSize:'0.85rem' }}>
-                                                &#128205; {selected.dernierePosition.latitude.toFixed(4)}, {selected.dernierePosition.longitude.toFixed(4)}
+                                                <i className="bi bi-geo-alt-fill"></i> {selected.dernierePosition.latitude.toFixed(4)}, {selected.dernierePosition.longitude.toFixed(4)}
                                                 {selected.dernierePosition.updatedAt && (
                                                     <span style={{ color:'#94a3b8', marginLeft:6, fontFamily:'inherit' }}>
                                                         ({new Date(selected.dernierePosition.updatedAt).toLocaleDateString('fr-FR')})

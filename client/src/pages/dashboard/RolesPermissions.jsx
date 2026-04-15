@@ -45,14 +45,14 @@ const ROLES = [
 
 // Toutes les permissions existantes
 const ALL_PERMISSIONS = [
-    { id: 'dashboard',     label: 'Voir le dashboard',                icon: '🏠' },
-    { id: 'discussions',   label: 'Voir les discussions',             icon: '💬' },
-    { id: 'contacts',      label: 'Voir les contacts',                icon: '📋' },
-    { id: 'users_view',    label: 'Voir les utilisateurs',            icon: '👁️' },
-    { id: 'users_manage',  label: 'Gérer les utilisateurs',           icon: '👥' },
-    { id: 'roles_manage',  label: 'Modifier les rôles et permissions',icon: '🔑' },
-    { id: 'stats',         label: 'Accéder aux statistiques',         icon: '📊' },
-    { id: 'settings',      label: 'Configurer les paramètres',        icon: '⚙️' },
+    { id: 'dashboard',     label: 'Voir le dashboard',                icon: 'bi bi-house-fill' },
+    { id: 'discussions',   label: 'Voir les discussions',             icon: 'bi bi-chat-dots-fill' },
+    { id: 'contacts',      label: 'Voir les contacts',                icon: 'bi bi-clipboard-fill' },
+    { id: 'users_view',    label: 'Voir les utilisateurs',            icon: 'bi bi-eye-fill' },
+    { id: 'users_manage',  label: 'Gérer les utilisateurs',           icon: 'bi bi-people-fill' },
+    { id: 'roles_manage',  label: 'Modifier les rôles et permissions',icon: 'bi bi-key-fill' },
+    { id: 'stats',         label: 'Accéder aux statistiques',         icon: 'bi bi-bar-chart-fill' },
+    { id: 'settings',      label: 'Configurer les paramètres',        icon: 'bi bi-gear-fill' },
 ];
 
 const INITIAL_MATRIX = {
@@ -124,7 +124,7 @@ export default function RolesPermissions() {
                             {ALL_PERMISSIONS.map(perm => (
                                 <tr key={perm.id}>
                                     <td className="perm-label">
-                                        <span>{perm.icon}</span> {perm.label}
+                                        <i className={perm.icon}></i> {perm.label}
                                     </td>
                                     {ROLES.map(role => {
                                         const checked = matrix[role.id].has(perm.id);
@@ -150,9 +150,9 @@ export default function RolesPermissions() {
                 </div>
 
                 <div className="perm-footer">
-                    <p className="perm-note">🔒 Les permissions de l'administrateur sont fixes et non modifiables.</p>
+                    <p className="perm-note"><i className="bi bi-lock-fill"></i> Les permissions de l'administrateur sont fixes et non modifiables.</p>
                     <button className="dt-btn dt-btn-primary" onClick={handleSave}>
-                        {saved ? '✓ Enregistré' : 'Enregistrer les modifications'}
+                        {saved ? <><i className="bi bi-check-lg"></i> Enregistré</> : 'Enregistrer les modifications'}
                     </button>
                 </div>
             </div>

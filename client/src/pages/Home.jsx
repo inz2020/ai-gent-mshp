@@ -3,22 +3,22 @@ import Banner from '../components/Banner.jsx';
 
 const CARDS = [
   {
-    icon: '💉',
+    icon: 'bi bi-syringe',
     title: 'Vaccination gratuite',
     desc: 'Tous les vaccins du PEV sont entièrement gratuits dans les centres de santé publics du Niger.'
   },
   {
-    icon: '🤖',
+    icon: 'bi bi-robot',
     title: 'Assistante IA 24h/24',
     desc: 'Hawa répond à vos questions en français et en Hausa via WhatsApp, à toute heure.'
   },
   {
-    icon: '📅',
+    icon: 'bi bi-calendar-fill',
     title: 'Calendrier vaccinal',
     desc: 'Suivez le calendrier officiel du PEV Niger, de la naissance jusqu\'à 23 mois.'
   },
   {
-    icon: '📍',
+    icon: 'bi bi-geo-alt-fill',
     title: 'Centres de santé',
     desc: 'Trouvez le centre de santé le plus proche de chez vous pour vacciner votre enfant.'
   }
@@ -38,7 +38,7 @@ export default function Home() {
           <div className="features-grid">
             {CARDS.map((card) => (
               <div key={card.title} className="feature-card">
-                <span className="feature-icon">{card.icon}</span>
+                <i className={`feature-icon ${card.icon}`}></i>
                 <h3>{card.title}</h3>
                 <p>{card.desc}</p>
               </div>

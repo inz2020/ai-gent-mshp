@@ -11,7 +11,7 @@ export default function ErrorPage({ message }) {
   return (
     <div style={styles.wrapper}>
       <div style={styles.card}>
-        <span style={styles.icon}>⚠</span>
+        <i className="bi bi-exclamation-triangle-fill" style={styles.icon}></i>
         <h1 style={styles.title}>Une erreur est survenue</h1>
         <p style={styles.message}>{errorMessage}</p>
         <div style={styles.actions}>

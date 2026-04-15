@@ -100,18 +100,18 @@ export default function Districts() {
             <h1 className="dash-page-title">Districts</h1>
             <p className="dash-page-sub">Gestion des districts sanitaires.</p>
 
-            {error && <div className="dt-error">⚠️ {error}</div>}
+            {error && <div className="dt-error"><i className="bi bi-exclamation-triangle-fill"></i> {error}</div>}
             {toast && <div className="dt-toast">{toast}</div>}
 
             <div className="dt-toolbar">
                 <input className="dt-search" placeholder="Rechercher par nom ou région..." value={search} onChange={e => setSearch(e.target.value)} />
-                <button className="dt-btn dt-btn-primary" onClick={openCreate}>+ Ajouter</button>
+                <button className="dt-btn dt-btn-primary" onClick={openCreate}><i className="bi bi-plus-lg"></i> Ajouter</button>
                 <label className="dt-btn dt-btn-import">
-                    ⬆ Importer Excel
+                    <i className="bi bi-upload"></i> Importer Excel
                     <input type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleImport} />
                 </label>
                 <button className="dt-btn dt-btn-export" onClick={exportExcel} disabled={filtered.length === 0}>
-                    ⬇ Exporter ({filtered.length})
+                    <i className="bi bi-download"></i> Exporter ({filtered.length})
                 </button>
             </div>
 
@@ -131,8 +131,8 @@ export default function Districts() {
                                 <td><strong>{r.nom}</strong></td>
                                 <td><span className="dt-badge dt-badge-lang">{r.regionId?.nom ?? '—'}</span></td>
                                 <td className="dt-actions">
-                                    <button className="dt-btn dt-btn-edit" onClick={() => openEdit(r)}>✏️ Modifier</button>
-                                    <button className="dt-btn dt-btn-danger" onClick={() => openDelete(r)}>🗑️ Supprimer</button>
+                                    <button className="dt-btn dt-btn-edit" onClick={() => openEdit(r)}><i className="bi bi-pencil-fill"></i> Modifier</button>
+                                    <button className="dt-btn dt-btn-danger" onClick={() => openDelete(r)}><i className="bi bi-trash-fill"></i> Supprimer</button>
                                 </td>
                             </tr>
                         ))}
@@ -149,10 +149,10 @@ export default function Districts() {
                     <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2>{modal === 'create' ? 'Ajouter un district' : 'Modifier le district'}</h2>
-                            <button className="modal-close" onClick={close}>✕</button>
+                            <button className="modal-close" onClick={close}><i className="bi bi-x-lg"></i></button>
                         </div>
                         <form onSubmit={handleSave} className="modal-form">
-                            {formErr && <div className="modal-error">⚠️ {formErr}</div>}
+                            {formErr && <div className="modal-error"><i className="bi bi-exclamation-triangle-fill"></i> {formErr}</div>}
                             <div className="form-group">
                                 <label>Nom du district</label>
                                 <input name="nom" value={form.nom} onChange={handleChange} placeholder="ex: District de Madarounfa" required />
@@ -180,10 +180,10 @@ export default function Districts() {
                     <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2>Supprimer le district</h2>
-                            <button className="modal-close" onClick={close}>✕</button>
+                            <button className="modal-close" onClick={close}><i className="bi bi-x-lg"></i></button>
                         </div>
                         <div className="modal-body">
-                            {formErr && <div className="modal-error">⚠️ {formErr}</div>}
+                            {formErr && <div className="modal-error"><i className="bi bi-exclamation-triangle-fill"></i> {formErr}</div>}
                             <p>Supprimer <strong>{selected?.nom}</strong> ? Cette action est irréversible.</p>
                         </div>
                         <div className="modal-footer">

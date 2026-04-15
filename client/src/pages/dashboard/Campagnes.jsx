@@ -206,14 +206,14 @@ export default function Campagnes() {
             <h1 className="dash-page-title">Campagnes</h1>
             <p className="dash-page-sub">Planification et envoi de messages en masse aux contacts.</p>
 
-            {error   && <div className="dt-error">⚠ {error}</div>}
-            {success && <div className="dt-success">✓ {success}</div>}
+            {error   && <div className="dt-error"><i className="bi bi-exclamation-triangle-fill"></i> {error}</div>}
+            {success && <div className="dt-success"><i className="bi bi-check-lg"></i> {success}</div>}
 
             <div className="dt-toolbar">
                 <input className="dt-search" placeholder="Rechercher par nom, type ou produit..."
                     value={search} onChange={e => setSearch(e.target.value)} />
-                <button className="dt-btn dt-btn-primary" onClick={openCreate}>+ Nouvelle campagne</button>
-                <button className="dt-btn" onClick={fetchAll}>↻ Actualiser</button>
+                <button className="dt-btn dt-btn-primary" onClick={openCreate}><i className="bi bi-plus-lg"></i> Nouvelle campagne</button>
+                <button className="dt-btn" onClick={fetchAll}><i className="bi bi-arrow-clockwise"></i> Actualiser</button>
             </div>
 
             <div className="dt-wrapper">
@@ -242,7 +242,7 @@ export default function Campagnes() {
                                 <td><span className="dt-badge dt-badge-lang">{TYPES_CAMPAGNE.find(t => t.value === c.type)?.label ?? c.type}</span></td>
                                 <td>{c.produit || <span className="dt-muted">—</span>}</td>
                                 <td style={{ fontSize: '0.82rem' }}>
-                                    {new Date(c.dateDebut).toLocaleDateString('fr-FR')} →<br />
+                                    {new Date(c.dateDebut).toLocaleDateString('fr-FR')} <i className="bi bi-arrow-right"></i><br />
                                     {new Date(c.dateFin).toLocaleDateString('fr-FR')}
                                 </td>
                                 <td style={{ textAlign: 'center' }}>{c.districts?.length ?? 0}</td>
@@ -273,7 +273,7 @@ export default function Campagnes() {
                                     )}
                                     <button className="dt-btn dt-btn-danger"
                                         onClick={() => { setSelected(c); setFormError(''); setModal('delete'); }}
-                                        disabled={c.statut === 'en_cours'}>🗑️</button>
+                                        disabled={c.statut === 'en_cours'}><i className="bi bi-trash-fill"></i></button>
                                 </td>
                             </tr>
                         ))}
@@ -292,11 +292,11 @@ export default function Campagnes() {
                     <div className="modal" style={{ maxWidth: 680 }} onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2>{modal === 'create' ? 'Nouvelle campagne' : 'Modifier la campagne'}</h2>
-                            <button className="modal-close" onClick={closeModal}>✕</button>
+                            <button className="modal-close" onClick={closeModal}><i className="bi bi-x-lg"></i></button>
                         </div>
 
                         <form onSubmit={handleSubmit} className="modal-form">
-                            {formError && <div className="modal-error">⚠ {formError}</div>}
+                            {formError && <div className="modal-error"><i className="bi bi-exclamation-triangle-fill"></i> {formError}</div>}
 
                             {/* ── Infos générales ── */}
                             <div style={{ background: '#f8fafc', borderRadius: 8, padding: '14px 16px', marginBottom: 16 }}>
@@ -406,7 +406,7 @@ export default function Campagnes() {
                                                 <p style={{ color: '#94a3b8' }}>⏳ Upload en cours...</p>
                                             ) : form.messageMediaUrl ? (
                                                 <>
-                                                    <p style={{ color: '#16a34a', fontWeight: 600 }}>✓ Fichier chargé</p>
+                                                    <p style={{ color: '#16a34a', fontWeight: 600 }}><i className="bi bi-check-lg"></i> Fichier chargé</p>
                                                     <p style={{ fontSize: '0.82rem', color: '#475569' }}>{form.messageMediaNom}</p>
                                                     <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 4 }}>Cliquer pour remplacer</p>
                                                 </>
@@ -452,10 +452,10 @@ export default function Campagnes() {
                     <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2>Supprimer la campagne</h2>
-                            <button className="modal-close" onClick={closeModal}>✕</button>
+                            <button className="modal-close" onClick={closeModal}><i className="bi bi-x-lg"></i></button>
                         </div>
                         <div className="modal-body" style={{ padding: '20px 24px' }}>
-                            {formError && <div className="modal-error">⚠ {formError}</div>}
+                            {formError && <div className="modal-error"><i className="bi bi-exclamation-triangle-fill"></i> {formError}</div>}
                             <p>Voulez-vous supprimer <strong>{selected?.nom}</strong> ?</p>
                             <p style={{ color: '#dc2626', fontSize: '0.88rem', marginTop: 8 }}>Cette action est irréversible.</p>
                         </div>

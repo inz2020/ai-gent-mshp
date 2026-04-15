@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import { getConversationStats } from '../../api/index.js';
 
 const STAT_DEFS = [
-    { icon: '💬', label: 'Messages reçus',  key: 'total',    color: '#0a7c4e' },
-    { icon: '🎙️', label: 'Messages audio',  key: 'audio',    color: '#6366f1' },
-    { icon: '📝', label: 'Messages texte',  key: 'texte',    color: '#f59e0b' },
-    { icon: '👥', label: 'Contacts uniques', key: 'contacts', color: '#ec4899' },
+    { icon: 'bi bi-chat-dots-fill', label: 'Messages reçus',  key: 'total',    color: '#0a7c4e' },
+    { icon: 'bi bi-mic-fill',       label: 'Messages audio',  key: 'audio',    color: '#6366f1' },
+    { icon: 'bi bi-pencil-square',  label: 'Messages texte',  key: 'texte',    color: '#f59e0b' },
+    { icon: 'bi bi-people-fill',    label: 'Contacts uniques', key: 'contacts', color: '#ec4899' },
 ];
 
 export default function DashHome() {
@@ -25,7 +25,7 @@ export default function DashHome() {
             <div className="dash-stats-grid">
                 {STAT_DEFS.map(s => (
                     <div key={s.label} className="stat-card" style={{ borderTopColor: s.color }}>
-                        <span className="stat-icon">{s.icon}</span>
+                        <i className={`stat-icon ${s.icon}`}></i>
                         <div>
                             <p className="stat-value">
                                 {stats === null ? '…' : (stats[s.key] ?? 0).toLocaleString()}

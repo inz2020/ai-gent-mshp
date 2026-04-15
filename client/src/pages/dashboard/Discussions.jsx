@@ -275,7 +275,7 @@ export default function Discussions() {
             <h1 className="dash-page-title">Discussions</h1>
             <p className="dash-page-sub">Historique des conversations WhatsApp avec Hawa.</p>
 
-            {error && <div className="dt-error">⚠️ {error}</div>}
+            {error && <div className="dt-error"><i className="bi bi-exclamation-triangle-fill"></i> {error}</div>}
 
             <div className="dt-toolbar">
                 <input
@@ -291,7 +291,7 @@ export default function Discussions() {
                             Live · {lastSync.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                         </span>
                     )}
-                    <button className="dt-btn" onClick={fetchConvs}>↻ Actualiser</button>
+                    <button className="dt-btn" onClick={fetchConvs}><i className="bi bi-arrow-clockwise"></i> Actualiser</button>
                 </div>
             </div>
 
@@ -339,7 +339,7 @@ export default function Discussions() {
                                         Ouvrir
                                     </button>
                                     <button className="dt-btn dt-btn-danger" onClick={() => setDeleteModal(c)} title="Supprimer cette conversation">
-                                        🗑️ Supprimer
+                                        <i className="bi bi-trash-fill"></i> Supprimer
                                     </button>
                                     <button
                                         className="dt-btn"
@@ -347,7 +347,7 @@ export default function Discussions() {
                                         title="Voir la dernière position GPS"
                                         style={{ fontSize: '0.8rem' }}
                                     >
-                                        📍 GPS
+                                        <i className="bi bi-geo-alt-fill"></i> GPS
                                     </button>
                                     {c.contactId?.source === 'webhook' && !savedIds.has(c.contactId?._id) && (
                                         <button className="dt-btn dt-btn-primary" onClick={() => openSaveModal(c)} title="Enregistrer dans les contacts">
@@ -355,7 +355,7 @@ export default function Discussions() {
                                         </button>
                                     )}
                                     {(c.contactId?.source === 'dashboard' || savedIds.has(c.contactId?._id)) && (
-                                        <span className="dt-badge dt-badge-actif" style={{ fontSize: '0.7rem' }}>✓ Enregistré</span>
+                                        <span className="dt-badge dt-badge-actif" style={{ fontSize: '0.7rem' }}><i className="bi bi-check-lg"></i> Enregistré</span>
                                     )}
                                 </td>
                             </tr>
@@ -498,9 +498,7 @@ export default function Discussions() {
                         {/* ── Header style WhatsApp ── */}
                         <div className="wa-header">
                             <button className="wa-back" onClick={closeThread} title="Fermer">
-                                <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
-                                    <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
-                                </svg>
+                                <i className="bi bi-arrow-left"></i>
                             </button>
 
                             <div className="wa-header-avatar">{contactInitial}</div>
@@ -516,7 +514,7 @@ export default function Discussions() {
                                 </span>
                                 <span className="wa-header-sub">
                                     {contactPhone ? `+${contactPhone}` : '—'} &nbsp;·&nbsp;
-                                    {isHuman ? '👨‍⚕️ Mode Humain' : '🤖 Mode IA'}
+                                    {isHuman ? <><i className="bi bi-person-badge-fill"></i> Mode Humain</> : <><i className="bi bi-robot"></i> Mode IA</>}
                                 </span>
                             </div>
 
@@ -565,20 +563,20 @@ export default function Discussions() {
                                             }`}>
                                                 {/* Étiquette expéditeur (uniquement en bulles gauche) */}
                                                 {!isRight && (
-                                                    <span className="wa-sender-label">
-                                                        👤 Contact
+                                                                    <span className="wa-sender-label">
+                                                        <i className="bi bi-person-fill"></i> Contact
                                                         {m.langue === 'unknown' && (
                                                             <span style={{ marginLeft: 6, fontSize: '0.7rem', background: '#fef3c7', color: '#92400e', borderRadius: 3, padding: '1px 5px', fontWeight: 600 }}>
-                                                                🌐 Langue non détectée
+                                                                <i className="bi bi-globe"></i> Langue non détectée
                                                             </span>
                                                         )}
                                                     </span>
                                                 )}
                                                 {isOp && (
-                                                    <span className="wa-sender-label wa-sender-op">👨‍⚕️ Vous</span>
+                                                    <span className="wa-sender-label wa-sender-op"><i className="bi bi-person-badge-fill"></i> Vous</span>
                                                 )}
                                                 {m.emetteurType === 'agent_ia' && (
-                                                    <span className="wa-sender-label wa-sender-ai">🤖 Hawa</span>
+                                                    <span className="wa-sender-label wa-sender-ai"><i className="bi bi-robot"></i> Hawa</span>
                                                 )}
 
                                                 {/* Contenu */}
@@ -588,7 +586,7 @@ export default function Discussions() {
                                                         target="_blank" rel="noreferrer"
                                                         className="wa-location-link"
                                                     >
-                                                        <span className="wa-location-icon">📍</span>
+                                                        <i className="bi bi-geo-alt-fill wa-location-icon"></i>
                                                         <span>
                                                             Position GPS<br />
                                                             <small>{m.coordonnees.latitude.toFixed(4)}, {m.coordonnees.longitude.toFixed(4)}</small>
@@ -599,12 +597,12 @@ export default function Discussions() {
                                                         {m.audioUrl ? (
                                                             <audio controls src={m.audioUrl} className="wa-audio" />
                                                         ) : (
-                                                            <em className="wa-text-empty">🎵 Message audio</em>
+                                                            <em className="wa-text-empty"><i className="bi bi-music-note-beamed"></i> Message audio</em>
                                                         )}
                                                         {m.texteBrut && m.texteBrut !== '[Audio reçu en mode humain]' && (
                                                             <div className="wa-audio-transcript">
                                                                 <span className="wa-transcript-label">
-                                                                    {m.emetteurType === 'agent_ia' ? '📝 Réponse' : '🎙️ Transcription'}
+                                                                    {m.emetteurType === 'agent_ia' ? <><i className="bi bi-pencil-square"></i> Réponse</> : <><i className="bi bi-mic-fill"></i> Transcription</>}
                                                                 </span>
                                                                 <em>"{m.texteBrut}"</em>
                                                             </div>
@@ -617,12 +615,7 @@ export default function Discussions() {
                                                 {/* Heure + coches */}
                                                 <div className="wa-meta">
                                                     <span className="wa-time">{formatTime(m.dateEnvoi)}</span>
-                                                    {isRight && (
-                                                        <svg className="wa-ticks" viewBox="0 0 16 11" width="14" height="10">
-                                                            <path d="M11.071.653a.75.75 0 0 1 .206 1.04l-5.5 8a.75.75 0 0 1-1.197.077l-3-3.5a.75.75 0 0 1 1.14-.977l2.418 2.82 4.893-7.254a.75.75 0 0 1 1.04-.206z" fill="currentColor"/>
-                                                            <path d="M14.571.653a.75.75 0 0 1 .206 1.04l-5.5 8a.75.75 0 0 1-1.04.206.75.75 0 0 1-.206-1.04l5.5-8a.75.75 0 0 1 1.04-.206z" fill="currentColor" opacity=".5"/>
-                                                        </svg>
-                                                    )}
+                                                    {isRight && <i className="bi bi-check-all wa-ticks"></i>}
                                                 </div>
                                             </div>
                                         </div>
@@ -636,9 +629,7 @@ export default function Discussions() {
                         {isHuman ? (
                             <div className="wa-input-bar">
                                 <button className="wa-input-icon" title="Emoji" tabIndex={-1}>
-                                    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-                                        <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/>
-                                    </svg>
+                                    <i className="bi bi-emoji-smile"></i>
                                 </button>
 
                                 <textarea
@@ -660,19 +651,11 @@ export default function Discussions() {
                                     title="Envoyer"
                                 >
                                     {sending ? (
-                                        <svg viewBox="0 0 24 24" width="22" height="22" fill="white">
-                                            <circle cx="12" cy="12" r="3" opacity="0.4"/>
-                                        </svg>
+                                        <i className="bi bi-hourglass-split"></i>
                                     ) : opText.trim() ? (
-                                        /* Icône envoi */
-                                        <svg viewBox="0 0 24 24" width="22" height="22" fill="white">
-                                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-                                        </svg>
+                                        <i className="bi bi-send-fill"></i>
                                     ) : (
-                                        /* Icône micro */
-                                        <svg viewBox="0 0 24 24" width="22" height="22" fill="white">
-                                            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-                                        </svg>
+                                        <i className="bi bi-mic-fill"></i>
                                     )}
                                 </button>
                             </div>
@@ -680,17 +663,13 @@ export default function Discussions() {
                             /* Mode IA — barre grisée avec hint */
                             <div className="wa-input-bar wa-input-bar-disabled">
                                 <button className="wa-input-icon" disabled>
-                                    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-                                        <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/>
-                                    </svg>
+                                    <i className="bi bi-emoji-smile"></i>
                                 </button>
                                 <div className="wa-input-field wa-input-ai-hint">
-                                    🤖 Hawa répond automatiquement — cliquez "Prendre la main" pour écrire
+                                    <i className="bi bi-robot"></i> Hawa répond automatiquement — cliquez "Prendre la main" pour écrire
                                 </div>
                                 <button className="wa-send-btn" disabled>
-                                    <svg viewBox="0 0 24 24" width="22" height="22" fill="white">
-                                        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-                                    </svg>
+                                    <i className="bi bi-mic-fill"></i>
                                 </button>
                             </div>
                         )}
@@ -703,16 +682,8 @@ export default function Discussions() {
 
 /* ── Icônes inline ── */
 function RobotIcon() {
-    return (
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style={{ marginRight: 4 }}>
-            <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7H3a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2zM7.5 14a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm9 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM3 21v-2a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v2H3z"/>
-        </svg>
-    );
+    return <i className="bi bi-robot" style={{ marginRight: 4 }}></i>;
 }
 function AgentIcon() {
-    return (
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style={{ marginRight: 4 }}>
-            <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
-        </svg>
-    );
+    return <i className="bi bi-person-badge-fill" style={{ marginRight: 4 }}></i>;
 }

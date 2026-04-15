@@ -2,23 +2,23 @@ import { useState } from 'react';
 import { NavLink, useNavigate, useLocation, Outlet } from 'react-router-dom';
 
 const NAV_ITEMS = [
-    { to: '/dashboard',             icon: '🏠', label: 'Dashboard', end: true },
-    { to: '/dashboard/discussions', icon: '💬', label: 'Discussions' },
-    { to: '/dashboard/contacts',    icon: '📋', label: 'Contacts' },
+    { to: '/dashboard',             icon: 'bi bi-house-fill',      label: 'Dashboard', end: true },
+    { to: '/dashboard/discussions', icon: 'bi bi-chat-dots-fill',  label: 'Discussions' },
+    { to: '/dashboard/contacts',    icon: 'bi bi-clipboard-fill',  label: 'Contacts' },
     {
         key: 'utilisateurs',
-        icon: '👥', label: 'Utilisateurs',
+        icon: 'bi bi-people-fill', label: 'Utilisateurs',
         prefix: '/dashboard/utilisateurs',
         children: [
             { to: '/dashboard/utilisateurs',        label: 'Liste des utilisateurs' },
             { to: '/dashboard/utilisateurs/roles',  label: 'Rôles & permissions' },
         ]
     },
-    { to: '/dashboard/diffusions',  icon: '📣', label: 'Diffusions' },
-    { to: '/dashboard/campagnes',   icon: '📢', label: 'Campagnes' },
+    { to: '/dashboard/diffusions',  icon: 'bi bi-megaphone-fill',  label: 'Diffusions' },
+    { to: '/dashboard/campagnes',   icon: 'bi bi-broadcast',       label: 'Campagnes' },
     {
         key: 'metadonnees',
-        icon: '🗂️', label: 'Métadonnées',
+        icon: 'bi bi-folder-fill', label: 'Métadonnées',
         prefix: '/dashboard/metadonnees',
         children: [
             { to: '/dashboard/metadonnees/regions',       label: 'Régions' },
@@ -29,7 +29,18 @@ const NAV_ITEMS = [
             { to: '/dashboard/metadonnees/hausa-prompt',  label: 'Vocabulaire Hausa' },
         ]
     },
-    { to: '/dashboard/parametres', icon: '⚙️', label: 'Paramètres' },
+    { key:'communication', icon:'bi bi-megaphone-fill', label:'Communication',
+        prefix:'/dashboard/communication',
+        children:[
+            { to:'/dashboard/communication/configurations', label:'Configurations'   },
+            { to:'/dashboard/communication/relais', label:'Relais'   },
+            { to:'/dashboard/communication/diffusions', label:'Diffusions'},
+            { to:'/dashboard/communication/sensibilisation', label:'Sensibilisation Communautaire'},
+
+        ]
+    },
+
+    { to: '/dashboard/parametres', icon: 'bi bi-gear-fill', label: 'Paramètres' },
 ];
 
 export default function DashboardLayout() {
@@ -71,7 +82,7 @@ export default function DashboardLayout() {
                 </div>
 
                 <button className="sidebar-toggle" onClick={() => setCollapsed(c => !c)}>
-                    {collapsed ? '→' : '←'}
+                    <i className={collapsed ? 'bi bi-chevron-right' : 'bi bi-chevron-left'}></i>
                 </button>
 
                 <nav className="sidebar-nav">
@@ -85,11 +96,11 @@ export default function DashboardLayout() {
                                         className={`sidebar-link sidebar-group-btn ${isActive ? 'active' : ''}`}
                                         onClick={() => !collapsed && toggleMenu(item.key)}
                                     >
-                                        <span className="sidebar-icon">{item.icon}</span>
+                                        <i className={`sidebar-icon ${item.icon}`}></i>
                                         {!collapsed && (
                                             <>
                                                 <span className="sidebar-label">{item.label}</span>
-                                                <span className="sidebar-chevron">{isOpen ? '▾' : '▸'}</span>
+                                                <i className={`sidebar-chevron bi ${isOpen ? 'bi-chevron-down' : 'bi-chevron-right'}`}></i>
                                             </>
                                         )}
                                     </button>
@@ -121,7 +132,7 @@ export default function DashboardLayout() {
                                     `sidebar-link ${isActive ? 'active' : ''}`
                                 }
                             >
-                                <span className="sidebar-icon">{item.icon}</span>
+                                <i className={`sidebar-icon ${item.icon}`}></i>
                                 {!collapsed && <span className="sidebar-label">{item.label}</span>}
                             </NavLink>
                         );
@@ -129,7 +140,7 @@ export default function DashboardLayout() {
                 </nav>
 
                 <button className="sidebar-logout" onClick={handleLogout}>
-                    <span className="sidebar-icon">🚪</span>
+                    <i className="sidebar-icon bi bi-box-arrow-right"></i>
                     {!collapsed && <span className="sidebar-label">Déconnexion</span>}
                 </button>
             </aside>
@@ -138,7 +149,7 @@ export default function DashboardLayout() {
                 <header className="dash-topbar">
                     <h2 className="dash-title">Espace Administration</h2>
                     <div className="dash-user">
-                        <span className="dash-avatar">👤</span>
+                        <i className="dash-avatar bi bi-person-fill"></i>
                         <span>{userNom}{userRole ? ` (${userRole})` : ''}</span>
                     </div>
                 </header>

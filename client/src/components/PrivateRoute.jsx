@@ -14,6 +14,6 @@ function checkToken() {
 export default function PrivateRoute() {
     const statut = checkToken();
     if (statut === 'valide') return <Outlet />;
-    if (statut === 'expire') return <Navigate to="/session-expiree" replace />;
+    if (statut === 'expire') return <Navigate to="/session-expired" replace />;
     return <Navigate to="/connexion" replace />;
 }

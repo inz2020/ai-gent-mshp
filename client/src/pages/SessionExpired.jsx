@@ -14,10 +14,7 @@ export default function SessionExpired() {
         <div style={s.wrapper}>
             <div style={s.card}>
                 <div style={s.iconWrap}>
-                    <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--orange)' }}>
-                        <circle cx="12" cy="12" r="10" />
-                        <polyline points="12 6 12 12 16 14" />
-                    </svg>
+                    <i className="bi bi-clock" style={{ fontSize: '3rem', color: 'var(--orange)' }}></i>
                 </div>
                 <h1 style={s.title}>Session expirée</h1>
                 <p style={s.message}>

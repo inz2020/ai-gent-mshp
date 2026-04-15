@@ -18,7 +18,7 @@ export default function Banner() {
             rel="noreferrer"
             className="btn-primary"
           >
-            💬 Discuter avec Hawa
+            <i className="bi bi-chat-dots-fill"></i> Discuter avec Hawa
           </a>
           <a href="/solutions" className="btn-outline">En savoir plus</a>
         </div>

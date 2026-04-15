@@ -124,7 +124,7 @@ export default function Utilisateurs() {
             <h1 className="dash-page-title">Utilisateurs</h1>
             <p className="dash-page-sub">Gestion des comptes administrateurs et agents.</p>
 
-            {error && <div className="dt-error">⚠️ {error}</div>}
+            {error && <div className="dt-error"><i className="bi bi-exclamation-triangle-fill"></i> {error}</div>}
 
             {/* Barre d'outils */}
             <div className="dt-toolbar">
@@ -167,8 +167,8 @@ export default function Utilisateurs() {
                                 <td><span className={`dt-badge ${u.actif ? 'dt-badge-actif' : 'dt-badge-inactif'}`}>{u.actif ? 'Actif' : 'Inactif'}</span></td>
                                 <td>{new Date(u.createdAt).toLocaleDateString('fr-FR')}</td>
                                 <td className="dt-actions">
-                                    <button className="dt-btn dt-btn-edit" onClick={() => openEdit(u)}>✏️ Modifier</button>
-                                    <button className="dt-btn dt-btn-danger" onClick={() => openDelete(u)}>🗑️ Supprimer</button>
+                                    <button className="dt-btn dt-btn-edit" onClick={() => openEdit(u)}><i className="bi bi-pencil-fill"></i> Modifier</button>
+                                    <button className="dt-btn dt-btn-danger" onClick={() => openDelete(u)}><i className="bi bi-trash-fill"></i> Supprimer</button>
                                 </td>
                             </tr>
                         ))}
@@ -187,11 +187,11 @@ export default function Utilisateurs() {
                     <div className="modal" onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2>{modal === 'create' ? 'Créer un utilisateur' : 'Modifier l\'utilisateur'}</h2>
-                            <button className="modal-close" onClick={closeModal}>✕</button>
+                            <button className="modal-close" onClick={closeModal}><i className="bi bi-x-lg"></i></button>
                         </div>
 
                         <form onSubmit={modal === 'create' ? handleCreate : handleEdit} className="modal-form">
-                            {formError && <div className="modal-error">⚠️ {formError}</div>}
+                            {formError && <div className="modal-error"><i className="bi bi-exclamation-triangle-fill"></i> {formError}</div>}
 
                             <div className="form-row">
                                 <div className="form-group">
@@ -231,7 +231,7 @@ export default function Utilisateurs() {
                                     <ul className="password-rules">
                                         {PASSWORD_RULES.map(rule => (
                                             <li key={rule.message} className={rule.regex.test(form.password) ? 'rule-ok' : 'rule-ko'}>
-                                                {rule.regex.test(form.password) ? '✓' : '✗'} {rule.message}
+                                                <i className={rule.regex.test(form.password) ? 'bi bi-check-lg' : 'bi bi-x-lg'}></i> {rule.message}
                                             </li>
                                         ))}
                                     </ul>
@@ -255,10 +255,10 @@ export default function Utilisateurs() {
                     <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2>Confirmer la suppression</h2>
-                            <button className="modal-close" onClick={closeModal}>✕</button>
+                            <button className="modal-close" onClick={closeModal}><i className="bi bi-x-lg"></i></button>
                         </div>
                         <div className="modal-body">
-                            {formError && <div className="modal-error">⚠️ {formError}</div>}
+                            {formError && <div className="modal-error"><i className="bi bi-exclamation-triangle-fill"></i> {formError}</div>}
                             <p>Voulez-vous supprimer l'utilisateur <strong>{selected?.nom}</strong> ?<br />Cette action est irréversible.</p>
                         </div>
                         <div className="modal-footer">

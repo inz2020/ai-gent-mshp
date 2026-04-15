@@ -8,11 +8,11 @@ import Pagination from '../../components/Pagination.jsx';
 
 // ─── Types de variables ───────────────────────────────────────
 const VAR_TYPES = [
-    { value: 'text',      label: 'Texte',    icon: '💬' },
-    { value: 'image',     label: 'Image',    icon: '🖼️' },
-    { value: 'audio',     label: 'Audio',    icon: '🎵' },
-    { value: 'audio_tts', label: 'TTS',      icon: '🔊' },
-    { value: 'document',  label: 'Doc',      icon: '📄' },
+    { value: 'text',      label: 'Texte',    icon: 'bi bi-chat-text-fill' },
+    { value: 'image',     label: 'Image',    icon: 'bi bi-image-fill' },
+    { value: 'audio',     label: 'Audio',    icon: 'bi bi-music-note-beamed' },
+    { value: 'audio_tts', label: 'TTS',      icon: 'bi bi-volume-up-fill' },
+    { value: 'document',  label: 'Doc',      icon: 'bi bi-file-earmark-fill' },
 ];
 const MEDIA_VAR_TYPES  = ['image','audio','document'];
 const ACCEPT_MAP = { image:'image/*', audio:'audio/*,.mp3,.ogg,.m4a', document:'.pdf,.doc,.docx' };
@@ -653,7 +653,7 @@ function VarRow({ index, v, onChange, onUpload, onRemove, fileRef }) {
                         onDrop={e => { e.preventDefault(); e.currentTarget.classList.remove('drag-over'); const f = e.dataTransfer.files?.[0]; if (f) onUpload(f, v.type); }}>
                         {v.uploading
                             ? <><span className="bc-spinner"/><span style={{ fontSize:'0.8rem' }}>Upload...</span></>
-                            : <><span>{v.type==='image'?'🖼️':v.type==='document'?'📄':'🎵'}</span><span style={{ fontSize:'0.78rem' }}>Cliquez ou glissez</span></>
+                            : <><i className={v.type==='image'?'bi bi-image-fill':v.type==='document'?'bi bi-file-earmark-fill':'bi bi-music-note-beamed'}></i><span style={{ fontSize:'0.78rem' }}>Cliquez ou glissez</span></>
                         }
                     </div>
                 )}
@@ -662,10 +662,10 @@ function VarRow({ index, v, onChange, onUpload, onRemove, fileRef }) {
                     <div className="var-preview">
                         {v.type==='image'    && <img src={v.mediaUrl} alt="" />}
                         {v.type==='audio'    && <audio controls src={v.mediaUrl} style={{ height:30, width:'100%' }} />}
-                        {v.type==='document' && <span style={{ fontSize:'0.8rem' }}>📄 {v.mediaFileName}</span>}
+                        {v.type==='document' && <span style={{ fontSize:'0.8rem' }}><i className="bi bi-file-earmark-fill"></i> {v.mediaFileName}</span>}
                         <button type="button" className="bc-remove-file"
                             onClick={() => onChange({ mediaUrl:'', mediaFileName:'' })}>
-                            &#10005;
+                            <i className="bi bi-x-lg"></i>
                         </button>
                     </div>
                 )}
@@ -677,7 +677,7 @@ function VarRow({ index, v, onChange, onUpload, onRemove, fileRef }) {
             </div>
 
             {/* Supprimer */}
-            <button type="button" className="var-remove" onClick={onRemove}>&#10005;</button>
+            <button type="button" className="var-remove" onClick={onRemove}><i className="bi bi-x-lg"></i></button>
         </div>
     );
 }

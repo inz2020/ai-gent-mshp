@@ -66,7 +66,7 @@ export default function Login() {
             <p>Entrez vos identifiants pour accéder à votre espace</p>
           </div>
 
-          {error && <div className="login-error">⚠️ {error}</div>}
+          {error && <div className="login-error"><i className="bi bi-exclamation-triangle-fill"></i> {error}</div>}
 
           <form onSubmit={handleSubmit} className="login-form">
             <div className="form-group">
@@ -113,7 +113,7 @@ export default function Login() {
           </form>
 
           <p className="login-back">
-            <Link to="/">← Retour à l'accueil</Link>
+            <Link to="/"><i className="bi bi-arrow-left"></i> Retour à l'accueil</Link>
           </p>
         </div>
       </div>

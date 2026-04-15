@@ -22,7 +22,7 @@ export default function Pagination({ page, totalPages, onChange }) {
                 disabled={page === 1}
                 onClick={() => onChange(page - 1)}
             >
-                ‹ Précédent
+                <i className="bi bi-chevron-left"></i> Précédent
             </button>
 
             {buildPages().map((p, i) =>
@@ -42,7 +42,7 @@ export default function Pagination({ page, totalPages, onChange }) {
                 disabled={page === totalPages}
                 onClick={() => onChange(page + 1)}
             >
-                Suivant ›
+                Suivant <i className="bi bi-chevron-right"></i>
             </button>
         </div>
     );

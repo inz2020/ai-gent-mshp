@@ -107,18 +107,18 @@ export default function Vaccins() {
             <h1 className="dash-page-title">Vaccins</h1>
             <p className="dash-page-sub">Gestion du référentiel vaccins du PEV Niger.</p>
 
-            {error && <div className="dt-error">⚠️ {error}</div>}
+            {error && <div className="dt-error"><i className="bi bi-exclamation-triangle-fill"></i> {error}</div>}
             {toast && <div className="dt-toast">{toast}</div>}
 
             <div className="dt-toolbar">
                 <input className="dt-search" placeholder="Rechercher par code, nom ou maladie..." value={search} onChange={e => setSearch(e.target.value)} />
-                <button className="dt-btn dt-btn-primary" onClick={openCreate}>+ Ajouter</button>
+                <button className="dt-btn dt-btn-primary" onClick={openCreate}><i className="bi bi-plus-lg"></i> Ajouter</button>
                 <label className="dt-btn dt-btn-import">
-                    ⬆ Importer Excel
+                    <i className="bi bi-upload"></i> Importer Excel
                     <input type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleImport} />
                 </label>
                 <button className="dt-btn dt-btn-export" onClick={exportExcel} disabled={filtered.length === 0}>
-                    ⬇ Exporter ({filtered.length})
+                    <i className="bi bi-download"></i> Exporter ({filtered.length})
                 </button>
             </div>
 
@@ -141,8 +141,8 @@ export default function Vaccins() {
                                 <td><span className="dt-badge dt-badge-voie">{v.voieAdministration}</span></td>
                                 <td><span className={`dt-badge ${v.actif ? 'dt-badge-actif' : 'dt-badge-inactif'}`}>{v.actif ? 'Actif' : 'Inactif'}</span></td>
                                 <td className="dt-actions">
-                                    <button className="dt-btn dt-btn-edit" onClick={() => openEdit(v)}>✏️ Modifier</button>
-                                    <button className="dt-btn dt-btn-danger" onClick={() => openDelete(v)}>🗑️ Supprimer</button>
+                                    <button className="dt-btn dt-btn-edit" onClick={() => openEdit(v)}><i className="bi bi-pencil-fill"></i> Modifier</button>
+                                    <button className="dt-btn dt-btn-danger" onClick={() => openDelete(v)}><i className="bi bi-trash-fill"></i> Supprimer</button>
                                 </td>
                             </tr>
                         ))}
@@ -159,10 +159,10 @@ export default function Vaccins() {
                     <div className="modal" onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2>{modal === 'create' ? 'Ajouter un vaccin' : 'Modifier le vaccin'}</h2>
-                            <button className="modal-close" onClick={close}>✕</button>
+                            <button className="modal-close" onClick={close}><i className="bi bi-x-lg"></i></button>
                         </div>
                         <form onSubmit={handleSave} className="modal-form">
-                            {formErr && <div className="modal-error">⚠️ {formErr}</div>}
+                            {formErr && <div className="modal-error"><i className="bi bi-exclamation-triangle-fill"></i> {formErr}</div>}
                             <div className="form-row">
                                 <div className="form-group">
                                     <label>Code vaccin</label>
@@ -211,10 +211,10 @@ export default function Vaccins() {
                     <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2>Supprimer le vaccin</h2>
-                            <button className="modal-close" onClick={close}>✕</button>
+                            <button className="modal-close" onClick={close}><i className="bi bi-x-lg"></i></button>
                         </div>
                         <div className="modal-body">
-                            {formErr && <div className="modal-error">⚠️ {formErr}</div>}
+                            {formErr && <div className="modal-error"><i className="bi bi-exclamation-triangle-fill"></i> {formErr}</div>}
                             <p>Supprimer <strong>{selected?.code} — {selected?.nom}</strong> ? Cette action est irréversible.</p>
                         </div>
                         <div className="modal-footer">
