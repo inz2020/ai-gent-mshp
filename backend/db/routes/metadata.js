@@ -90,21 +90,34 @@ router.get('/districts', async (req, res) => {
 
 router.post('/districts', async (req, res) => {
     try {
-        const { nom, regionId } = req.body;
+        const { nom, regionId, coordonnees } = req.body;
         if (!nom?.trim() || !regionId) return err(res, 400, 'Nom et région requis.');
         const region = await Region.findById(regionId);
         if (!region) return err(res, 404, 'Région introuvable.');
-        const district = await District.create({ nom: nom.trim(), regionId });
+        const district = await District.create({
+            nom: nom.trim(), regionId,
+            coordonnees: {
+                latitude:  coordonnees?.latitude  != null ? parseFloat(coordonnees.latitude)  : null,
+                longitude: coordonnees?.longitude != null ? parseFloat(coordonnees.longitude) : null,
+            },
+        });
         res.status(201).json(await district.populate('regionId', 'nom'));
     } catch (e) { err(res, 500, e.message); }
 });
 
 router.put('/districts/:id', async (req, res) => {
     try {
-        const { nom, regionId } = req.body;
+        const { nom, regionId, coordonnees } = req.body;
         if (!nom?.trim() || !regionId) return err(res, 400, 'Nom et région requis.');
+        const update = {
+            nom: nom.trim(), regionId,
+            coordonnees: {
+                latitude:  coordonnees?.latitude  != null ? parseFloat(coordonnees.latitude)  : null,
+                longitude: coordonnees?.longitude != null ? parseFloat(coordonnees.longitude) : null,
+            },
+        };
         const district = await District.findByIdAndUpdate(
-            req.params.id, { nom: nom.trim(), regionId }, { new: true, runValidators: true }
+            req.params.id, update, { new: true, runValidators: true }
         ).populate('regionId', 'nom');
         if (!district) return err(res, 404, 'District introuvable.');
         res.json(district);
@@ -158,10 +171,13 @@ router.post('/structures', async (req, res) => {
     try {
         const { nom, type, districtId, coordonnees, contactUrgence, statutVaccination } = req.body;
         if (!nom?.trim() || !type || !districtId) return err(res, 400, 'Nom, type et district requis.');
-        if (!coordonnees?.latitude || !coordonnees?.longitude) return err(res, 400, 'Coordonnées GPS requises.');
         const district = await District.findById(districtId);
         if (!district) return err(res, 404, 'District introuvable.');
-        const structure = await Structure.create({ nom: nom.trim(), type, districtId, coordonnees, contactUrgence, statutVaccination });
+        const coords = {
+            latitude:  coordonnees?.latitude  != null && coordonnees.latitude  !== '' ? parseFloat(coordonnees.latitude)  : null,
+            longitude: coordonnees?.longitude != null && coordonnees.longitude !== '' ? parseFloat(coordonnees.longitude) : null,
+        };
+        const structure = await Structure.create({ nom: nom.trim(), type, districtId, coordonnees: coords, contactUrgence, statutVaccination });
         res.status(201).json(await structure.populate({ path: 'districtId', select: 'nom', populate: { path: 'regionId', select: 'nom' } }));
     } catch (e) { err(res, 500, e.message); }
 });

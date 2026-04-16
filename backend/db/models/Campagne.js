@@ -8,13 +8,6 @@ const CampagneSchema = new mongoose.Schema({
     dateFin:      { type: Date, required: true },
     districts:    [{ type: mongoose.Schema.Types.ObjectId, ref: 'District' }],
 
-    // Message
-    messageType:     { type: String, enum: ['texte', 'audio', 'image', 'document', 'video'], default: 'texte' },
-    messageTexte:    { type: String, default: '' },
-    messageMediaUrl: { type: String, default: '' },
-    messageMediaNom: { type: String, default: '' },
-    messageCaption:  { type: String, default: '' },
-
     // Statut & stats
     statut:      { type: String, enum: ['brouillon', 'en_cours', 'terminee', 'annulee'], default: 'brouillon' },
     nbCibles:    { type: Number, default: 0 },

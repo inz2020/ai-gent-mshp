@@ -672,8 +672,15 @@ async function processAudio(mediaId, userPhone, phoneNumId = null) {
         return;
     }
 
-    const mediaRes = await axios.get(`https://graph.facebook.com/v22.0/${mediaId}`, { headers: metaHeaders });
-    const audioRes = await axios.get(mediaRes.data.url, { headers: metaHeaders, responseType: 'arraybuffer' });
+    let mediaRes, audioRes;
+    try {
+        mediaRes = await axios.get(`https://graph.facebook.com/v22.0/${mediaId}`, { headers: metaHeaders });
+        audioRes = await axios.get(mediaRes.data.url, { headers: metaHeaders, responseType: 'arraybuffer' });
+    } catch (dlErr) {
+        console.error('[AUDIO] Téléchargement Meta échoué:', dlErr.response?.status, dlErr.message);
+        await sendErrorAudio(userPhone, contact.langue === 'fr' ? 'quality_fr' : 'quality_ha');
+        return;
+    }
 
     const tmpId = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const inputFile = `input_${tmpId}.ogg`;

@@ -71,8 +71,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 // ─── POST /api/campagnes ────────────────────────────────────────
 router.post('/', requireAuth, requireRole('admin', 'staff'), async (req, res) => {
     try {
-        const { nom, type, produit, dateDebut, dateFin, districts,
-                messageType, messageTexte, messageMediaUrl, messageMediaNom, messageCaption } = req.body;
+        const { nom, type, produit, dateDebut, dateFin, districts } = req.body;
 
         if (!nom?.trim())   return res.status(400).json({ message: 'Le nom est requis.' });
         if (!type)          return res.status(400).json({ message: 'Le type est requis.' });
@@ -81,8 +80,6 @@ router.post('/', requireAuth, requireRole('admin', 'staff'), async (req, res) =>
         const campagne = await Campagne.create({
             nom: nom.trim(), type, produit, dateDebut, dateFin,
             districts: districts ?? [],
-            messageType: messageType ?? 'texte',
-            messageTexte, messageMediaUrl, messageMediaNom, messageCaption,
             creePar: req.user?._id,
         });
 
@@ -101,8 +98,7 @@ router.put('/:id', requireAuth, requireRole('admin', 'staff'), async (req, res) 
         if (!campagne) return res.status(404).json({ message: 'Campagne introuvable.' });
         if (campagne.statut === 'en_cours') return res.status(400).json({ message: 'Impossible de modifier une campagne en cours.' });
 
-        const fields = ['nom','type','produit','dateDebut','dateFin','districts',
-                        'messageType','messageTexte','messageMediaUrl','messageMediaNom','messageCaption','statut'];
+        const fields = ['nom', 'type', 'produit', 'dateDebut', 'dateFin', 'districts', 'statut'];
         fields.forEach(f => { if (req.body[f] !== undefined) campagne[f] = req.body[f]; });
         await campagne.save();
 
@@ -129,9 +125,6 @@ router.delete('/:id', requireAuth, requireRole('admin'), async (req, res) => {
 
 // ─── POST /api/campagnes/:id/envoyer ───────────────────────────
 // Lance l'envoi de masse vers tous les contacts des districts sélectionnés
-const BATCH_SIZE  = 10;
-const BATCH_DELAY = 400;
-
 router.post('/:id/envoyer', requireAuth, requireRole('admin', 'staff'), async (req, res) => {
     try {
         const campagne = await Campagne.findById(req.params.id).populate('districts', '_id nom');
@@ -156,74 +149,9 @@ router.post('/:id/envoyer', requireAuth, requireRole('admin', 'staff'), async (r
 
         res.json({ message: `Envoi lancé vers ${contacts.length} contacts.`, nbCibles: contacts.length });
 
-        // Envoi en arrière-plan
-        envoyerCampagne(campagne, contacts).catch(e =>
-            console.error('[CAMPAGNE] Erreur envoi:', e.message)
-        );
-
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
 });
-
-async function envoyerCampagne(campagne, contacts) {
-    const headers = {
-        Authorization: `Bearer ${process.env.META_TOKEN}`,
-        'Content-Type': 'application/json',
-    };
-    const base = { messaging_product: 'whatsapp' };
-    let envoyes = 0, echecs = 0;
-
-    for (let i = 0; i < contacts.length; i += BATCH_SIZE) {
-        const batch = contacts.slice(i, i + BATCH_SIZE);
-
-        await Promise.all(batch.map(async contact => {
-            try {
-                let payload;
-                const to = contact.whatsappId;
-
-                switch (campagne.messageType) {
-                    case 'texte':
-                        payload = { ...base, to, type: 'text', text: { body: campagne.messageTexte } };
-                        break;
-                    case 'audio':
-                        payload = { ...base, to, type: 'audio', audio: { link: campagne.messageMediaUrl } };
-                        break;
-                    case 'image':
-                        payload = { ...base, to, type: 'image', image: { link: campagne.messageMediaUrl, caption: campagne.messageCaption || '' } };
-                        break;
-                    case 'video':
-                        payload = { ...base, to, type: 'video', video: { link: campagne.messageMediaUrl, caption: campagne.messageCaption || '' } };
-                        break;
-                    case 'document':
-                        payload = { ...base, to, type: 'document', document: { link: campagne.messageMediaUrl, filename: campagne.messageMediaNom || 'document', caption: campagne.messageCaption || '' } };
-                        break;
-                    default:
-                        payload = { ...base, to, type: 'text', text: { body: campagne.messageTexte } };
-                }
-
-                await axios.post(
-                    `https://graph.facebook.com/v22.0/${process.env.PHONE_ID}/messages`,
-                    payload, { headers }
-                );
-                envoyes++;
-            } catch {
-                echecs++;
-            }
-        }));
-
-        // Mise à jour progression
-        await Campagne.findByIdAndUpdate(campagne._id, { nbEnvoyes: envoyes, nbEchecs: echecs });
-
-        if (i + BATCH_SIZE < contacts.length) {
-            await new Promise(r => setTimeout(r, BATCH_DELAY));
-        }
-    }
-
-    await Campagne.findByIdAndUpdate(campagne._id, {
-        statut: 'terminee', nbEnvoyes: envoyes, nbEchecs: echecs,
-    });
-    console.log(`[CAMPAGNE] "${campagne.nom}" terminée — ${envoyes} envoyés, ${echecs} échecs`);
-}
 
 export default router;

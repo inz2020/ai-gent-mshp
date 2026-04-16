@@ -13,8 +13,8 @@ const StructureSchema = new mongoose.Schema({
     },
     districtId: { type: mongoose.Schema.Types.ObjectId, ref: 'District', required: true },
     coordonnees: {
-        latitude: { type: Number, required: true },
-        longitude: { type: Number, required: true }
+        latitude:  { type: Number, default: null },
+        longitude: { type: Number, default: null }
     },
     contactUrgence: String,
     statutVaccination: { type: Boolean, default: true } // Indique si le centre vaccine actuellement

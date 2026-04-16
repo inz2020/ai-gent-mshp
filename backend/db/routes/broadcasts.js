@@ -159,17 +159,18 @@ async function translateText(text, targetLang) {
 }
 
 // ─── Construction dynamique des composants WhatsApp ──────────
+// Audio et audio_tts sont exclus du template (non supportés par Meta)
+// et envoyés en message libre séparé dans sendOne.
 function buildComponents(variables) {
     if (!variables?.length) return [];
     const components = [];
 
-    // Premier media → header (image, audio, audio_tts, document, video)
-    const HEADER_TYPES = ['image','audio','audio_tts','document','video'];
+    // Header : image, document ou video uniquement (pas audio)
+    const HEADER_TYPES = ['image', 'document', 'video'];
     const headerVar = variables.find(v => HEADER_TYPES.includes(v.type) && v.mediaUrl);
     if (headerVar) {
-        const hType = headerVar.type === 'audio_tts' ? 'audio' : headerVar.type;
-        const param = { type: hType, [hType]: { link: headerVar.mediaUrl } };
-        if (hType === 'document' && headerVar.mediaFileName) {
+        const param = { type: headerVar.type, [headerVar.type]: { link: headerVar.mediaUrl } };
+        if (headerVar.type === 'document' && headerVar.mediaFileName) {
             param.document.filename = headerVar.mediaFileName;
         }
         components.push({ type: 'header', parameters: [param] });
@@ -272,24 +273,41 @@ async function envoyerDiffusion(broadcast, contacts) {
 async function sendOne(broadcast, contact, headers, resolvedVars) {
     const components = buildComponents(resolvedVars);
 
-    const payload = {
-        messaging_product: 'whatsapp',
-        to:   contact.whatsappId,
-        type: 'template',
-        template: {
-            name:     broadcast.templateName,
-            language: { code: broadcast.langueTemplate },
-            ...(components.length > 0 && { components }),
-        },
-    };
-
-    const response = await axios.post(
+    // Étape 1 — Template image (ouvre la fenêtre 24h)
+    const templateResponse = await axios.post(
         `https://graph.facebook.com/v22.0/${process.env.PHONE_ID}/messages`,
-        payload,
+        {
+            messaging_product: 'whatsapp',
+            to:   contact.whatsappId,
+            type: 'template',
+            template: {
+                name:     broadcast.templateName,
+                language: { code: broadcast.langueTemplate },
+                ...(components.length > 0 && { components }),
+            },
+        },
         { headers }
     );
 
-    return response.data?.messages?.[0]?.id ?? '';
+    const messageId = templateResponse.data?.messages?.[0]?.id ?? '';
+
+    // Étape 2 — Audio en message libre (fenêtre 24h maintenant ouverte)
+    const audioVar = resolvedVars.find(v => (v.type === 'audio_tts' || v.type === 'audio') && v.mediaUrl);
+    if (audioVar?.mediaUrl) {
+        await axios.post(
+            `https://graph.facebook.com/v22.0/${process.env.PHONE_ID}/messages`,
+            {
+                messaging_product: 'whatsapp',
+                to:   contact.whatsappId,
+                type: 'audio',
+                audio: { link: audioVar.mediaUrl },
+            },
+            { headers }
+        );
+        console.log(`[BROADCAST] Audio envoyé à +${contact.whatsappId}`);
+    }
+
+    return messageId;
 }
 
 // ─── Planificateur — vérifie chaque minute les diffusions planifiées ─

@@ -32,7 +32,7 @@ router.post('/login', async (req, res) => {
             process.env.JWT_SECRET,
             { expiresIn: '24h' }
         );
-
+console.log('token from back:', token)
         res.json({ token, nom: user.nom, role: user.role });
     } catch (err) {
         console.error('[Login error]', err.message);

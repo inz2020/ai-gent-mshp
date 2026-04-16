@@ -1,12 +1,11 @@
 import mongoose from 'mongoose';
 
 const AgentComSchema = new mongoose.Schema({
-              // ID numéro WA Business (PHONE_ID Meta)
-    nom:{type:String, require:true},
+    nom:      { type: String, required: true, trim: true },
     district: { type: mongoose.Schema.Types.ObjectId, ref: 'District' },
-    dateService: { type: Date, default: Date.now },
-    contact: { type: mongoose.Schema.Types.ObjectId, ref: 'Contact' },
-    statut: { type: String, enum: ['Responsable', 'Substitut', 'Stagiaire', 'Autre'], default: 'communicateur' },
+    contact:  { type: mongoose.Schema.Types.ObjectId, ref: 'Contact' },
+    dateService: { type: Date },
+    statut: { type: String, enum: ['Responsable', 'Substitut', 'Stagiaire', 'Autre'], default: 'Autre' },
 });
 export default mongoose.model('AgentCom', AgentComSchema);
 

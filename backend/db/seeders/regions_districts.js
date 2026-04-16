@@ -53,7 +53,7 @@ const DATA = [
         region: 'Tahoua',
         districts: [
             { nom: 'Abalak',            lat: 15.4500, lng: 6.2833 },
-            { nom: 'Affala',            lat: 14.2000, lng: 5.2500 },
+            { nom: 'Tillia',            lat: 16.116667, lng: 4.783333 },
             { nom: 'Bagaroua',          lat: 14.3833, lng: 5.5000 },
             { nom: "Birni N'Konni",     lat: 13.7955, lng: 5.2503 },
             { nom: 'Bouza',             lat: 14.4167, lng: 6.0500 },
@@ -69,7 +69,7 @@ const DATA = [
     },
     
     {
-        region: 'Tillaberi',
+        region: 'Tillabéri',
         districts: [
             { nom: 'Ayorou',    lat: 14.7300, lng: 0.9170 },
             { nom: 'Bankilare', lat: 14.9200, lng: 0.8200 },
@@ -89,11 +89,14 @@ const DATA = [
             { nom: 'Dungass',          lat: 13.8667, lng: 8.2833 },
             { nom: 'Goure',            lat: 13.9833, lng: 10.2667 },
             { nom: 'Kantche',          lat: 13.5333, lng: 8.4667 },
-            { nom: 'Magaria',          lat: 12.9983, lng: 8.9078 },
             { nom: 'Matameye',         lat: 13.4233, lng: 8.4744 },
+            { nom: 'Magaria',          lat: 12.9983, lng: 8.9078 },
             { nom: 'Mirriah',          lat: 13.7073, lng: 9.1500 },
             { nom: 'Tanout',           lat: 14.9700, lng: 8.8800 },
             { nom: 'Zinder Ville',     lat: 13.8072, lng: 8.9881 },
+            {nom:'Tesker', lat:null, lng:null},
+            {nom:'Takiéta', lat:null, lng:null},
+            {nom:'Belbédji ', lat:null, lng:null},
         ]
     },
     {

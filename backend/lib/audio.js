@@ -82,8 +82,6 @@ export async function ttsElevenLabs(text) {
         {
             text,
             model_id: 'eleven_multilingual_v2',
-            // speed est un parametre TOP-LEVEL, pas dans voice_settings
-            speed: 0.88,
             voice_settings: {
                 stability: 0.42,
                 similarity_boost: 0.78,
@@ -107,7 +105,6 @@ export async function ttsOpenAI(text) {
             {
                 text,
                 model_id: 'eleven_multilingual_v2',
-                speed: 0.88,
                 voice_settings: {
                     stability: 0.42,
                     similarity_boost: 0.78,
