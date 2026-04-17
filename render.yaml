@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: e-sante-chatbot
+    name: hawa-sante-digitale
     env: node
     region: frankfurt          # changer si besoin : oregon, singapore, ohio…
     plan: free                 # ou starter, standard, etc.
