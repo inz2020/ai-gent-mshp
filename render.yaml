@@ -8,7 +8,7 @@ services:
 
     buildCommand: cd backend && npm install && cd ../client && npm install --include=dev && npm run build
 
-    startCommand: cd backend && node app.js
+    startCommand: node backend/app.js
 
     healthCheckPath: /api/me   # Render pinge cette route pour vérifier que le serveur répond
 
