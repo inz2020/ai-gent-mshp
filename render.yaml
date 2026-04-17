@@ -7,6 +7,7 @@ services:
     rootDir: .                 # racine du dépôt
 
     buildCommand: npm run install:all && npm run build:client
+    nodeVersion: 20.11.0
 
     startCommand: cd backend && node app.js
 
