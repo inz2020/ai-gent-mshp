@@ -6,9 +6,7 @@ services:
     plan: free                 # ou starter, standard, etc.
     rootDir: .                 # racine du dépôt
 
-    buildCommand: |
-      cd backend && npm install
-      cd ../client && npm install && npm run build
+    buildCommand: npm run install:all && npm run build:client
 
     startCommand: cd backend && node app.js
 
