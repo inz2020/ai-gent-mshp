@@ -681,7 +681,7 @@ export default function Campagnes() {
                                     {/* Modal erreur diffusion */}
                                     {diffErrModal && (
                                         <div className="modal-overlay" onClick={() => setDiffErrModal(null)}>
-                                            <div className="modal-box" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
+                                            <div className="modal" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
                                                 <div className="modal-header" style={{ background: '#fee2e2', borderBottom: '1px solid #fca5a5' }}>
                                                     <h3 style={{ margin: 0, color: '#b91c1c', display: 'flex', alignItems: 'center', gap: 8 }}>
                                                         <i className="bi bi-exclamation-triangle-fill"></i> {diffErrModal.titre}
@@ -1632,48 +1632,49 @@ export default function Campagnes() {
 
             {/* ── Modal Template WhatsApp Ajouter / Modifier ── */}
             {tplModal && (
-                <div className="modal-overlay" onClick={closeTplModal}>
-                    <div className="modal-box" style={{ maxWidth: 500 }} onClick={e => e.stopPropagation()}>
+                <div className="modal-overlay">
+                    <div className="modal" style={{ maxWidth: 480 }}>
                         <div className="modal-header">
-                            <h3><i className="bi bi-whatsapp" style={{ color: '#25d366' }}></i> {tplModal === 'add' ? 'Ajouter un template' : 'Modifier le template'}</h3>
-                            <button className="modal-close" onClick={closeTplModal}>&times;</button>
+                            <h2><i className="bi bi-whatsapp" style={{ color: '#25d366', marginRight: 6 }}></i>{tplModal === 'add' ? 'Ajouter un template' : 'Modifier le template'}</h2>
+                            <button className="modal-close" onClick={closeTplModal}><i className="bi bi-x-lg"></i></button>
                         </div>
                         <form onSubmit={handleSaveTpl}>
-                            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                                {tplErr && <div className="dt-error"><i className="bi bi-exclamation-triangle-fill"></i> {tplErr}</div>}
+                            <div className="modal-body">
+                                {tplErr && <div className="dt-error" style={{ marginBottom: 12 }}><i className="bi bi-exclamation-triangle-fill"></i> {tplErr}</div>}
 
                                 <div className="form-group">
                                     <label>Nom affiché <span style={{ color: '#dc2626' }}>*</span></label>
                                     <input className="form-control" placeholder="Ex : Template audio relais"
                                         value={tplForm.nom} onChange={e => setTplForm(f => ({ ...f, nom: e.target.value }))} />
-                                    <small style={{ color: '#94a3b8' }}>Label visible dans le dashboard uniquement</small>
+                                    <small className="form-hint">Label visible dans le dashboard uniquement</small>
                                 </div>
 
                                 <div className="form-group">
                                     <label>Nom exact Meta <span style={{ color: '#dc2626' }}>*</span></label>
                                     <input className="form-control" placeholder="Ex : hello_world"
                                         value={tplForm.templateName} onChange={e => setTplForm(f => ({ ...f, templateName: e.target.value }))} />
-                                    <small style={{ color: '#94a3b8' }}>Nom tel qu'il apparaît dans Meta Business Manager → Templates</small>
+                                    <small className="form-hint">Nom tel qu'il apparaît dans Meta Business Manager → Templates</small>
                                 </div>
 
-                                <div className="form-group">
-                                    <label>Code langue</label>
-                                    <input className="form-control" placeholder="Ex : fr, en_US, ha"
-                                        value={tplForm.langue} onChange={e => setTplForm(f => ({ ...f, langue: e.target.value }))} />
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                    <div className="form-group">
+                                        <label>Code langue</label>
+                                        <input className="form-control" placeholder="fr, en_US, ha"
+                                            value={tplForm.langue} onChange={e => setTplForm(f => ({ ...f, langue: e.target.value }))} />
+                                    </div>
+                                    <div className="form-group">
+                                        <label>Statut</label>
+                                        <select className="form-control" value={tplForm.statut} onChange={e => setTplForm(f => ({ ...f, statut: e.target.value }))}>
+                                            <option value="actif">Actif</option>
+                                            <option value="inactif">Inactif</option>
+                                        </select>
+                                    </div>
                                 </div>
 
                                 <div className="form-group">
                                     <label>Description</label>
                                     <input className="form-control" placeholder="Usage, contexte..."
                                         value={tplForm.description} onChange={e => setTplForm(f => ({ ...f, description: e.target.value }))} />
-                                </div>
-
-                                <div className="form-group">
-                                    <label>Statut</label>
-                                    <select className="form-control" value={tplForm.statut} onChange={e => setTplForm(f => ({ ...f, statut: e.target.value }))}>
-                                        <option value="actif">Actif</option>
-                                        <option value="inactif">Inactif</option>
-                                    </select>
                                 </div>
                             </div>
                             <div className="modal-footer">
