@@ -589,26 +589,37 @@ async function processText(userText, userPhone, phoneNumId = null) {
             });
             const retryParsed = JSON.parse(retryResponse.choices[0].message.content);
             reply = (retryParsed.reply ?? '').trim();
-            if (retryParsed.lang && ['fr', 'ha'].includes(retryParsed.lang)) lang = retryParsed.lang;
+            // Ne pas écraser lang depuis le retry — on a explicitement forcé la langue
         } catch (retryErr) {
             console.error('[TEXT] Échec retry GPT:', retryErr.message);
         }
     }
 
     if (!reply) {
-        const errKey = `quality_${lang === 'fr' ? 'fr' : 'ha'}`;
-        const errorMsg = ERROR_TEXTS[errKey];
-        await sendErrorAudio(userPhone, errKey);
-        try {
-            await saveMessages(contact._id, lang, { humanText: userText, aiText: errorMsg, aiIsAudio: true });
-        } catch (dbErr) {
-            console.error('[DB] Erreur persistance message inconnu:', dbErr.message);
+        // Principe : texte → erreur texte (FR), audio → erreur audio (HA)
+        if (lang === 'fr') {
+            const errMsg = ERROR_TEXTS['quality_fr'] || "Je n'ai pas pu traiter votre message. Veuillez reformuler.";
+            await sendWhatsAppText(userPhone, errMsg);
+            try {
+                await saveMessages(contact._id, lang, { humanText: userText, aiText: errMsg });
+            } catch (dbErr) {
+                console.error('[DB] Erreur persistance message inconnu:', dbErr.message);
+            }
+        } else {
+            const errKey = 'quality_ha';
+            await sendErrorAudio(userPhone, errKey, 'ha');
+            try {
+                await saveMessages(contact._id, lang, { humanText: userText, aiText: ERROR_TEXTS[errKey], aiIsAudio: true });
+            } catch (dbErr) {
+                console.error('[DB] Erreur persistance message inconnu:', dbErr.message);
+            }
         }
         return;
     }
 
-    // Hausa → réponse audio (meilleure expérience pour locuteurs Hausa)
-    // Français → réponse texte
+    // Principe fondamental : message texte → réponse texte / message audio → réponse audio
+    // Hausa → audio (utilisateurs souvent analphabètes)
+    // Français → texte
     let aiAudioUpload = null;
     if (lang === 'ha') {
         aiAudioUpload = await sendAudioReply(userPhone, reply, 'ha');
