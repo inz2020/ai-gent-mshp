@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { getRegions, createRegion, updateRegion, deleteRegion, importRegions } from '../../api/index.js';
 import { usePagination } from '../../hooks/usePagination.js';
+import { useSort } from '../../hooks/useSort.js';
 import Pagination from '../../components/Pagination.jsx';
+import SortableTh from '../../components/SortableTh.jsx';
 
 const EMPTY = { nom: '' };
 
@@ -86,7 +88,8 @@ export default function Regions() {
     }
 
     const filtered = rows.filter(r => r.nom.toLowerCase().includes(search.toLowerCase()));
-    const { paged, page, setPage, totalPages } = usePagination(filtered);
+    const { sorted, sortKey, sortDir, toggleSort } = useSort(filtered, 'nom');
+    const { paged, page, setPage, totalPages } = usePagination(sorted);
 
     return (
         <div className="dash-page">
@@ -111,7 +114,11 @@ export default function Regions() {
             <div className="dt-wrapper">
                 <table className="dt-table">
                     <thead>
-                        <tr><th>#</th><th>Nom de la région</th><th>Actions</th></tr>
+                        <tr>
+                            <th>#</th>
+                            <SortableTh label="Nom de la région" field="nom" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                            <th>Actions</th>
+                        </tr>
                     </thead>
                     <tbody>
                         {loading ? (
@@ -137,8 +144,8 @@ export default function Regions() {
             </div>
 
             {(modal === 'create' || modal === 'edit') && (
-                <div className="modal-overlay" onClick={close}>
-                    <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
+                <div className="modal-overlay">
+                    <div className="modal modal-sm">
                         <div className="modal-header">
                             <h2>{modal === 'create' ? 'Ajouter une région' : 'Modifier la région'}</h2>
                             <button className="modal-close" onClick={close}><i className="bi bi-x-lg"></i></button>
@@ -161,8 +168,8 @@ export default function Regions() {
             )}
 
             {modal === 'delete' && (
-                <div className="modal-overlay" onClick={close}>
-                    <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
+                <div className="modal-overlay">
+                    <div className="modal modal-sm">
                         <div className="modal-header">
                             <h2>Supprimer la région</h2>
                             <button className="modal-close" onClick={close}><i className="bi bi-x-lg"></i></button>

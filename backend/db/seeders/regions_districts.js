@@ -79,7 +79,7 @@ const DATA = [
             { nom: 'Ouallam',   lat: 14.3167, lng: 2.0833 },
             { nom: 'Say',       lat: 13.1000, lng: 2.3667 },
             { nom: 'Tera',      lat: 14.0000, lng: 0.7500 },
-            { nom: 'Tillaberi', lat: 14.2100, lng: 1.4500 },
+            { nom: 'Tillabéri', lat: 14.2100, lng: 1.4500 },
         ]
     },
     {

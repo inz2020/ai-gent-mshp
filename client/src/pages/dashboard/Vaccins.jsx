@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { getVaccins, createVaccin, updateVaccin, deleteVaccin, importVaccins } from '../../api/index.js';
 import { usePagination } from '../../hooks/usePagination.js';
+import { useSort } from '../../hooks/useSort.js';
 import Pagination from '../../components/Pagination.jsx';
+import SortableTh from '../../components/SortableTh.jsx';
 
 const VOIES = ['injectable', 'oral', 'intradermique'];
 const EMPTY = { code: '', nom: '', maladiesProtegees: '', nbDoses: 1, voieAdministration: 'injectable', actif: true };
@@ -100,7 +102,8 @@ export default function Vaccins() {
         v.nom.toLowerCase().includes(search.toLowerCase()) ||
         (v.maladiesProtegees ?? '').toLowerCase().includes(search.toLowerCase())
     );
-    const { paged, page, setPage, totalPages } = usePagination(filtered);
+    const { sorted, sortKey, sortDir, toggleSort } = useSort(filtered, 'code');
+    const { paged, page, setPage, totalPages } = usePagination(sorted);
 
     return (
         <div className="dash-page">
@@ -125,7 +128,15 @@ export default function Vaccins() {
             <div className="dt-wrapper">
                 <table className="dt-table">
                     <thead>
-                        <tr><th>Code</th><th>Nom</th><th>Maladies protégées</th><th>Doses</th><th>Voie</th><th>Statut</th><th>Actions</th></tr>
+                        <tr>
+                            <SortableTh label="Code"              field="code"               sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                            <SortableTh label="Nom"               field="nom"                sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                            <th>Maladies protégées</th>
+                            <SortableTh label="Doses"             field="nbDoses"            sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                            <SortableTh label="Voie"              field="voieAdministration" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                            <SortableTh label="Statut"            field="actif"              sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                            <th>Actions</th>
+                        </tr>
                     </thead>
                     <tbody>
                         {loading ? (
@@ -155,8 +166,8 @@ export default function Vaccins() {
             </div>
 
             {(modal === 'create' || modal === 'edit') && (
-                <div className="modal-overlay" onClick={close}>
-                    <div className="modal" onClick={e => e.stopPropagation()}>
+                <div className="modal-overlay">
+                    <div className="modal">
                         <div className="modal-header">
                             <h2>{modal === 'create' ? 'Ajouter un vaccin' : 'Modifier le vaccin'}</h2>
                             <button className="modal-close" onClick={close}><i className="bi bi-x-lg"></i></button>
@@ -207,8 +218,8 @@ export default function Vaccins() {
             )}
 
             {modal === 'delete' && (
-                <div className="modal-overlay" onClick={close}>
-                    <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
+                <div className="modal-overlay">
+                    <div className="modal modal-sm">
                         <div className="modal-header">
                             <h2>Supprimer le vaccin</h2>
                             <button className="modal-close" onClick={close}><i className="bi bi-x-lg"></i></button>

@@ -2,81 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { getContacts, createContact, updateContact, importContacts, getContactConversations, inviterContact, deleteContact, detectContactLocation } from '../../api/index.js';
 import { usePagination } from '../../hooks/usePagination.js';
+import { useSort } from '../../hooks/useSort.js';
 import Pagination from '../../components/Pagination.jsx';
+import SortableTh from '../../components/SortableTh.jsx';
+import {COUNTRY_CODES} from '../../utils/countryCodes.js'
 
-// Codes pays — Niger en premier, puis ordre alphabétique
-const COUNTRY_CODES = [
-    { code: '227', name: 'Niger',                flag: '🇳🇪' },
-    { code: '213', name: 'Algerie',              flag: '🇩🇿' },
-    { code: '244', name: 'Angola',               flag: '🇦🇴' },
-    { code: '229', name: 'Benin',                flag: '🇧🇯' },
-    { code: '267', name: 'Botswana',             flag: '🇧🇼' },
-    { code: '226', name: 'Burkina Faso',         flag: '🇧🇫' },
-    { code: '257', name: 'Burundi',              flag: '🇧🇮' },
-    { code: '238', name: 'Cap-Vert',             flag: '🇨🇻' },
-    { code: '237', name: 'Cameroun',             flag: '🇨🇲' },
-    { code: '236', name: 'Centrafrique',         flag: '🇨🇫' },
-    { code: '269', name: 'Comores',              flag: '🇰🇲' },
-    { code: '242', name: 'Congo',                flag: '🇨🇬' },
-    { code: '243', name: 'Congo (RDC)',          flag: '🇨🇩' },
-    { code: '253', name: 'Djibouti',             flag: '🇩🇯' },
-    { code: '20',  name: 'Egypte',              flag: '🇪🇬' },
-    { code: '240', name: 'Guinee equatoriale',   flag: '🇬🇶' },
-    { code: '291', name: 'Erythree',             flag: '🇪🇷' },
-    { code: '251', name: 'Ethiopie',             flag: '🇪🇹' },
-    { code: '241', name: 'Gabon',                flag: '🇬🇦' },
-    { code: '220', name: 'Gambie',               flag: '🇬🇲' },
-    { code: '233', name: 'Ghana',                flag: '🇬🇭' },
-    { code: '224', name: 'Guinee',               flag: '🇬🇳' },
-    { code: '245', name: 'Guinee-Bissau',        flag: '🇬🇼' },
-    { code: '225', name: 'Cote d\'Ivoire',       flag: '🇨🇮' },
-    { code: '254', name: 'Kenya',                flag: '🇰🇪' },
-    { code: '266', name: 'Lesotho',              flag: '🇱🇸' },
-    { code: '231', name: 'Liberia',              flag: '🇱🇷' },
-    { code: '218', name: 'Libye',                flag: '🇱🇾' },
-    { code: '261', name: 'Madagascar',           flag: '🇲🇬' },
-    { code: '265', name: 'Malawi',               flag: '🇲🇼' },
-    { code: '223', name: 'Mali',                 flag: '🇲🇱' },
-    { code: '222', name: 'Mauritanie',           flag: '🇲🇷' },
-    { code: '230', name: 'Maurice',              flag: '🇲🇺' },
-    { code: '212', name: 'Maroc',               flag: '🇲🇦' },
-    { code: '258', name: 'Mozambique',           flag: '🇲🇿' },
-    { code: '264', name: 'Namibie',              flag: '🇳🇦' },
-    { code: '234', name: 'Nigeria',              flag: '🇳🇬' },
-    { code: '250', name: 'Rwanda',               flag: '🇷🇼' },
-    { code: '239', name: 'Sao Tome-et-Principe', flag: '🇸🇹' },
-    { code: '221', name: 'Senegal',              flag: '🇸🇳' },
-    { code: '232', name: 'Sierra Leone',         flag: '🇸🇱' },
-    { code: '252', name: 'Somalie',              flag: '🇸🇴' },
-    { code: '27',  name: 'Afrique du Sud',       flag: '🇿🇦' },
-    { code: '211', name: 'Soudan du Sud',        flag: '🇸🇸' },
-    { code: '249', name: 'Soudan',               flag: '🇸🇩' },
-    { code: '268', name: 'Eswatini',             flag: '🇸🇿' },
-    { code: '255', name: 'Tanzanie',             flag: '🇹🇿' },
-    { code: '228', name: 'Togo',                 flag: '🇹🇬' },
-    { code: '216', name: 'Tunisie',              flag: '🇹🇳' },
-    { code: '256', name: 'Ouganda',              flag: '🇺🇬' },
-    { code: '260', name: 'Zambie',               flag: '🇿🇲' },
-    { code: '263', name: 'Zimbabwe',             flag: '🇿🇼' },
-    // Europe
-    { code: '33',  name: 'France',               flag: '🇫🇷' },
-    { code: '32',  name: 'Belgique',             flag: '🇧🇪' },
-    { code: '41',  name: 'Suisse',               flag: '🇨🇭' },
-    { code: '352', name: 'Luxembourg',           flag: '🇱🇺' },
-    { code: '1',   name: 'USA / Canada',         flag: '🇺🇸' },
-    { code: '44',  name: 'Royaume-Uni',          flag: '🇬🇧' },
-    { code: '49',  name: 'Allemagne',            flag: '🇩🇪' },
-    { code: '34',  name: 'Espagne',              flag: '🇪🇸' },
-    { code: '39',  name: 'Italie',               flag: '🇮🇹' },
-    { code: '351', name: 'Portugal',             flag: '🇵🇹' },
-    // Moyen-Orient
-    { code: '966', name: 'Arabie saoudite',      flag: '🇸🇦' },
-    { code: '971', name: 'Emirats arabes unis',  flag: '🇦🇪' },
-    { code: '974', name: 'Qatar',                flag: '🇶🇦' },
-    // Asie
-    { code: '91',  name: 'Inde',                 flag: '🇮🇳' },
-    { code: '86',  name: 'Chine',                flag: '🇨🇳' },
-];
+
 
 const LANG_LABEL = { fr: 'Francais', ha: 'Hausa', hausa: 'Hausa', unknown: 'Inconnu' };
 
@@ -146,6 +77,7 @@ export default function Contacts() {
     }
 
     async function handleCreate(e) {
+        
         e.preventDefault();
         if (!form.localNumber.trim()) { setFormError('Saisissez le numero local.'); return; }
         setSaving(true); setFormError('');
@@ -290,7 +222,8 @@ export default function Contacts() {
         (c.region?.nom ?? '').toLowerCase().includes(search.toLowerCase())
     );
 
-    const { paged, page, setPage, totalPages } = usePagination(filtered, 10);
+    const { sorted, sortKey, sortDir, toggleSort } = useSort(filtered, 'nom');
+    const { paged, page, setPage, totalPages } = usePagination(sorted, 10);
 
     // Codes pays filtrés par la recherche dans le select
     const filteredCodes = codeSearch
@@ -364,12 +297,12 @@ export default function Contacts() {
                 <table className="dt-table">
                     <thead>
                         <tr>
-                            <th>N° WhatsApp</th>
-                            <th>Nom</th>
-                            <th>Region</th>
-                            <th>District</th>
-                            <th>Langue</th>
-                            <th>Inscrit le</th>
+                            <SortableTh label="N° WhatsApp" field="whatsappId"        sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                            <SortableTh label="Nom"         field="nom"               sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                            <SortableTh label="Région"      field="region.nom"        sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                            <SortableTh label="District"    field="district.nom"      sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                            <SortableTh label="Langue"      field="langue"            sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                            <SortableTh label="Inscrit le"  field="dateInscription"   sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                             <th>Detail</th>
                         </tr>
                     </thead>
@@ -417,8 +350,8 @@ export default function Contacts() {
 
             {/* ══ Modal creation contact ══ */}
             {modal && (
-                <div className="modal-overlay" onClick={() => setModal(false)}>
-                    <div className="modal" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
+                <div className="modal-overlay">
+                    <div className="modal" style={{ maxWidth: 460 }}>
                         <div className="modal-header">
                             <h2>Nouveau contact</h2>
                             <button className="modal-close" onClick={() => setModal(false)}><i className="bi bi-x-lg"></i></button>
@@ -512,8 +445,8 @@ export default function Contacts() {
 
             {/* ══ Modal édition contact ══ */}
             {editModal && (
-                <div className="modal-overlay" onClick={() => setEditModal(null)}>
-                    <div className="modal" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
+                <div className="modal-overlay">
+                    <div className="modal" style={{ maxWidth: 420 }}>
                         <div className="modal-header">
                             <h2>Modifier le contact</h2>
                             <button className="modal-close" onClick={() => setEditModal(null)}><i className="bi bi-x-lg"></i></button>
@@ -556,8 +489,8 @@ export default function Contacts() {
 
             {/* ══ Modal résultat import ══ */}
             {importResult && (
-                <div className="modal-overlay" onClick={() => setImportResult(null)}>
-                    <div className="modal" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
+                <div className="modal-overlay">
+                    <div className="modal" style={{ maxWidth: 440 }}>
                         <div className="modal-header">
                             <h2>Résultat de l'import</h2>
                             <button className="modal-close" onClick={() => setImportResult(null)}><i className="bi bi-x-lg"></i></button>
@@ -600,8 +533,8 @@ export default function Contacts() {
 
             {/* ══ Modal confirmation suppression ══ */}
             {confirmDelete && (
-                <div className="modal-overlay" onClick={() => setConfirmDelete(null)}>
-                    <div className="modal" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
+                <div className="modal-overlay">
+                    <div className="modal" style={{ maxWidth: 400 }}>
                         <div className="modal-header">
                             <h2>Confirmer la suppression</h2>
                             <button className="modal-close" onClick={() => setConfirmDelete(null)}><i className="bi bi-x-lg"></i></button>
@@ -626,8 +559,8 @@ export default function Contacts() {
 
             {/* ══ Panneau detail contact ══ */}
             {selected && (
-                <div className="modal-overlay" onClick={() => { setSelected(null); setConvs([]); }}>
-                    <div className="modal" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
+                <div className="modal-overlay">
+                    <div className="modal" style={{ maxWidth: 560 }}>
                         <div className="modal-header">
                             <h2>Contact — +{selected.whatsappId}</h2>
                             <button className="modal-close" onClick={() => { setSelected(null); setConvs([]); }}><i className="bi bi-x-lg"></i></button>

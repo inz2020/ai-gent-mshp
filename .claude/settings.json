@@ -9,7 +9,8 @@
       "Bash(node --check db/routes/campagnes.js)",
       "Bash(node --check db/models/Campagne.js)",
       "Bash(node --check db/models/MobilisationSociale.js)",
-      "Bash(node --check db/routes/MobilisationSociale.js)"
+      "Bash(node --check db/routes/MobilisationSociale.js)",
+      "Bash(grep -n \"^\\\\s*>\" /c/Users/ABOU/Desktop/e-sante/project-node-chatbot/client/src/pages/dashboard/*.jsx)"
     ]
   }
 }

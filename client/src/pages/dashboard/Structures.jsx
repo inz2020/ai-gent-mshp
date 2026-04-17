@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { getStructures, createStructure, updateStructure, deleteStructure, importStructures, getDistricts } from '../../api/index.js';
 import { usePagination } from '../../hooks/usePagination.js';
+import { useSort } from '../../hooks/useSort.js';
 import Pagination from '../../components/Pagination.jsx';
+import SortableTh from '../../components/SortableTh.jsx';
 
 const TYPES = ['CSI', 'CS', 'Hôpital District', 'CH R'];
 const EMPTY = { nom: '', type: 'CSI', districtId: '', coordonnees: { latitude: '', longitude: '' }, contactUrgence: '', statutVaccination: true };
@@ -38,7 +40,7 @@ export default function Structures() {
         setForm({
             nom: s.nom, type: s.type, districtId: s.districtId?._id || '',
             coordonnees: { latitude: s.coordonnees?.latitude ?? '', longitude: s.coordonnees?.longitude ?? '' },
-            contactUrgence: s.contactUrgence || '', statutVaccination: s.statutVaccination
+             statutVaccination: s.statutVaccination
         });
         setFormErr(''); setModal('edit');
     }
@@ -100,7 +102,7 @@ export default function Structures() {
             region: s.districtId?.regionId?.nom ?? '',
             latitude: s.coordonnees?.latitude ?? '',
             longitude: s.coordonnees?.longitude ?? '',
-            contactUrgence: s.contactUrgence ?? '',
+/*             contactUrgence: s.contactUrgence ?? '', */
             statutVaccination: s.statutVaccination ? 'Oui' : 'Non'
         })));
         ws['!cols'] = [28, 14, 24, 18, 12, 12, 18, 16].map(w => ({ wch: w }));
@@ -129,7 +131,8 @@ export default function Structures() {
         (s.districtId?.nom ?? '').toLowerCase().includes(search.toLowerCase()) ||
         (s.districtId?.regionId?.nom ?? '').toLowerCase().includes(search.toLowerCase())
     );
-    const { paged, page, setPage, totalPages } = usePagination(filtered);
+    const { sorted, sortKey, sortDir, toggleSort } = useSort(filtered, 'nom');
+    const { paged, page, setPage, totalPages } = usePagination(sorted);
 
     return (
         <div className="dash-page">
@@ -154,7 +157,15 @@ export default function Structures() {
             <div className="dt-wrapper">
                 <table className="dt-table">
                     <thead>
-                        <tr><th>Nom</th><th>Type</th><th>District</th><th>Région</th><th>Coords GPS</th><th>Contact</th><th>Vaccine</th><th>Actions</th></tr>
+                        <tr>
+                            <SortableTh label="Nom"      field="nom"                    sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                            <SortableTh label="Type"     field="type"                   sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                            <SortableTh label="District" field="districtId.nom"         sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                            <SortableTh label="Région"   field="districtId.regionId.nom" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                            <th>Coords GPS</th>
+                            <th>Vaccine</th>
+                            <th>Actions</th>
+                        </tr>
                     </thead>
                     <tbody>
                         {loading ? (
@@ -168,10 +179,13 @@ export default function Structures() {
                                 <td>{s.districtId?.nom ?? '—'}</td>
                                 <td>{s.districtId?.regionId?.nom ?? '—'}</td>
                                 <td className="dt-mono" style={{ fontSize: '0.78rem' }}>
-                                    {s.coordonnees ? `${s.coordonnees.latitude.toFixed(3)}, ${s.coordonnees.longitude.toFixed(3)}` : '—'}
+                                    {s.coordonnees?.latitude != null
+                                        ? `${s.coordonnees.latitude.toFixed(3)}, ${s.coordonnees.longitude.toFixed(3)}`
+                                        : <span className="dt-muted">—</span>}
                                 </td>
-                                <td>{s.contactUrgence || <span className="dt-muted">—</span>}</td>
-                                <td><span className={`dt-badge ${s.statutVaccination ? 'dt-badge-actif' : 'dt-badge-inactif'}`}>{s.statutVaccination ? 'Oui' : 'Non'}</span></td>
+{/*                                 <td>{s.contactUrgence || <span className="dt-muted">—</span>}</td>
+ */}                                
+ <td><span className={`dt-badge ${s.statutVaccination ? 'dt-badge-actif' : 'dt-badge-inactif'}`}>{s.statutVaccination ? 'Oui' : 'Non'}</span></td>
                                 <td className="dt-actions">
                                     <button className="dt-btn dt-btn-edit" onClick={() => openEdit(s)}><i className="bi bi-pencil-fill"></i></button>
                                     <button className="dt-btn dt-btn-danger" onClick={() => openDelete(s)}><i className="bi bi-trash-fill"></i></button>
@@ -187,8 +201,8 @@ export default function Structures() {
             </div>
 
             {(modal === 'create' || modal === 'edit') && (
-                <div className="modal-overlay" onClick={close}>
-                    <div className="modal" onClick={e => e.stopPropagation()}>
+                <div className="modal-overlay">
+                    <div className="modal">
                         <div className="modal-header">
                             <h2>{modal === 'create' ? 'Ajouter une structure' : 'Modifier la structure'}</h2>
                             <button className="modal-close" onClick={close}><i className="bi bi-x-lg"></i></button>
@@ -215,19 +229,19 @@ export default function Structures() {
                                         {districts.map(d => <option key={d._id} value={d._id}>{d.nom} ({d.regionId?.nom})</option>)}
                                     </select>
                                 </div>
-                                <div className="form-group">
+                              {/*   <div className="form-group">
                                     <label>Contact urgence</label>
                                     <input name="contactUrgence" value={form.contactUrgence} onChange={handleChange} placeholder="+227 XX XX XX XX" />
-                                </div>
+                                </div> */}
                             </div>
                             <div className="form-row">
                                 <div className="form-group">
                                     <label>Latitude</label>
-                                    <input name="latitude" type="number" step="any" value={form.coordonnees.latitude} onChange={handleChange} placeholder="13.5137" required />
+                                    <input name="latitude" type="number" step="any" value={form.coordonnees.latitude} onChange={handleChange} placeholder="13.5137" />
                                 </div>
                                 <div className="form-group">
                                     <label>Longitude</label>
-                                    <input name="longitude" type="number" step="any" value={form.coordonnees.longitude} onChange={handleChange} placeholder="2.1098" required />
+                                    <input name="longitude" type="number" step="any" value={form.coordonnees.longitude} onChange={handleChange} placeholder="2.1098" />
                                 </div>
                             </div>
                             <div className="form-group form-group-check">
@@ -248,8 +262,8 @@ export default function Structures() {
             )}
 
             {modal === 'delete' && (
-                <div className="modal-overlay" onClick={close}>
-                    <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
+                <div className="modal-overlay">
+                    <div className="modal modal-sm">
                         <div className="modal-header">
                             <h2>Supprimer la structure</h2>
                             <button className="modal-close" onClick={close}><i className="bi bi-x-lg"></i></button>

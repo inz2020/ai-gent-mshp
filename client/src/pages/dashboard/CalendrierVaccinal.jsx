@@ -191,8 +191,8 @@ export default function CalendrierVaccinal() {
             </div>
 
             {(modal === 'create' || modal === 'edit') && (
-                <div className="modal-overlay" onClick={close}>
-                    <div className="modal" onClick={e => e.stopPropagation()}>
+                <div className="modal-overlay">
+                    <div className="modal">
                         <div className="modal-header">
                             <h2>{modal === 'create' ? 'Ajouter une entrée' : 'Modifier l\'entrée'}</h2>
                             <button className="modal-close" onClick={close}><i className="bi bi-x-lg"></i></button>
@@ -283,8 +283,8 @@ export default function CalendrierVaccinal() {
             )}
 
             {modal === 'delete' && (
-                <div className="modal-overlay" onClick={close}>
-                    <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
+                <div className="modal-overlay">
+                    <div className="modal modal-sm">
                         <div className="modal-header">
                             <h2>Supprimer l'entrée</h2>
                             <button className="modal-close" onClick={close}><i className="bi bi-x-lg"></i></button>

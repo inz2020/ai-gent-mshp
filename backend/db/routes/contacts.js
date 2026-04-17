@@ -39,7 +39,7 @@ router.post('/', requireAuth, requireRole('admin', 'staff'), async (req, res) =>
     const { whatsappId, nom, langue = 'fr' } = req.body;
 
     if (!whatsappId || !/^\d{7,15}$/.test(whatsappId)) {
-        return res.status(400).json({ message: 'Numero WhatsApp invalide (chiffres uniquement, 7 a 15 digits).' });
+        return res.status(400).json({ message: 'Numéro WhatsApp invalide (chiffres uniquement, 7 a 15 digits).' });
     }
     if (!nom?.trim()) {
         return res.status(400).json({ message: 'Le nom est requis.' });
@@ -47,7 +47,7 @@ router.post('/', requireAuth, requireRole('admin', 'staff'), async (req, res) =>
 
     const exists = await Contact.findOne({ whatsappId });
     if (exists) {
-        return res.status(409).json({ message: `Ce numero existe deja (${nom}).` });
+        return res.status(409).json({ message: `Ce numéro existe déjà (${nom}).` });
     }
 
     try {

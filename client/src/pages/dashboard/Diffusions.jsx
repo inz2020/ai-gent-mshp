@@ -7,6 +7,8 @@ import { usePagination } from '../../hooks/usePagination.js';
 import Pagination from '../../components/Pagination.jsx';
 
 // ─── Types de variables ───────────────────────────────────────
+// image/text/document → inclus dans le template Meta
+// audio/audio_tts     → envoyés en message libre après le template (Meta ne supporte pas l'audio dans les templates)
 const VAR_TYPES = [
     { value: 'text',      label: 'Texte',    icon: 'bi bi-chat-text-fill' },
     { value: 'image',     label: 'Image',    icon: 'bi bi-image-fill' },
@@ -14,6 +16,7 @@ const VAR_TYPES = [
     { value: 'audio_tts', label: 'TTS',      icon: 'bi bi-volume-up-fill' },
     { value: 'document',  label: 'Doc',      icon: 'bi bi-file-earmark-fill' },
 ];
+const AUDIO_VAR_TYPES  = ['audio', 'audio_tts'];
 const MEDIA_VAR_TYPES  = ['image','audio','document'];
 const ACCEPT_MAP = { image:'image/*', audio:'audio/*,.mp3,.ogg,.m4a', document:'.pdf,.doc,.docx' };
 
@@ -269,8 +272,11 @@ export default function Diffusions() {
                                     <td><span className="dt-mono">{b.templateName}</span></td>
                                     <td style={{ textAlign:'center' }}>
                                         {vars.length > 0
-                                            ? <span title={vars.map(v=>v.type).join(', ')} style={{ fontSize:'0.78rem', color:'var(--gray-600)' }}>
-                                                {vars.map(v => VAR_TYPES.find(t=>t.value===v.type)?.icon ?? '?').join(' ')}
+                                            ? <span title={vars.map(v=>v.type).join(', ')} style={{ fontSize:'0.78rem', color:'var(--gray-600)', display:'flex', gap:4, justifyContent:'center' }}>
+                                                {vars.map((v, i) => {
+                                                    const icon = VAR_TYPES.find(t=>t.value===v.type)?.icon;
+                                                    return icon ? <i key={i} className={icon}></i> : '?';
+                                                })}
                                               </span>
                                             : <span className="dt-muted">—</span>
                                         }
@@ -313,8 +319,8 @@ export default function Diffusions() {
 
             {/* ═══════════ MODAL CREATION ═══════════ */}
             {modal && (
-                <div className="modal-overlay" onClick={() => setModal(false)}>
-                    <div className="modal" style={{ maxWidth:580 }} onClick={e => e.stopPropagation()}>
+                <div className="modal-overlay">
+                    <div className="modal" style={{ maxWidth:580 }}>
                         <div className="modal-header">
                             <h2>Nouvelle diffusion</h2>
                             <button className="modal-close" onClick={() => setModal(false)}>&#10005;</button>
@@ -456,7 +462,11 @@ export default function Diffusions() {
                             </div>
 
                             <div className="broadcast-warning">
-                                &#9888; Assurez-vous que le template est approuve par Meta avant de lancer.
+                                &#9888; Le template doit etre approuve par Meta avant de lancer.<br/>
+                                <span style={{ fontSize:'0.78rem', opacity:0.85 }}>
+                                    &#128247; Image / Texte / Document → envoyes via le template.<br/>
+                                    &#127908; Audio / TTS → envoyes en message libre juste apres (Meta ne supporte pas l'audio dans les templates).
+                                </span>
                             </div>
 
                             <div className="modal-footer">
@@ -475,8 +485,8 @@ export default function Diffusions() {
 
             {/* ═══════════ MODAL DETAIL ═══════════ */}
             {detail && (
-                <div className="modal-overlay" onClick={() => setDetail(null)}>
-                    <div className="modal" style={{ maxWidth:520 }} onClick={e => e.stopPropagation()}>
+                <div className="modal-overlay">
+                    <div className="modal" style={{ maxWidth:520 }}>
                         <div className="modal-header">
                             <h2>Detail — <span className="dt-mono" style={{ fontSize:'0.95rem' }}>{detail.templateName}</span></h2>
                             <button className="modal-close" onClick={() => setDetail(null)}>&#10005;</button>
@@ -597,11 +607,17 @@ function VarRow({ index, v, onChange, onUpload, onRemove, fileRef }) {
     const inputRef = useRef(null);
     const isMedia  = MEDIA_VAR_TYPES.includes(v.type);
     const isTTS    = v.type === 'audio_tts';
+    const isAudio  = AUDIO_VAR_TYPES.includes(v.type);
 
     return (
         <div className="var-row">
             {/* Index */}
             <span className="var-index">{index}</span>
+            {isAudio && (
+                <span title="Envoye en message libre apres le template" style={{ fontSize:'0.68rem', background:'#eff6ff', color:'#2563eb', borderRadius:4, padding:'2px 6px', whiteSpace:'nowrap' }}>
+                    msg libre
+                </span>
+            )}
 
             {/* Type selector */}
             <div className="var-type-tabs">
@@ -610,7 +626,7 @@ function VarRow({ index, v, onChange, onUpload, onRemove, fileRef }) {
                         title={vt.label}
                         className={`var-type-btn${v.type === vt.value ? ' active' : ''}`}
                         onClick={() => onChange({ type: vt.value, value:'', mediaUrl:'', mediaFileName:'', ttsText:'' })}>
-                        {vt.icon}
+                        <i className={vt.icon}></i>
                     </button>
                 ))}
             </div>

@@ -24,6 +24,9 @@ import NotFound from './pages/NotFound.jsx';
 import ErrorPage from './pages/ErrorPage.jsx';
 import SessionExpired from './pages/SessionExpired.jsx';
 import { setNavigate } from './utils/navigate.js';
+import AgentComms from './pages/dashboard/AgentComms.jsx';
+import RelaisPage from './pages/dashboard/Relais.jsx';
+import Sensibilisation from './pages/dashboard/Sensibilisation.jsx';
 
 function PublicLayout() {
   return (
@@ -58,6 +61,10 @@ export default function App() {
           <Route path="contacts"           element={<Contacts />} />
           <Route path="utilisateurs"       element={<Utilisateurs />} />
           <Route path="utilisateurs/roles" element={<RolesPermissions />} />
+          <Route path="communication/agent-comm"        element={<AgentComms />} />
+          <Route path="communication/relais"          element={<RelaisPage />} />
+          <Route path="communication/diffusions"      element={<Diffusions />} />
+          <Route path="communication/sensibilisation" element={<Sensibilisation />} />
           <Route path="diffusions"                    element={<Diffusions />} />
           <Route path="campagnes"                    element={<Campagnes />} />
           <Route path="metadonnees/regions"          element={<Regions />} />

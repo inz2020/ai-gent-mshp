@@ -260,8 +260,8 @@ export default function HausaPrompt() {
 
             {/* Modal Ajout */}
             {modal === 'add' && (
-                <div className="modal-overlay" onClick={close}>
-                    <div className="modal" onClick={e => e.stopPropagation()}>
+                <div className="modal-overlay">
+                    <div className="modal">
                         <div className="modal-header">
                             <h2>Ajouter un {tab} Hausa</h2>
                             <button className="modal-close" onClick={close}><i className="bi bi-x-lg"></i></button>
@@ -307,8 +307,8 @@ export default function HausaPrompt() {
 
             {/* Modal Modification */}
             {modal === 'edit' && (
-                <div className="modal-overlay" onClick={close}>
-                    <div className="modal" onClick={e => e.stopPropagation()}>
+                <div className="modal-overlay">
+                    <div className="modal">
                         <div className="modal-header">
                             <h2>Modifier le {selected?.type} Hausa</h2>
                             <button className="modal-close" onClick={close}><i className="bi bi-x-lg"></i></button>
@@ -354,8 +354,8 @@ export default function HausaPrompt() {
 
             {/* Modal Suppression */}
             {modal === 'delete' && (
-                <div className="modal-overlay" onClick={close}>
-                    <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
+                <div className="modal-overlay">
+                    <div className="modal modal-sm">
                         <div className="modal-header">
                             <h2>Supprimer</h2>
                             <button className="modal-close" onClick={close}><i className="bi bi-x-lg"></i></button>

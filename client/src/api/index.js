@@ -14,16 +14,63 @@ async function request(path, options = {}) {
         headers: { 'Content-Type': 'application/json', ...options.headers },
     });
     if (res.status === 401) {
+        const hadToken = !!localStorage.getItem('token');
         localStorage.removeItem('token');
         localStorage.removeItem('user_nom');
         localStorage.removeItem('user_role');
-        navigateTo('/session-expired');
-        return;
+        const data = await res.json().catch(() => ({}));
+        if (hadToken) navigateTo('/session-expired');
+        throw new Error(data.message || 'Non autorisé.');
     }
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || 'Erreur serveur.');
     return data;
 }
+
+// ── Communication ───────────────────────────────────────────────
+const Communication  = '/api/communication';
+
+export const getAgentComms   = ()       => request(`${Communication}/agent-comm`,       { headers: authHeaders() });
+export const createAgentComm = (data)   => request(`${Communication}/agent-comm`,       { method: 'POST',   headers: authHeaders(), body: JSON.stringify(data) });
+export const updateAgentComm = (id, d)  => request(`${Communication}/agent-comm/${id}`, { method: 'PUT',    headers: authHeaders(), body: JSON.stringify(d) });
+export const deleteAgentComm = (id)     => request(`${Communication}/agent-comm/${id}`, { method: 'DELETE', headers: authHeaders() });
+
+export const getRelais        = ()       => request(`${Communication}/relais`,       { headers: authHeaders() });
+export const createRelais     = (data)   => request(`${Communication}/relais`,       { method: 'POST',   headers: authHeaders(), body: JSON.stringify(data) });
+export const updateRelais     = (id, d)  => request(`${Communication}/relais/${id}`, { method: 'PUT',    headers: authHeaders(), body: JSON.stringify(d) });
+export const deleteRelais     = (id)     => request(`${Communication}/relais/${id}`, { method: 'DELETE', headers: authHeaders() });
+
+export const getSensibilisations    = ()       => request(`${Communication}/sensibilisation`,       { headers: authHeaders() });
+export const createSensibilisation  = (data)   => request(`${Communication}/sensibilisation`,       { method: 'POST',   headers: authHeaders(), body: JSON.stringify(data) });
+export const updateSensibilisation  = (id, d)  => request(`${Communication}/sensibilisation/${id}`, { method: 'PUT',    headers: authHeaders(), body: JSON.stringify(d) });
+export const deleteSensibilisation  = (id)     => request(`${Communication}/sensibilisation/${id}`, { method: 'DELETE', headers: authHeaders() });
+
+export const getReunions      = (campagneId) => request(`${Communication}/reunion-plaidoyer?campagne=${campagneId}`, { headers: authHeaders() });
+export const createReunion    = (data)       => request(`${Communication}/reunion-plaidoyer`,       { method: 'POST',   headers: authHeaders(), body: JSON.stringify(data) });
+export const updateReunion    = (id, d)      => request(`${Communication}/reunion-plaidoyer/${id}`, { method: 'PUT',    headers: authHeaders(), body: JSON.stringify(d) });
+export const deleteReunion    = (id)         => request(`${Communication}/reunion-plaidoyer/${id}`, { method: 'DELETE', headers: authHeaders() });
+
+export const getMobilisationRelais    = (campagneId) => request(`${Communication}/mobilisation-relais?campagne=${campagneId}`, { headers: authHeaders() });
+export const createMobilisationRelais = (data)       => request(`${Communication}/mobilisation-relais`,       { method: 'POST',   headers: authHeaders(), body: JSON.stringify(data) });
+export const updateMobilisationRelais = (id, d)      => request(`${Communication}/mobilisation-relais/${id}`, { method: 'PUT',    headers: authHeaders(), body: JSON.stringify(d) });
+export const deleteMobilisationRelais = (id)         => request(`${Communication}/mobilisation-relais/${id}`, { method: 'DELETE', headers: authHeaders() });
+export const diffuserMobilisationRelais = (id)           => request(`${Communication}/mobilisation-relais/${id}/diffuser`,                              { method: 'POST', headers: authHeaders() });
+export const diffuserToutCampagne       = (campagneId)   => request(`${Communication}/mobilisation-relais/campagne/${campagneId}/diffuser-tout`,        { method: 'POST', headers: authHeaders() });
+
+export async function uploadMobilisationAudio(file) {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`${BASE_URL}${Communication}/mobilisation-relais/upload`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        body: form,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Erreur upload.');
+    return data; // { url, publicId, nom }
+}
+
+
 
 export function loginUser(login, password) {
     return request('/api/login', {

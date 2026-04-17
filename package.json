@@ -1,13 +1,13 @@
 {
   "name": "e-sante-monorepo",
   "version": "1.0.0",
-  "description": "PEV Niger — Chatbot e-santé (monorepo frontend + backend)",
+  "description": "PEV Niger — Chatbot e-santé (monorepo client + backend)",
   "private": true,
   "scripts": {
     "start": "cd backend && node app.js",
     "dev:backend": "cd backend && nodemon app.js",
-    "dev:frontend": "cd frontend && npm run dev",
-    "build:frontend": "cd frontend && npm run build",
-    "install:all": "cd backend && npm install && cd ../frontend && npm install"
+    "dev:client": "cd client && npm run dev",
+    "build:client": "cd client && npm run build",
+    "install:all": "cd backend && npm install && cd ../client && npm install"
   }
 }

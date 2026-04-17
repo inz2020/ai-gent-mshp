@@ -1,4 +1,7 @@
 import express from 'express'
+import axios from 'axios'
+import multer from 'multer'
+import { v2 as cloudinary } from 'cloudinary'
 import District from '../models/District.js'
 import { requireAuth, requireAdmin } from '../../middlewares/auth.js'
 import AgentCom from '../models/AgentCom.js'
@@ -7,6 +10,15 @@ import Relais from '../models/Relais.js'
 import Structure from '../models/Structure.js'
 import MobilisationSociale from '../models/MobilisationSociale.js'
 import ReunionPlaidoyer from '../models/ReunionPlaidoyer.js'
+import MobilisationRelais from '../models/MobilisationRelais.js'
+
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_NAME,
+    api_key:    process.env.CLOUDINARY_KEY,
+    api_secret: process.env.CLOUDINARY_SECRET,
+})
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } })
 
 const router = express.Router()
 router.use(requireAuth, requireAdmin)
@@ -125,7 +137,7 @@ router.get('/relais', async (_req, res) => {
 
 router.post('/relais', async (req, res) => {
     try {
-        const { nom, contactId, districtId, structureSanitaireId, nbreAnneesExperience, typeRelais } = req.body
+        const { nom, telephone, contactId, districtId, structureSanitaireId, nbreAnneesExperience, typeRelais } = req.body
         if (!nom?.trim()) return err(res, 400, 'Le nom du relais est requis')
 
         const existe = await Relais.findOne({ nom: nom.trim() })
@@ -133,6 +145,7 @@ router.post('/relais', async (req, res) => {
 
         const relais = await Relais.create({
             nom: nom.trim(),
+            telephone:          telephone?.trim()     || '',
             contact:            contactId             || undefined,
             district:           districtId            || undefined,
             structureSanitaire: structureSanitaireId  || undefined,
@@ -156,7 +169,7 @@ router.put('/relais/:id', async (req, res) => {
         const relais = await Relais.findById(req.params.id)
         if (!relais) return err(res, 404, 'Relais introuvable')
 
-        const { nom, contactId, districtId, structureSanitaireId, nbreAnneesExperience, typeRelais } = req.body
+        const { nom, telephone, contactId, districtId, structureSanitaireId, nbreAnneesExperience, typeRelais } = req.body
 
         if (nom?.trim() && nom.trim() !== relais.nom) {
             const existe = await Relais.findOne({ nom: nom.trim(), _id: { $ne: req.params.id } })
@@ -164,6 +177,7 @@ router.put('/relais/:id', async (req, res) => {
             relais.nom = nom.trim()
         }
 
+        if (telephone            !== undefined) relais.telephone          = telephone?.trim()    || ''
         if (contactId            !== undefined) relais.contact            = contactId            || undefined
         if (districtId           !== undefined) relais.district           = districtId           || undefined
         if (structureSanitaireId !== undefined) relais.structureSanitaire = structureSanitaireId || undefined
@@ -339,5 +353,269 @@ router.delete('/reunion-plaidoyer/:id', async (req, res) => {
         res.json({ message: 'Réunion/Plaidoyer supprimé(e) avec succès' });
     } catch (e) { err(res, 500, e.message); }
 });
+
+// ═══════════════════════════════════════════════════════
+// MOBILISATION RELAIS PAR DISTRICT
+// ═══════════════════════════════════════════════════════
+
+// POST /mobilisation-relais/upload — upload audio Cloudinary
+router.post('/mobilisation-relais/upload', upload.single('file'), async (req, res) => {
+    if (!req.file) return err(res, 400, 'Aucun fichier reçu.')
+    try {
+        const result = await new Promise((resolve, reject) => {
+            cloudinary.uploader.upload_stream(
+                { resource_type: 'video', folder: 'mobilisation_audio', use_filename: true, unique_filename: true },
+                (e, r) => e ? reject(e) : resolve(r)
+            ).end(req.file.buffer)
+        })
+        res.json({ url: result.secure_url, publicId: result.public_id, nom: req.file.originalname })
+    } catch (e) { err(res, 500, 'Erreur upload : ' + e.message) }
+})
+
+// GET /mobilisation-relais?campagne=:id
+router.get('/mobilisation-relais', async (req, res) => {
+    const { campagne } = req.query
+    if (!campagne) return err(res, 400, 'campagne requis')
+    try {
+        const records = await MobilisationRelais.find({ campagne })
+            .populate('district', 'nom')
+            .populate('relais', 'nom telephone typeRelais')
+        res.json(records)
+    } catch (e) { err(res, 500, e.message) }
+})
+
+// POST /mobilisation-relais
+router.post('/mobilisation-relais', async (req, res) => {
+    const { campagneId, districtId, relaisIds, concessionsVisitees, personnesTouchees, messageAudio } = req.body
+    if (!campagneId || !districtId) return err(res, 400, 'campagneId et districtId requis')
+    try {
+        const record = await MobilisationRelais.create({
+            campagne: campagneId,
+            district: districtId,
+            relais:   relaisIds ?? [],
+            concessionsVisitees: concessionsVisitees ?? 0,
+            personnesTouchees:   personnesTouchees   ?? 0,
+            messageAudio: messageAudio ?? { url: '', nom: '', publicId: '' },
+        })
+        const populated = await MobilisationRelais.findById(record._id)
+            .populate('district', 'nom')
+            .populate('relais', 'nom telephone typeRelais')
+        res.status(201).json(populated)
+    } catch (e) {
+        if (e.code === 11000) return err(res, 409, 'Un enregistrement existe déjà pour ce district dans cette campagne')
+        err(res, 500, e.message)
+    }
+})
+
+// PUT /mobilisation-relais/:id
+router.put('/mobilisation-relais/:id', async (req, res) => {
+    try {
+        const record = await MobilisationRelais.findById(req.params.id)
+        if (!record) return err(res, 404, 'Enregistrement introuvable')
+        const { relaisIds, concessionsVisitees, personnesTouchees, messageAudio } = req.body
+        if (relaisIds            !== undefined) record.relais              = relaisIds
+        if (concessionsVisitees  !== undefined) record.concessionsVisitees = concessionsVisitees
+        if (personnesTouchees    !== undefined) record.personnesTouchees   = personnesTouchees
+        if (messageAudio         !== undefined) record.messageAudio        = messageAudio
+        await record.save()
+        const populated = await MobilisationRelais.findById(record._id)
+            .populate('district', 'nom')
+            .populate('relais', 'nom telephone typeRelais')
+        res.json(populated)
+    } catch (e) { err(res, 500, e.message) }
+})
+
+// DELETE /mobilisation-relais/:id
+router.delete('/mobilisation-relais/:id', async (req, res) => {
+    try {
+        const record = await MobilisationRelais.findById(req.params.id)
+        if (!record) return err(res, 404, 'Enregistrement introuvable')
+        await record.deleteOne()
+        res.json({ message: 'Enregistrement supprimé.' })
+    } catch (e) { err(res, 500, e.message) }
+})
+
+// ═══════════════════════════════════════════════════════
+// DIFFUSION AUDIO WHATSAPP — RELAIS PAR DISTRICT
+// ═══════════════════════════════════════════════════════
+
+const WA_BATCH_SIZE  = 5
+const WA_BATCH_DELAY = 600  // ms entre chaque batch
+
+// ── Résolution du numéro WhatsApp d'un relais ─────────────────
+function resolvePhone(relais) {
+    const raw = relais.contact?.whatsappId || relais.telephone || ''
+    const cleaned = raw.replace(/\s+/g, '').replace(/^\+/, '')
+    return cleaned.length >= 8 ? cleaned : null
+}
+
+// ── Envoi d'un template puis d'un audio à un numéro ──────────
+async function envoyerAudioRelais(phone, audioUrl, headers) {
+    const templateName = process.env.WA_INVITE_TEMPLATE || 'hello_world'
+    const templateLang = process.env.WA_INVITE_TEMPLATE_LANG_FR || 'fr'
+    const phoneId      = process.env.PHONE_ID
+    const base         = `https://graph.facebook.com/v22.0/${phoneId}/messages`
+
+    // Étape 1 — Template (ouvre la fenêtre 24h si le relais n'a pas encore contacté le bot)
+    await axios.post(base, {
+        messaging_product: 'whatsapp',
+        to:   phone,
+        type: 'template',
+        template: { name: templateName, language: { code: templateLang } },
+    }, { headers })
+
+    // Étape 2 — Audio libre
+    await axios.post(base, {
+        messaging_product: 'whatsapp',
+        to:   phone,
+        type: 'audio',
+        audio: { link: audioUrl },
+    }, { headers })
+}
+
+// ── Moteur d'envoi en arrière-plan ────────────────────────────
+async function diffuserAudioDistrict(record, targets) {
+    const headers = {
+        Authorization: `Bearer ${process.env.META_TOKEN}`,
+        'Content-Type': 'application/json',
+    }
+    const audioUrl = record.messageAudio.url
+    let envoyes = 0, echecs = 0
+
+    for (let i = 0; i < targets.length; i += WA_BATCH_SIZE) {
+        const batch = targets.slice(i, i + WA_BATCH_SIZE)
+
+        const results = await Promise.allSettled(
+            batch.map(t => envoyerAudioRelais(t.phone, audioUrl, headers))
+        )
+
+        for (let j = 0; j < results.length; j++) {
+            if (results[j].status === 'fulfilled') {
+                envoyes++
+                console.log(`[DIFFUSION] ok +${batch[j].phone}`)
+            } else {
+                echecs++
+                const msg = results[j].reason?.response?.data?.error?.message ?? results[j].reason?.message ?? 'unknown'
+                console.error(`[DIFFUSION] fail +${batch[j].phone}: ${msg}`)
+            }
+        }
+
+        await MobilisationRelais.findByIdAndUpdate(record._id, {
+            'diffusion.envoyes': envoyes,
+            'diffusion.echecs':  echecs,
+        })
+
+        if (i + WA_BATCH_SIZE < targets.length) {
+            await new Promise(r => setTimeout(r, WA_BATCH_DELAY))
+        }
+    }
+
+    const statut = echecs === targets.length ? 'erreur' : 'termine'
+    await MobilisationRelais.findByIdAndUpdate(record._id, {
+        'diffusion.statut':  statut,
+        'diffusion.envoyes': envoyes,
+        'diffusion.echecs':  echecs,
+    })
+    console.log(`[DIFFUSION] district ${record.district} — ${envoyes} ok, ${echecs} fail`)
+}
+
+// ── POST /mobilisation-relais/campagne/:campagneId/diffuser-tout ─
+// (défini AVANT /:id/diffuser pour éviter le conflit de paramètre)
+router.post('/mobilisation-relais/campagne/:campagneId/diffuser-tout', async (req, res) => {
+    try {
+        const records = await MobilisationRelais.find({
+            campagne: req.params.campagneId,
+            'messageAudio.url': { $nin: [null, ''] },
+        }).populate({
+            path: 'relais',
+            select: 'nom telephone contact',
+            populate: { path: 'contact', select: 'whatsappId' },
+        })
+
+        if (!records.length)
+            return err(res, 400, 'Aucun district configuré avec un message audio.')
+
+        const enCours = records.filter(r => r.diffusion?.statut === 'en_cours')
+        if (enCours.length)
+            return err(res, 409, `${enCours.length} district(s) déjà en cours d'envoi.`)
+
+        let totalCibles = 0
+        let districtLances = 0
+
+        for (const record of records) {
+            const targets = record.relais
+                .map(r => ({ nom: r.nom, phone: resolvePhone(r) }))
+                .filter(t => t.phone)
+
+            if (!targets.length) continue
+
+            record.diffusion = {
+                statut: 'en_cours', total: targets.length,
+                envoyes: 0, echecs: 0, dateEnvoi: new Date(), errorLog: '',
+            }
+            await record.save()
+
+            totalCibles += targets.length
+            districtLances++
+            diffuserAudioDistrict(record, targets).catch(e =>
+                console.error('[DIFFUSION-TOUT]', e.message))
+        }
+
+        if (!districtLances)
+            return err(res, 400, 'Aucun relais avec un numéro WhatsApp valide dans les districts configurés.')
+
+        res.json({
+            message: `Diffusion lancée vers ${totalCibles} relais sur ${districtLances} district(s).`,
+            total: totalCibles, districts: districtLances,
+        })
+    } catch (e) { err(res, 500, e.message) }
+})
+
+// ── POST /mobilisation-relais/:id/diffuser ────────────────────
+router.post('/mobilisation-relais/:id/diffuser', async (req, res) => {
+    try {
+        const record = await MobilisationRelais.findById(req.params.id)
+            .populate({
+                path: 'relais',
+                select: 'nom telephone contact',
+                populate: { path: 'contact', select: 'whatsappId' },
+            })
+
+        if (!record)                   return err(res, 404, 'Enregistrement introuvable.')
+        if (!record.messageAudio?.url) return err(res, 400, 'Aucun message audio configuré pour ce district.')
+        if (!record.relais?.length)    return err(res, 400, 'Aucun relais assigné à ce district.')
+        if (record.diffusion?.statut === 'en_cours')
+            return err(res, 409, 'Une diffusion est déjà en cours pour ce district.')
+
+        const targets    = []
+        const sansNumero = []
+
+        for (const r of record.relais) {
+            const phone = resolvePhone(r)
+            if (phone) targets.push({ nom: r.nom, phone })
+            else       sansNumero.push(r.nom)
+        }
+
+        if (!targets.length)
+            return err(res, 400, 'Aucun relais ne possède de numéro WhatsApp valide.')
+
+        record.diffusion = {
+            statut: 'en_cours', total: targets.length,
+            envoyes: 0, echecs: 0, dateEnvoi: new Date(),
+            errorLog: sansNumero.length ? `Sans numéro: ${sansNumero.join(', ')}` : '',
+        }
+        await record.save()
+
+        res.json({
+            message:     `Diffusion lancée vers ${targets.length} relais.`,
+            total:       targets.length,
+            sansNumero,
+        })
+
+        diffuserAudioDistrict(record, targets).catch(e =>
+            console.error('[DIFFUSION]', e.message))
+
+    } catch (e) { err(res, 500, e.message) }
+})
 
 export default router

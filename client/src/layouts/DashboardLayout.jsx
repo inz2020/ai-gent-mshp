@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, useNavigate, useLocation, Outlet } from 'react-router-dom';
 
 const NAV_ITEMS = [
@@ -32,7 +32,7 @@ const NAV_ITEMS = [
     { key:'communication', icon:'bi bi-megaphone-fill', label:'Communication',
         prefix:'/dashboard/communication',
         children:[
-            { to:'/dashboard/communication/configurations', label:'Configurations'   },
+            { to:'/dashboard/communication/agent-comm', label:'Configurations'   },
             { to:'/dashboard/communication/relais', label:'Relais'   },
             { to:'/dashboard/communication/diffusions', label:'Diffusions'},
             { to:'/dashboard/communication/sensibilisation', label:'Sensibilisation Communautaire'},
@@ -47,8 +47,13 @@ export default function DashboardLayout() {
     const navigate  = useNavigate();
     const location  = useLocation();
     const [collapsed, setCollapsed] = useState(false);
+    // Mobile (<768px) : sidebar overlay fermée par défaut
+    const [mobileOpen, setMobileOpen] = useState(false);
     const userNom  = localStorage.getItem('user_nom') || 'Administrateur';
     const userRole = localStorage.getItem('user_role') || '';
+
+    // Ferme la sidebar mobile à chaque changement de page
+    useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 
     // État des sous-menus : { utilisateurs: bool, metadonnees: bool }
     const [openMenus, setOpenMenus] = useState(() => {
@@ -72,7 +77,12 @@ export default function DashboardLayout() {
 
     return (
         <div className={`dash-wrapper ${collapsed ? 'collapsed' : ''}`}>
-            <aside className="sidebar">
+            {/* Backdrop mobile */}
+            {mobileOpen && (
+                <div className="sidebar-backdrop" onClick={() => setMobileOpen(false)} />
+            )}
+
+            <aside className={`sidebar ${mobileOpen ? 'mobile-open' : ''}`}>
                 <div className="sidebar-header">
                     <img
                         src="https://res.cloudinary.com/dvdayaoa9/image/upload/q_auto/f_auto/v1775218374/logoMSP_bydyvk.png"
@@ -147,6 +157,10 @@ export default function DashboardLayout() {
 
             <div className="dash-content">
                 <header className="dash-topbar">
+                    {/* Hamburger — visible uniquement sur mobile */}
+                    <button className="sidebar-hamburger" onClick={() => setMobileOpen(o => !o)}>
+                        <i className="bi bi-list"></i>
+                    </button>
                     <h2 className="dash-title">Espace Administration</h2>
                     <div className="dash-user">
                         <i className="dash-avatar bi bi-person-fill"></i>

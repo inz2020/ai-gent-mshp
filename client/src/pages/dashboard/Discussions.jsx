@@ -372,8 +372,8 @@ export default function Discussions() {
 
             {/* ══════════ MODAL SUPPRESSION CONVERSATION ══════════ */}
             {deleteModal && (
-                <div className="modal-overlay" onClick={() => setDeleteModal(null)}>
-                    <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
+                <div className="modal-overlay">
+                    <div className="modal modal-sm">
                         <div className="modal-header">
                             <h2>Supprimer la conversation</h2>
                             <button className="modal-close" onClick={() => setDeleteModal(null)}>✕</button>
@@ -402,8 +402,8 @@ export default function Discussions() {
                     ? `https://www.google.com/maps?q=${pos.latitude},${pos.longitude}`
                     : null;
                 return (
-                    <div className="modal-overlay" onClick={() => setGpsModal(null)}>
-                        <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
+                    <div className="modal-overlay">
+                        <div className="modal modal-sm">
                             <div className="modal-header">
                                 <h2>📍 Position GPS</h2>
                                 <button className="modal-close" onClick={() => setGpsModal(null)}>✕</button>
@@ -453,8 +453,8 @@ export default function Discussions() {
 
             {/* ══════════ MODAL SAVE CONTACT ══════════ */}
             {saveModal && (
-                <div className="modal-overlay" onClick={() => setSaveModal(null)}>
-                    <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
+                <div className="modal-overlay">
+                    <div className="modal modal-sm">
                         <div className="modal-header">
                             <h2>Enregistrer le contact</h2>
                             <button className="modal-close" onClick={() => setSaveModal(null)}>✕</button>
@@ -492,8 +492,8 @@ export default function Discussions() {
 
             {/* ══════════ FENÊTRE WHATSAPP ══════════ */}
             {selected && (
-                <div className="modal-overlay" onClick={closeThread}>
-                    <div className="wa-window" onClick={e => e.stopPropagation()}>
+                <div className="modal-overlay">
+                    <div className="wa-window">
 
                         {/* ── Header style WhatsApp ── */}
                         <div className="wa-header">

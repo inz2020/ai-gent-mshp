@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { getUsers, createUser, updateUser, deleteUser } from '../../api/index.js';
 import { validerMotDePasse, PASSWORD_RULES } from '../../utils/passwordPolicy.js';
 import { usePagination } from '../../hooks/usePagination.js';
+import { useSort } from '../../hooks/useSort.js';
 import Pagination from '../../components/Pagination.jsx';
+import SortableTh from '../../components/SortableTh.jsx';
 
 function genLoginPreview(nom) {
     return nom
@@ -117,7 +119,8 @@ export default function Utilisateurs() {
         (u.nom ?? '').toLowerCase().includes(search.toLowerCase()) ||
         (u.email ?? '').toLowerCase().includes(search.toLowerCase())
     );
-    const { paged, page, setPage, totalPages } = usePagination(filtered);
+    const { sorted, sortKey, sortDir, toggleSort } = useSort(filtered, 'nom');
+    const { paged, page, setPage, totalPages } = usePagination(sorted);
 
     return (
         <div className="dash-page">
@@ -144,19 +147,19 @@ export default function Utilisateurs() {
                 <table className="dt-table">
                     <thead>
                         <tr>
-                            <th>Nom</th>
+                            <SortableTh label="Nom"         field="nom"       sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                             <th>Identifiant</th>
-                            <th>Email</th>
-                            <th>Rôle</th>
-                            <th>Statut</th>
-                            <th>Créé le</th>
+                            <SortableTh label="Email"       field="email"     sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                            <SortableTh label="Rôle"        field="role"      sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                            <SortableTh label="Statut"      field="actif"     sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                            <SortableTh label="Créé le"     field="createdAt" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {loading ? (
                             <tr><td colSpan="7" className="dt-center">Chargement...</td></tr>
-                        ) : filtered.length === 0 ? (
+                        ) : sorted.length === 0 ? (
                             <tr><td colSpan="7" className="dt-center">Aucun utilisateur trouvé.</td></tr>
                         ) : paged.map(u => (
                             <tr key={u._id}>
@@ -184,7 +187,7 @@ export default function Utilisateurs() {
             {/* Modal Créer / Modifier */}
             {(modal === 'create' || modal === 'edit') && (
                 <div className="modal-overlay">
-                    <div className="modal" onClick={e => e.stopPropagation()}>
+                    <div className="modal">
                         <div className="modal-header">
                             <h2>{modal === 'create' ? 'Créer un utilisateur' : 'Modifier l\'utilisateur'}</h2>
                             <button className="modal-close" onClick={closeModal}><i className="bi bi-x-lg"></i></button>
@@ -251,8 +254,8 @@ export default function Utilisateurs() {
 
             {/* Modal Supprimer */}
             {modal === 'delete' && (
-                <div className="modal-overlay" onClick={closeModal}>
-                    <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
+                <div className="modal-overlay">
+                    <div className="modal modal-sm">
                         <div className="modal-header">
                             <h2>Confirmer la suppression</h2>
                             <button className="modal-close" onClick={closeModal}><i className="bi bi-x-lg"></i></button>
