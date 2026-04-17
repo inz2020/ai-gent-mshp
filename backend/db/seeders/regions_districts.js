@@ -11,7 +11,7 @@ const DATA = [
             { nom: 'Agadez',        lat: 16.9733, lng: 7.9911 },
             { nom: 'Arlit',         lat: 18.7369, lng: 7.3853 },
             { nom: 'Bilma',         lat: 18.6853, lng: 12.9164 },
-            { nom: 'Tchirozerine',  lat: 17.2458, lng: 7.3270 },
+            { nom: 'Tchirozérine',  lat: 17.2458, lng: 7.3270 },
         ]
     },
     {
@@ -20,7 +20,7 @@ const DATA = [
             { nom: 'Bosso',         lat: 13.7333, lng: 13.9333 },
             { nom: 'Diffa',         lat: 13.3154, lng: 12.6113 },
             { nom: 'Goudoumaria',   lat: 13.7081, lng: 12.7286 },
-            { nom: 'Maine-Soroa',   lat: 13.2114, lng: 12.0241 },
+            { nom: 'Maïné-Soroa',   lat: 13.2114, lng: 12.0241 },
             { nom: "N'Guigmi",      lat: 14.2490, lng: 13.1092 },
         ]
     },

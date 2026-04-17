@@ -6,6 +6,7 @@ import {
     getMobilisationRelais, createMobilisationRelais, updateMobilisationRelais, deleteMobilisationRelais,
     diffuserMobilisationRelais, diffuserToutCampagne,
     uploadMobilisationAudio,
+    getWhatsappTemplates, createWhatsappTemplate, updateWhatsappTemplate, deleteWhatsappTemplate,
     getDistricts, getStructures,
 } from '../../api/index.js';
 import { usePagination } from '../../hooks/usePagination.js';
@@ -81,7 +82,7 @@ export default function Campagnes() {
     const [mobRelaisModal, setMobRelaisModal]       = useState(null); // 'view' | 'edit' | null
     const [mobRelaisDistrict, setMobRelaisDistrict] = useState(null); // district courant
     const [mobRelaisRecord, setMobRelaisRecord]     = useState(null); // enregistrement existant
-    const [mobRelaisForm, setMobRelaisForm]         = useState({ relaisIds: [], concessionsVisitees: 0, personnesTouchees: 0, messageAudio: { url: '', nom: '', publicId: '' } });
+    const [mobRelaisForm, setMobRelaisForm]         = useState({ relaisIds: [], concessionsVisitees: 0, personnesTouchees: 0, messageAudio: { url: '', nom: '', publicId: '' }, templateId: '' });
     const [savingMobRelais, setSavingMobRelais]     = useState(false);
     const [confirmMobRelais, setConfirmMobRelais]   = useState(null);
     const [mobRelaisErr, setMobRelaisErr]           = useState('');
@@ -92,7 +93,18 @@ export default function Campagnes() {
     const [diffusing, setDiffusing]     = useState(false);  // "tout diffuser" en cours
     const [diffErrMsg, setDiffErrMsg]   = useState('');
     const [diffSuccMsg, setDiffSuccMsg] = useState('');
+    const [diffErrModal, setDiffErrModal] = useState(null); // { titre, message, log }
     const pollingRef = useRef(null);
+
+    // ── Templates WhatsApp ────────────────────────────────────────
+    const [templates, setTemplates]           = useState([]);
+    const [tplModal, setTplModal]             = useState(null); // 'add' | 'edit'
+    const [editingTpl, setEditingTpl]         = useState(null);
+    const [tplForm, setTplForm]               = useState({ nom: '', templateName: '', langue: 'fr', description: '', statut: 'actif' });
+    const [savingTpl, setSavingTpl]           = useState(false);
+    const [confirmTpl, setConfirmTpl]         = useState(null);
+    const [tplErr, setTplErr]                 = useState('');
+    const [searchTpl, setSearchTpl]           = useState('');
 
     // ── Init ─────────────────────────────────────────────────────
     useEffect(() => { fetchAll(); }, []);
@@ -100,8 +112,8 @@ export default function Campagnes() {
     async function fetchAll() {
         setLoading(true);
         try {
-            const [c, d] = await Promise.all([getCampagnes(), getDistricts()]);
-            setCampagnes(c); setDistricts(d);
+            const [c, d, t] = await Promise.all([getCampagnes(), getDistricts(), getWhatsappTemplates()]);
+            setCampagnes(c); setDistricts(d); setTemplates(t);
         } catch (e) { setError(e.message); }
         finally { setLoading(false); }
     }
@@ -122,6 +134,37 @@ export default function Campagnes() {
             setRelais(r); setStructures(s); setReunions(rp); setMobRelais(mr);
         } catch (e) { setError(e.message); }
         finally { setLoadingMob(false); setLoadingReu(false); setLoadingMobRelais(false); }
+    }
+
+    // ── Templates WhatsApp CRUD ───────────────────────────────────
+    function openAddTpl()    { setEditingTpl(null); setTplForm({ nom: '', templateName: '', langue: 'fr', description: '', statut: 'actif' }); setTplErr(''); setTplModal('add'); }
+    function openEditTpl(t)  { setEditingTpl(t); setTplForm({ nom: t.nom, templateName: t.templateName, langue: t.langue, description: t.description || '', statut: t.statut }); setTplErr(''); setTplModal('edit'); }
+    function closeTplModal() { setTplModal(null); setEditingTpl(null); setTplErr(''); }
+
+    async function handleSaveTpl(e) {
+        e.preventDefault();
+        if (!tplForm.nom.trim())          return setTplErr('Le nom affiché est requis.');
+        if (!tplForm.templateName.trim()) return setTplErr('Le nom exact Meta est requis.');
+        setSavingTpl(true); setTplErr('');
+        try {
+            if (editingTpl) {
+                const updated = await updateWhatsappTemplate(editingTpl._id, tplForm);
+                setTemplates(prev => prev.map(t => t._id === updated._id ? updated : t));
+            } else {
+                const created = await createWhatsappTemplate(tplForm);
+                setTemplates(prev => [...prev, created]);
+            }
+            closeTplModal();
+        } catch (e) { setTplErr(e.message); }
+        finally { setSavingTpl(false); }
+    }
+
+    async function handleDeleteTpl(tpl) {
+        try {
+            await deleteWhatsappTemplate(tpl._id);
+            setTemplates(prev => prev.filter(t => t._id !== tpl._id));
+        } catch (e) { setError(e.message); }
+        finally { setConfirmTpl(null); }
     }
 
     // ── Organisation : CRUD campagnes ─────────────────────────────
@@ -304,6 +347,7 @@ export default function Campagnes() {
             concessionsVisitees: record?.concessionsVisitees ?? 0,
             personnesTouchees:   record?.personnesTouchees   ?? 0,
             messageAudio:        record?.messageAudio ?? { url: '', nom: '', publicId: '' },
+            templateId:          record?.template?._id ?? '',
         });
         setMobRelaisErr('');
         setMobRelaisModal('edit');
@@ -338,6 +382,7 @@ export default function Campagnes() {
                 concessionsVisitees: Number(mobRelaisForm.concessionsVisitees),
                 personnesTouchees:   Number(mobRelaisForm.personnesTouchees),
                 messageAudio:        mobRelaisForm.messageAudio,
+                templateId:          mobRelaisForm.templateId || null,
             };
             if (mobRelaisRecord) {
                 const up = await updateMobilisationRelais(mobRelaisRecord._id, payload);
@@ -385,13 +430,20 @@ export default function Campagnes() {
             const res = await diffuserMobilisationRelais(record._id);
             setDiffSuccMsg(res.message + (res.sansNumero?.length ? ` (${res.sansNumero.length} sans numéro ignoré${res.sansNumero.length > 1 ? 's' : ''})` : ''));
             setTimeout(() => setDiffSuccMsg(''), 6000);
-            // Mise à jour optimiste du statut
             setMobRelais(prev => prev.map(m =>
                 m._id === record._id
                     ? { ...m, diffusion: { ...m.diffusion, statut: 'en_cours', total: res.total, envoyes: 0, echecs: 0 } }
                     : m
             ));
-        } catch (e) { setDiffErrMsg(e.message); setTimeout(() => setDiffErrMsg(''), 6000); }
+        } catch (e) {
+            // Récupérer le errorLog si la diffusion a partiellement tourné
+            const rec = mobRelais.find(m => m._id === record._id);
+            setDiffErrModal({
+                titre: `Erreur — District ${record.district?.nom || ''}`,
+                message: e.message,
+                log: rec?.diffusion?.errorLog || '',
+            });
+        }
     }
 
     async function handleDiffuserTout() {
@@ -404,7 +456,20 @@ export default function Campagnes() {
             setTimeout(() => setDiffSuccMsg(''), 6000);
             const fresh = await getMobilisationRelais(activeCampagne._id);
             setMobRelais(fresh);
-        } catch (e) { setDiffErrMsg(e.message); setTimeout(() => setDiffErrMsg(''), 6000); }
+        } catch (e) {
+            // Récupérer les errorLogs de tous les districts en erreur
+            const fresh = await getMobilisationRelais(activeCampagne._id).catch(() => mobRelais);
+            setMobRelais(fresh);
+            const logsErreur = fresh
+                .filter(m => m.diffusion?.statut === 'erreur' && m.diffusion?.errorLog)
+                .map(m => `[${m.district?.nom || m.district}]\n${m.diffusion.errorLog}`)
+                .join('\n\n');
+            setDiffErrModal({
+                titre: 'Erreur — Diffusion globale',
+                message: e.message,
+                log: logsErreur,
+            });
+        }
         finally { setDiffusing(false); }
     }
 
@@ -611,6 +676,39 @@ export default function Campagnes() {
                                     {/* Messages flash diffusion */}
                                     {diffErrMsg  && <div className="dt-error"  style={{ marginBottom: 8 }}><i className="bi bi-exclamation-triangle-fill"></i> {diffErrMsg}</div>}
                                     {diffSuccMsg && <div className="dt-success" style={{ marginBottom: 8 }}><i className="bi bi-check-lg"></i> {diffSuccMsg}</div>}
+
+                                    {/* Modal erreur diffusion */}
+                                    {diffErrModal && (
+                                        <div className="modal-overlay" onClick={() => setDiffErrModal(null)}>
+                                            <div className="modal-box" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
+                                                <div className="modal-header" style={{ background: '#fee2e2', borderBottom: '1px solid #fca5a5' }}>
+                                                    <h3 style={{ margin: 0, color: '#b91c1c', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                        <i className="bi bi-exclamation-triangle-fill"></i> {diffErrModal.titre}
+                                                    </h3>
+                                                    <button className="modal-close" onClick={() => setDiffErrModal(null)}>&times;</button>
+                                                </div>
+                                                <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                                    <div style={{ background: '#fff1f2', border: '1px solid #fca5a5', borderRadius: 6, padding: '10px 14px', color: '#b91c1c', fontWeight: 500 }}>
+                                                        <i className="bi bi-x-circle-fill" style={{ marginRight: 6 }}></i>
+                                                        {diffErrModal.message}
+                                                    </div>
+                                                    {diffErrModal.log && (
+                                                        <div>
+                                                            <div style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                                                <i className="bi bi-terminal-fill" style={{ marginRight: 4 }}></i>Journal d'erreurs
+                                                            </div>
+                                                            <pre style={{ margin: 0, background: '#1e1e2e', color: '#f8f8f2', borderRadius: 6, padding: '10px 14px', fontSize: 12, overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 260 }}>
+                                                                {diffErrModal.log}
+                                                            </pre>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="modal-footer">
+                                                    <button className="dt-btn dt-btn-secondary" onClick={() => setDiffErrModal(null)}>Fermer</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
 
                                     <div className="mob-section-header">
                                         <h3 className="mob-section-title">
@@ -866,6 +964,72 @@ export default function Campagnes() {
                             <div className="dt-footer">
                                 <span>{filtReunions.length} réunion{filtReunions.length !== 1 ? 's' : ''} / plaidoyer{filtReunions.length !== 1 ? 's' : ''}{searchReunion ? ` sur ${reunions.length}` : ''}</span>
                                 <Pagination page={pageReunion} totalPages={totalReunion} onChange={setPageReunion} />
+                            </div>
+                        </div>
+
+                        {/* ── Section Templates WhatsApp ── */}
+                        <div className="mob-section">
+                            <div className="mob-section-header">
+                                <h3 className="mob-section-title">
+                                    <i className="bi bi-whatsapp" style={{ color: '#25d366' }}></i> Templates WhatsApp Meta
+                                </h3>
+                                <button className="dt-btn dt-btn-primary" onClick={openAddTpl}>
+                                    <i className="bi bi-plus-lg"></i> Ajouter
+                                </button>
+                            </div>
+                            <p style={{ fontSize: '0.82rem', color: '#64748b', marginBottom: 10 }}>
+                                Ces templates sont utilisés lors de la diffusion audio pour ouvrir la fenêtre 24h WhatsApp. Ils doivent exister et être approuvés dans votre <strong>Meta Business Manager</strong>.
+                            </p>
+                            <div style={{ marginBottom: 8 }}>
+                                <input className="dt-search" placeholder="Rechercher un template..."
+                                    value={searchTpl} onChange={e => setSearchTpl(e.target.value)} />
+                            </div>
+                            <div className="dt-wrapper">
+                                <table className="dt-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Nom affiché</th>
+                                            <th>Nom Meta (exact)</th>
+                                            <th>Langue</th>
+                                            <th>Description</th>
+                                            <th>Statut</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {templates.filter(t =>
+                                            !searchTpl || t.nom.toLowerCase().includes(searchTpl.toLowerCase()) ||
+                                            t.templateName.toLowerCase().includes(searchTpl.toLowerCase())
+                                        ).map(t => (
+                                            <tr key={t._id}>
+                                                <td><strong>{t.nom}</strong></td>
+                                                <td><code style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4, fontSize: '0.82rem' }}>{t.templateName}</code></td>
+                                                <td><span className="dt-badge dt-badge-info">{t.langue}</span></td>
+                                                <td style={{ fontSize: '0.82rem', color: '#64748b' }}>{t.description || '—'}</td>
+                                                <td>
+                                                    <span className={`dt-badge ${t.statut === 'actif' ? 'dt-badge-actif' : 'dt-badge-inactif'}`}>
+                                                        {t.statut === 'actif' ? 'Actif' : 'Inactif'}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <div style={{ display: 'flex', gap: 6 }}>
+                                                        <button className="dt-btn dt-btn-edit" onClick={() => openEditTpl(t)} title="Modifier">
+                                                            <i className="bi bi-pencil-fill"></i>
+                                                        </button>
+                                                        <button className="dt-btn dt-btn-danger" onClick={() => setConfirmTpl(t)} title="Supprimer">
+                                                            <i className="bi bi-trash-fill"></i>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {templates.length === 0 && (
+                                            <tr><td colSpan={6} style={{ textAlign: 'center', color: '#94a3b8', padding: '20px 0' }}>
+                                                Aucun template configuré. Ajoutez-en un pour personnaliser la diffusion.
+                                            </td></tr>
+                                        )}
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </>
@@ -1427,6 +1591,33 @@ export default function Campagnes() {
                                 )}
                             </div>
 
+                            {/* Sélecteur de template WhatsApp */}
+                            <div className="form-group">
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <i className="bi bi-whatsapp" style={{ color: '#25d366' }}></i> Template WhatsApp
+                                    <span style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: 400 }}>(optionnel — fallback sur .env si vide)</span>
+                                </label>
+                                <select className="form-control"
+                                    value={mobRelaisForm.templateId}
+                                    onChange={e => setMobRelaisForm(f => ({ ...f, templateId: e.target.value }))}>
+                                    <option value="">— Utiliser le template par défaut ({import.meta.env.VITE_DEFAULT_TEMPLATE || 'hello_world'}) —</option>
+                                    {templates.filter(t => t.statut === 'actif').map(t => (
+                                        <option key={t._id} value={t._id}>
+                                            {t.nom} — {t.templateName} [{t.langue}]
+                                        </option>
+                                    ))}
+                                </select>
+                                {mobRelaisForm.templateId && (() => {
+                                    const tpl = templates.find(t => t._id === mobRelaisForm.templateId);
+                                    return tpl ? (
+                                        <div style={{ marginTop: 6, fontSize: '0.8rem', color: '#0369a1', background: '#e0f2fe', borderRadius: 5, padding: '5px 10px' }}>
+                                            <i className="bi bi-info-circle-fill"></i> <strong>{tpl.templateName}</strong> · langue : <strong>{tpl.langue}</strong>
+                                            {tpl.description && <span> · {tpl.description}</span>}
+                                        </div>
+                                    ) : null;
+                                })()}
+                            </div>
+
                             <div className="modal-footer">
                                 <button type="button" className="dt-btn" onClick={() => setMobRelaisModal(null)}>Annuler</button>
                                 <button type="submit" className="dt-btn dt-btn-primary" disabled={savingMobRelais}>
@@ -1434,6 +1625,83 @@ export default function Campagnes() {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Modal Template WhatsApp Ajouter / Modifier ── */}
+            {tplModal && (
+                <div className="modal-overlay" onClick={closeTplModal}>
+                    <div className="modal-box" style={{ maxWidth: 500 }} onClick={e => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h3><i className="bi bi-whatsapp" style={{ color: '#25d366' }}></i> {tplModal === 'add' ? 'Ajouter un template' : 'Modifier le template'}</h3>
+                            <button className="modal-close" onClick={closeTplModal}>&times;</button>
+                        </div>
+                        <form onSubmit={handleSaveTpl}>
+                            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                                {tplErr && <div className="dt-error"><i className="bi bi-exclamation-triangle-fill"></i> {tplErr}</div>}
+
+                                <div className="form-group">
+                                    <label>Nom affiché <span style={{ color: '#dc2626' }}>*</span></label>
+                                    <input className="form-control" placeholder="Ex : Template audio relais"
+                                        value={tplForm.nom} onChange={e => setTplForm(f => ({ ...f, nom: e.target.value }))} />
+                                    <small style={{ color: '#94a3b8' }}>Label visible dans le dashboard uniquement</small>
+                                </div>
+
+                                <div className="form-group">
+                                    <label>Nom exact Meta <span style={{ color: '#dc2626' }}>*</span></label>
+                                    <input className="form-control" placeholder="Ex : hello_world"
+                                        value={tplForm.templateName} onChange={e => setTplForm(f => ({ ...f, templateName: e.target.value }))} />
+                                    <small style={{ color: '#94a3b8' }}>Nom tel qu'il apparaît dans Meta Business Manager → Templates</small>
+                                </div>
+
+                                <div className="form-group">
+                                    <label>Code langue</label>
+                                    <input className="form-control" placeholder="Ex : fr, en_US, ha"
+                                        value={tplForm.langue} onChange={e => setTplForm(f => ({ ...f, langue: e.target.value }))} />
+                                </div>
+
+                                <div className="form-group">
+                                    <label>Description</label>
+                                    <input className="form-control" placeholder="Usage, contexte..."
+                                        value={tplForm.description} onChange={e => setTplForm(f => ({ ...f, description: e.target.value }))} />
+                                </div>
+
+                                <div className="form-group">
+                                    <label>Statut</label>
+                                    <select className="form-control" value={tplForm.statut} onChange={e => setTplForm(f => ({ ...f, statut: e.target.value }))}>
+                                        <option value="actif">Actif</option>
+                                        <option value="inactif">Inactif</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="modal-footer">
+                                <button type="button" className="dt-btn" onClick={closeTplModal}>Annuler</button>
+                                <button type="submit" className="dt-btn dt-btn-primary" disabled={savingTpl}>
+                                    {savingTpl ? 'Enregistrement...' : tplModal === 'add' ? 'Ajouter' : 'Mettre à jour'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Confirmation suppression template ── */}
+            {confirmTpl && (
+                <div className="modal-overlay">
+                    <div className="modal modal-sm">
+                        <div className="modal-header">
+                            <h2>Supprimer le template</h2>
+                            <button className="modal-close" onClick={() => setConfirmTpl(null)}><i className="bi bi-x-lg"></i></button>
+                        </div>
+                        <div className="modal-body" style={{ padding: '16px 24px' }}>
+                            <p>Supprimer le template <strong>{confirmTpl.nom}</strong> ?</p>
+                            <p style={{ color: '#dc2626', fontSize: '0.85rem', marginTop: 6 }}>Les districts qui l'utilisent reviendront au template par défaut.</p>
+                        </div>
+                        <div className="modal-footer">
+                            <button className="dt-btn" onClick={() => setConfirmTpl(null)}>Annuler</button>
+                            <button className="dt-btn dt-btn-danger" onClick={() => handleDeleteTpl(confirmTpl)}>Supprimer</button>
+                        </div>
                     </div>
                 </div>
             )}

@@ -6,6 +6,7 @@ const MobilisationRelaisSchema = new mongoose.Schema({
     campagne:  { type: ObjectId, ref: 'Campagne',  required: true },
     district:  { type: ObjectId, ref: 'District',  required: true },
     relais:    [{ type: ObjectId, ref: 'Relais' }],
+    template:  { type: ObjectId, ref: 'WhatsappTemplate', default: null },
     messageAudio: {
         url:      { type: String, default: '' },
         nom:      { type: String, default: '' },

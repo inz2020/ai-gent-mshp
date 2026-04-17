@@ -37,7 +37,7 @@ const DATA = [
     { district: 'Madaoua',  nom: 'CSI Madaoua',            type: 'CSI', lat: 14.0737, lng: 5.9579, contact: '+22720640003' },
     { district: 'Bouza',    nom: 'CSI Bouza',              type: 'CSI', lat: 14.4218, lng: 5.6986, contact: '+22720640004' },
     { district: 'Illela',   nom: 'CSI Illéla',             type: 'CSI', lat: 14.4696, lng: 4.9987, contact: '+22720640005' },
-    { district: 'Keita',    nom: 'CSI Keïta',              type: 'CSI', lat: 14.7603, lng: 5.7701, contact: '+22720640006' },
+    { district: 'Keita',    nom: 'CSI Keita',              type: 'CSI', lat: 14.7603, lng: 5.7701, contact: '+22720640006' },
 
     // ── TAHOUA Département ───────────────────────────────────────────────────────────────
     

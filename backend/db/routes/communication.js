@@ -11,6 +11,7 @@ import Structure from '../models/Structure.js'
 import MobilisationSociale from '../models/MobilisationSociale.js'
 import ReunionPlaidoyer from '../models/ReunionPlaidoyer.js'
 import MobilisationRelais from '../models/MobilisationRelais.js'
+import WhatsappTemplate from '../models/WhatsappTemplate.js'
 
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_NAME,
@@ -372,6 +373,58 @@ router.post('/mobilisation-relais/upload', upload.single('file'), async (req, re
     } catch (e) { err(res, 500, 'Erreur upload : ' + e.message) }
 })
 
+// ── Templates WhatsApp CRUD ───────────────────────────────────
+router.get('/templates', async (_req, res) => {
+    try {
+        const templates = await WhatsappTemplate.find().sort({ nom: 1 })
+        res.json(templates)
+    } catch (e) { err(res, 500, e.message) }
+})
+
+router.post('/templates', async (req, res) => {
+    try {
+        const { nom, templateName, langue, description, statut } = req.body
+        if (!nom?.trim())          return err(res, 400, 'Le nom est requis')
+        if (!templateName?.trim()) return err(res, 400, 'Le nom du template Meta est requis')
+        const tpl = await WhatsappTemplate.create({
+            nom: nom.trim(),
+            templateName: templateName.trim(),
+            langue: langue?.trim() || 'fr',
+            description: description?.trim() || '',
+            statut: statut || 'actif',
+        })
+        res.status(201).json(tpl)
+    } catch (e) {
+        if (e.code === 11000) return err(res, 409, 'Ce template (nom + langue) existe déjà')
+        err(res, 500, e.message)
+    }
+})
+
+router.put('/templates/:id', async (req, res) => {
+    try {
+        const { nom, templateName, langue, description, statut } = req.body
+        const tpl = await WhatsappTemplate.findById(req.params.id)
+        if (!tpl) return err(res, 404, 'Template introuvable')
+        if (nom          !== undefined) tpl.nom          = nom.trim()
+        if (templateName !== undefined) tpl.templateName = templateName.trim()
+        if (langue       !== undefined) tpl.langue       = langue.trim()
+        if (description  !== undefined) tpl.description  = description.trim()
+        if (statut       !== undefined) tpl.statut       = statut
+        await tpl.save()
+        res.json(tpl)
+    } catch (e) {
+        if (e.code === 11000) return err(res, 409, 'Ce template (nom + langue) existe déjà')
+        err(res, 500, e.message)
+    }
+})
+
+router.delete('/templates/:id', async (req, res) => {
+    try {
+        await WhatsappTemplate.findByIdAndDelete(req.params.id)
+        res.json({ message: 'Template supprimé' })
+    } catch (e) { err(res, 500, e.message) }
+})
+
 // GET /mobilisation-relais?campagne=:id
 router.get('/mobilisation-relais', async (req, res) => {
     const { campagne } = req.query
@@ -380,13 +433,14 @@ router.get('/mobilisation-relais', async (req, res) => {
         const records = await MobilisationRelais.find({ campagne })
             .populate('district', 'nom')
             .populate('relais', 'nom telephone typeRelais')
+            .populate('template', 'nom templateName langue')
         res.json(records)
     } catch (e) { err(res, 500, e.message) }
 })
 
 // POST /mobilisation-relais
 router.post('/mobilisation-relais', async (req, res) => {
-    const { campagneId, districtId, relaisIds, concessionsVisitees, personnesTouchees, messageAudio } = req.body
+    const { campagneId, districtId, relaisIds, concessionsVisitees, personnesTouchees, messageAudio, templateId } = req.body
     if (!campagneId || !districtId) return err(res, 400, 'campagneId et districtId requis')
     try {
         const record = await MobilisationRelais.create({
@@ -396,10 +450,12 @@ router.post('/mobilisation-relais', async (req, res) => {
             concessionsVisitees: concessionsVisitees ?? 0,
             personnesTouchees:   personnesTouchees   ?? 0,
             messageAudio: messageAudio ?? { url: '', nom: '', publicId: '' },
+            template: templateId || null,
         })
         const populated = await MobilisationRelais.findById(record._id)
             .populate('district', 'nom')
             .populate('relais', 'nom telephone typeRelais')
+            .populate('template', 'nom templateName langue')
         res.status(201).json(populated)
     } catch (e) {
         if (e.code === 11000) return err(res, 409, 'Un enregistrement existe déjà pour ce district dans cette campagne')
@@ -412,15 +468,17 @@ router.put('/mobilisation-relais/:id', async (req, res) => {
     try {
         const record = await MobilisationRelais.findById(req.params.id)
         if (!record) return err(res, 404, 'Enregistrement introuvable')
-        const { relaisIds, concessionsVisitees, personnesTouchees, messageAudio } = req.body
+        const { relaisIds, concessionsVisitees, personnesTouchees, messageAudio, templateId } = req.body
         if (relaisIds            !== undefined) record.relais              = relaisIds
         if (concessionsVisitees  !== undefined) record.concessionsVisitees = concessionsVisitees
         if (personnesTouchees    !== undefined) record.personnesTouchees   = personnesTouchees
         if (messageAudio         !== undefined) record.messageAudio        = messageAudio
+        if (templateId           !== undefined) record.template            = templateId || null
         await record.save()
         const populated = await MobilisationRelais.findById(record._id)
             .populate('district', 'nom')
             .populate('relais', 'nom telephone typeRelais')
+            .populate('template', 'nom templateName langue')
         res.json(populated)
     } catch (e) { err(res, 500, e.message) }
 })
@@ -450,9 +508,9 @@ function resolvePhone(relais) {
 }
 
 // ── Envoi d'un template puis d'un audio à un numéro ──────────
-async function envoyerAudioRelais(phone, audioUrl, headers) {
-    const templateName = process.env.WA_INVITE_TEMPLATE || 'hello_world'
-    const templateLang = process.env.WA_INVITE_TEMPLATE_LANG_FR || 'fr'
+async function envoyerAudioRelais(phone, audioUrl, headers, tplName, tplLang) {
+    const templateName = tplName || process.env.WA_INVITE_TEMPLATE || 'hello_world'
+    const templateLang = tplLang || process.env.WA_INVITE_TEMPLATE_LANG_FR || 'fr'
     const phoneId      = process.env.PHONE_ID
     const base         = `https://graph.facebook.com/v22.0/${phoneId}/messages`
 
@@ -480,13 +538,21 @@ async function diffuserAudioDistrict(record, targets) {
         'Content-Type': 'application/json',
     }
     const audioUrl = record.messageAudio.url
+
+    // Résoudre le template associé au record (ou fallback env)
+    let tplName = null, tplLang = null
+    if (record.template) {
+        const tpl = await WhatsappTemplate.findById(record.template).lean()
+        if (tpl) { tplName = tpl.templateName; tplLang = tpl.langue }
+    }
+
     let envoyes = 0, echecs = 0
 
     for (let i = 0; i < targets.length; i += WA_BATCH_SIZE) {
         const batch = targets.slice(i, i + WA_BATCH_SIZE)
 
         const results = await Promise.allSettled(
-            batch.map(t => envoyerAudioRelais(t.phone, audioUrl, headers))
+            batch.map(t => envoyerAudioRelais(t.phone, audioUrl, headers, tplName, tplLang))
         )
 
         for (let j = 0; j < results.length; j++) {
