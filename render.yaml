@@ -6,7 +6,7 @@ services:
     plan: free                 # ou starter, standard, etc.
     rootDir: .                 # racine du dépôt
 
-    buildCommand: cd backend && npm install && cd ../client && npm ci && npm run build
+    buildCommand: cd backend && npm install && cd ../client && npm install --legacy-peer-deps && npm run build
 
     startCommand: node backend/app.js
 
