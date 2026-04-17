@@ -112,8 +112,9 @@ export default function Campagnes() {
     async function fetchAll() {
         setLoading(true);
         try {
-            const [c, d, t] = await Promise.all([getCampagnes(), getDistricts(), getWhatsappTemplates()]);
-            setCampagnes(c); setDistricts(d); setTemplates(t);
+            const [c, d] = await Promise.all([getCampagnes(), getDistricts()]);
+            setCampagnes(c); setDistricts(d);
+            getWhatsappTemplates().then(setTemplates).catch(() => {});
         } catch (e) { setError(e.message); }
         finally { setLoading(false); }
     }
