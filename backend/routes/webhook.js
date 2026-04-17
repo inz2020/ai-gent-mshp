@@ -513,6 +513,26 @@ async function processText(userText, userPhone, phoneNumId = null) {
         return;
     }
 
+    // Interception des salutations — réponse directe sans GPT
+    const normalizedForGreeting = userText.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    const isGreeting = GREETING_CONFIG.keywords.some(kw => {
+        const norm = kw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        return normalizedForGreeting === norm || normalizedForGreeting.startsWith(norm + ' ') || normalizedForGreeting.endsWith(' ' + norm);
+    });
+    if (isGreeting) {
+        const greetLang = detectTextLanguage(userText);
+        const greetReply = greetLang === 'ha'
+            ? 'Sannu! Ni ce Hawa, wakiliyan lafiya. Ina nan domin taimakawa game da rigakafi, lafiyar jariri, da shawarar lafiya. Me kuke bukata?'
+            : 'Bonjour ! Je suis Hawa, votre agente de santé communautaire. Je suis là pour vous aider sur la vaccination, la santé de votre bébé et les consultations. Quelle est votre question ?';
+        await sendWhatsAppText(userPhone, greetReply);
+        try {
+            await saveMessages(contact._id, greetLang === 'ha' ? 'ha' : 'fr', { humanText: userText, aiText: greetReply });
+        } catch (dbErr) {
+            console.error('[DB] Erreur persistance salutation:', dbErr.message);
+        }
+        return;
+    }
+
     // Pré-détection rapide par dictionnaire (HAUSA_WORDS / HAUSA_PHRASES)
     // Si des mots Hausa sont trouvés → on confirme à GPT que c'est du Hausa
     const dictLang = detectTextLanguage(userText);
@@ -598,7 +618,7 @@ async function processText(userText, userPhone, phoneNumId = null) {
     if (!reply) {
         // Principe : texte → erreur texte (FR), audio → erreur audio (HA)
         if (lang === 'fr') {
-            const errMsg = ERROR_TEXTS['quality_fr'] || "Je n'ai pas pu traiter votre message. Veuillez reformuler.";
+            const errMsg = "Je n'ai pas compris votre message. Pouvez-vous le reformuler différemment ?";
             await sendWhatsAppText(userPhone, errMsg);
             try {
                 await saveMessages(contact._id, lang, { humanText: userText, aiText: errMsg });
