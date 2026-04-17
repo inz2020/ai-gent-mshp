@@ -10,7 +10,8 @@
       "Bash(node --check db/models/Campagne.js)",
       "Bash(node --check db/models/MobilisationSociale.js)",
       "Bash(node --check db/routes/MobilisationSociale.js)",
-      "Bash(grep -n \"^\\\\s*>\" /c/Users/ABOU/Desktop/e-sante/project-node-chatbot/client/src/pages/dashboard/*.jsx)"
+      "Bash(grep -n \"^\\\\s*>\" /c/Users/ABOU/Desktop/e-sante/project-node-chatbot/client/src/pages/dashboard/*.jsx)",
+      "Bash(cmd /c \"taskkill /F /PID 24524 2>&1\")"
     ]
   }
 }

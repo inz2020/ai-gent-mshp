@@ -7,7 +7,7 @@ const router = express.Router();
 // POST /api/login
 router.post('/login', async (req, res) => {
     const { login, password } = req.body;
-
+console.log('login:', login)
     if (!login || !password) {
         return res.status(400).json({ message: 'Identifiant et mot de passe requis.' });
     }
@@ -18,6 +18,7 @@ router.post('/login', async (req, res) => {
             $or: [{ login: login.toLowerCase().trim() }, { email: login.toLowerCase().trim() }],
             actif: true,
         });
+        console.log('user:', user)
         if (!user) {
             return res.status(401).json({ message: 'Identifiants incorrects.' });
         }

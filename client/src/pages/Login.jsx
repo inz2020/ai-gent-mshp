@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { loginUser } from '../api/index.js';
 
 export default function Login() {
+
   const navigate = useNavigate();
   const [form, setForm] = useState({ login: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
@@ -28,6 +29,7 @@ export default function Login() {
     setError('');
     try {
       const { token, nom, role } = await loginUser(form.login, form.password);
+      console.log('nom:', nom)
       localStorage.setItem('token', token);
       console.log('token:', token)
       localStorage.setItem('user_nom', nom ?? '');
