@@ -6,8 +6,7 @@ services:
     plan: free                 # ou starter, standard, etc.
     rootDir: .                 # racine du dépôt
 
-    buildCommand: npm run install:all && npm run build:client
-    nodeVersion: 20.11.0
+    buildCommand: cd backend && npm install && cd ../client && npm install && npm run build
 
     startCommand: cd backend && node app.js
 
@@ -16,6 +15,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_VERSION
+        value: "20.11.0"
 
       # ── WhatsApp / Meta ────────────────────────────────────────
       - key: META_TOKEN
