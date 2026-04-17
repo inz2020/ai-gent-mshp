@@ -1,0 +1,63 @@
+services:
+  - type: web
+    name: e-sante-chatbot
+    env: node
+    region: frankfurt          # changer si besoin : oregon, singapore, ohio…
+    plan: free                 # ou starter, standard, etc.
+    rootDir: .                 # racine du dépôt
+
+    buildCommand: |
+      cd backend && npm install
+      cd ../client && npm install && npm run build
+
+    startCommand: cd backend && node app.js
+
+    healthCheckPath: /api/me   # Render pinge cette route pour vérifier que le serveur répond
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # ── WhatsApp / Meta ────────────────────────────────────────
+      - key: META_TOKEN
+        sync: false            # à renseigner manuellement dans le dashboard Render
+      - key: PHONE_ID
+        sync: false
+      - key: WA_INVITE_TEMPLATE
+        sync: false
+      - key: WA_INVITE_TEMPLATE_LANG_FR
+        sync: false
+      - key: WA_INVITE_TEMPLATE_LANG_HA
+        sync: false
+
+      # ── IA / LLM ───────────────────────────────────────────────
+      - key: OPENAI_KEY
+        sync: false
+      - key: CLAUDE_KEY
+        sync: false
+
+      # ── ElevenLabs TTS ────────────────────────────────────────
+      - key: ELEVEN_KEY
+        sync: false
+      - key: VOICE_ID
+        sync: false
+
+      # ── Cloudinary ────────────────────────────────────────────
+      - key: CLOUDINARY_NAME
+        sync: false
+      - key: CLOUDINARY_KEY
+        sync: false
+      - key: CLOUDINARY_SECRET
+        sync: false
+
+      # ── Base de données ───────────────────────────────────────
+      - key: MONGODB_URI
+        sync: false
+
+      # ── Auth ──────────────────────────────────────────────────
+      - key: JWT_SECRET
+        sync: false
+
+      # ── CORS ──────────────────────────────────────────────────
+      - key: FRONTEND_URL
+        value: https://e-sante-chatbot.onrender.com   # remplacer par l'URL réelle du service
