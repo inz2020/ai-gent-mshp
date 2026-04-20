@@ -900,6 +900,73 @@ export default function Campagnes() {
                             </div>
                         </div>
 
+                        {/* ── Section Réunions / Plaidoyers ── */}
+                        <div className="mob-section">
+                            <div className="mob-section-header">
+                                <h3 className="mob-section-title">
+                                    <i className="bi bi-mic-fill"></i> Réunions &amp; Plaidoyers
+                                </h3>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    <button className="dt-btn dt-btn-primary" onClick={openCreateReunion}>
+                                        <i className="bi bi-plus-lg"></i> Ajouter
+                                    </button>
+                                    <button className="dt-btn" onClick={loadMobilisationData}>
+                                        <i className="bi bi-arrow-clockwise"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="dt-toolbar" style={{ marginBottom: 8 }}>
+                                <input className="dt-search" placeholder="Rechercher par nom, type, district, lieu..."
+                                    value={searchReunion} onChange={e => setSearchReunion(e.target.value)} />
+                            </div>
+                            <div className="dt-wrapper">
+                                <table className="dt-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Nom</th>
+                                            <th>Type</th>
+                                            <th>Date</th>
+                                            <th>Lieu</th>
+                                            <th>District</th>
+                                            <th>Participants</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {loadingReu ? (
+                                            <tr><td colSpan="7" className="dt-center">Chargement...</td></tr>
+                                        ) : filtReunions.length === 0 ? (
+                                            <tr><td colSpan="7" className="dt-center">Aucune réunion / plaidoyer trouvé.</td></tr>
+                                        ) : pagedReunions.map(r => (
+                                            <tr key={r._id}>
+                                                <td><strong>{r.nom}</strong></td>
+                                                <td>
+                                                    <span className={`dt-badge ${r.type === 'Réunion' ? 'dt-badge-actif' : 'dt-badge-warning'}`}>
+                                                        {r.type}
+                                                    </span>
+                                                </td>
+                                                <td style={{ fontSize: '0.82rem' }}>
+                                                    {r.date ? new Date(r.date).toLocaleDateString('fr-FR') : <span className="dt-muted">—</span>}
+                                                </td>
+                                                <td>{r.lieu || <span className="dt-muted">—</span>}</td>
+                                                <td>{r.district?.nom ?? <span className="dt-muted">—</span>}</td>
+                                                <td style={{ textAlign: 'center' }}>{r.nbParticipants ?? 0}</td>
+                                                <td>
+                                                    <div style={{ display: 'flex', gap: 6 }}>
+                                                        <button className="dt-btn dt-btn-edit" onClick={() => openEditReunion(r)}><i className="bi bi-pencil-fill"></i></button>
+                                                        <button className="dt-btn dt-btn-danger" onClick={() => setConfirmReunion(r._id)}><i className="bi bi-trash-fill"></i></button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div className="dt-footer">
+                                <span>{filtReunions.length} réunion{filtReunions.length !== 1 ? 's' : ''} / plaidoyer{filtReunions.length !== 1 ? 's' : ''}{searchReunion ? ` sur ${reunions.length}` : ''}</span>
+                                <Pagination page={pageReunion} totalPages={totalReunion} onChange={setPageReunion} />
+                            </div>
+                        </div>
 
                         {/* ── Section Templates WhatsApp ── */}
                         <div className="mob-section">
