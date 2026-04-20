@@ -100,7 +100,7 @@ export default function Campagnes() {
     const [templates, setTemplates]           = useState([]);
     const [tplModal, setTplModal]             = useState(null); // 'add' | 'edit'
     const [editingTpl, setEditingTpl]         = useState(null);
-    const [tplForm, setTplForm]               = useState({ nom: '', templateName: '', langue: 'fr', description: '', statut: 'actif' });
+    const [tplForm, setTplForm]               = useState({ nom: '', templateName: '', langue: 'fr', description: '', statut: 'actif', typeContenu: 'audio', variablesCorps: 0, variablesEntete: 0 });
     const [savingTpl, setSavingTpl]           = useState(false);
     const [confirmTpl, setConfirmTpl]         = useState(null);
     const [tplErr, setTplErr]                 = useState('');
@@ -138,8 +138,8 @@ export default function Campagnes() {
     }
 
     // ── Templates WhatsApp CRUD ───────────────────────────────────
-    function openAddTpl()    { setEditingTpl(null); setTplForm({ nom: '', templateName: '', langue: 'fr', description: '', statut: 'actif' }); setTplErr(''); setTplModal('add'); }
-    function openEditTpl(t)  { setEditingTpl(t); setTplForm({ nom: t.nom, templateName: t.templateName, langue: t.langue, description: t.description || '', statut: t.statut }); setTplErr(''); setTplModal('edit'); }
+    function openAddTpl()    { setEditingTpl(null); setTplForm({ nom: '', templateName: '', langue: 'fr', description: '', statut: 'actif', typeContenu: 'audio', variablesCorps: 0, variablesEntete: 0 }); setTplErr(''); setTplModal('add'); }
+    function openEditTpl(t)  { setEditingTpl(t); setTplForm({ nom: t.nom, templateName: t.templateName, langue: t.langue, description: t.description || '', statut: t.statut, typeContenu: t.typeContenu || 'audio', variablesCorps: t.variablesCorps ?? 0, variablesEntete: t.variablesEntete ?? 0 }); setTplErr(''); setTplModal('edit'); }
     function closeTplModal() { setTplModal(null); setEditingTpl(null); setTplErr(''); }
 
     async function handleSaveTpl(e) {
@@ -992,6 +992,8 @@ export default function Campagnes() {
                                             <th>Nom affiché</th>
                                             <th>Nom Meta (exact)</th>
                                             <th>Langue</th>
+                                            <th>Header</th>
+                                            <th>Variables</th>
                                             <th>Description</th>
                                             <th>Statut</th>
                                             <th>Actions</th>
@@ -1005,7 +1007,16 @@ export default function Campagnes() {
                                             <tr key={t._id}>
                                                 <td><strong>{t.nom}</strong></td>
                                                 <td><code style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4, fontSize: '0.82rem' }}>{t.templateName}</code></td>
-                                                <td><span className="dt-badge dt-badge-info">{t.langue}</span></td>
+                                                <td><span className="dt-badge dt-badge-lang">{t.langue}</span></td>
+                                                <td><TplTypeBadge type={t.typeContenu} /></td>
+                                                <td style={{ textAlign: 'center', fontSize: '0.82rem', color: '#64748b' }}>
+                                                    {(t.variablesCorps ?? 0) > 0
+                                                        ? <span className="dt-badge dt-badge-code">{t.variablesCorps} corps</span>
+                                                        : '—'}
+                                                    {(t.variablesEntete ?? 0) > 0 && (
+                                                        <span className="dt-badge dt-badge-code" style={{ marginLeft: 4 }}>{t.variablesEntete} entête</span>
+                                                    )}
+                                                </td>
                                                 <td style={{ fontSize: '0.82rem', color: '#64748b' }}>{t.description || '—'}</td>
                                                 <td>
                                                     <span className={`dt-badge ${t.statut === 'actif' ? 'dt-badge-actif' : 'dt-badge-inactif'}`}>
@@ -1633,7 +1644,7 @@ export default function Campagnes() {
             {/* ── Modal Template WhatsApp Ajouter / Modifier ── */}
             {tplModal && (
                 <div className="modal-overlay">
-                    <div className="modal" style={{ maxWidth: 480 }}>
+                    <div className="modal" style={{ maxWidth: 540 }}>
                         <div className="modal-header">
                             <h2><i className="bi bi-whatsapp" style={{ color: '#25d366', marginRight: 6 }}></i>{tplModal === 'add' ? 'Ajouter un template' : 'Modifier le template'}</h2>
                             <button className="modal-close" onClick={closeTplModal}><i className="bi bi-x-lg"></i></button>
@@ -1642,6 +1653,7 @@ export default function Campagnes() {
                             <div className="modal-body">
                                 {tplErr && <div className="dt-error" style={{ marginBottom: 12 }}><i className="bi bi-exclamation-triangle-fill"></i> {tplErr}</div>}
 
+                                {/* Identification */}
                                 <div className="form-group">
                                     <label>Nom affiché <span style={{ color: '#dc2626' }}>*</span></label>
                                     <input className="form-control" placeholder="Ex : Template audio relais"
@@ -1657,12 +1669,12 @@ export default function Campagnes() {
                                 </div>
 
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                                    <div className="form-group">
+                                    <div className="form-group" style={{ margin: 0 }}>
                                         <label>Code langue</label>
                                         <input className="form-control" placeholder="fr, en_US, ha"
                                             value={tplForm.langue} onChange={e => setTplForm(f => ({ ...f, langue: e.target.value }))} />
                                     </div>
-                                    <div className="form-group">
+                                    <div className="form-group" style={{ margin: 0 }}>
                                         <label>Statut</label>
                                         <select className="form-control" value={tplForm.statut} onChange={e => setTplForm(f => ({ ...f, statut: e.target.value }))}>
                                             <option value="actif">Actif</option>
@@ -1671,7 +1683,98 @@ export default function Campagnes() {
                                     </div>
                                 </div>
 
-                                <div className="form-group">
+                                {/* ── Section : contenu du template Meta ── */}
+                                <div style={{ borderTop: '1px solid #e5e7eb', marginTop: 16, paddingTop: 14 }}>
+                                    <p style={{ fontSize: '0.82rem', fontWeight: 700, color: '#374151', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        <i className="bi bi-layout-text-sidebar-reverse" style={{ color: '#6366f1' }}></i>
+                                        Composants du template Meta
+                                    </p>
+
+                                    {/* Type de contenu : sélecteur visuel */}
+                                    <div className="form-group" style={{ marginBottom: 10 }}>
+                                        <label>Type de header</label>
+                                        <div className="tpl-type-grid">
+                                            {[
+                                                { value: 'aucun',    icon: 'bi-slash-circle',       label: 'Aucun',     color: '#6b7280', bg: '#f9fafb' },
+                                                { value: 'texte',    icon: 'bi-fonts',               label: 'Texte',     color: '#7c3aed', bg: '#ede9fe' },
+                                                { value: 'image',    icon: 'bi-image-fill',          label: 'Image',     color: '#0369a1', bg: '#e0f2fe' },
+                                                { value: 'document', icon: 'bi-file-earmark-pdf-fill', label: 'Document', color: '#b45309', bg: '#fef3c7' },
+                                                { value: 'audio',    icon: 'bi-mic-fill',            label: 'Audio',     color: '#15803d', bg: '#dcfce7' },
+                                            ].map(opt => (
+                                                <button
+                                                    key={opt.value}
+                                                    type="button"
+                                                    className={`tpl-type-btn${tplForm.typeContenu === opt.value ? ' tpl-type-btn-active' : ''}`}
+                                                    style={tplForm.typeContenu === opt.value ? { background: opt.bg, borderColor: opt.color, color: opt.color } : {}}
+                                                    onClick={() => setTplForm(f => ({ ...f, typeContenu: opt.value }))}
+                                                >
+                                                    <i className={`bi ${opt.icon}`}></i>
+                                                    <span>{opt.label}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Hint contextuel selon le type */}
+                                    {tplForm.typeContenu === 'audio' && (
+                                        <div className="tpl-hint tpl-hint-green">
+                                            <i className="bi bi-info-circle-fill"></i>
+                                            <span>Le template ouvre la fenêtre de conversation, puis l'audio est envoyé en message séparé.</span>
+                                        </div>
+                                    )}
+                                    {tplForm.typeContenu === 'image' && (
+                                        <div className="tpl-hint tpl-hint-blue">
+                                            <i className="bi bi-info-circle-fill"></i>
+                                            <span>Le header du template est une <strong>IMAGE</strong>. Une URL d'image sera requise comme paramètre <code>header</code> lors de la diffusion.</span>
+                                        </div>
+                                    )}
+                                    {tplForm.typeContenu === 'document' && (
+                                        <div className="tpl-hint tpl-hint-orange">
+                                            <i className="bi bi-info-circle-fill"></i>
+                                            <span>Le header du template est un <strong>DOCUMENT</strong> (PDF). Une URL de document sera requise comme paramètre <code>header</code> lors de la diffusion.</span>
+                                        </div>
+                                    )}
+                                    {tplForm.typeContenu === 'texte' && (
+                                        <div className="tpl-hint tpl-hint-purple">
+                                            <i className="bi bi-info-circle-fill"></i>
+                                            <span>Le header est du <strong>TEXTE</strong>. Si le header contient une variable <code>{'{{1}}'}</code>, indiquez ci-dessous le nombre de variables.</span>
+                                        </div>
+                                    )}
+                                    {tplForm.typeContenu === 'aucun' && (
+                                        <div className="tpl-hint tpl-hint-gray">
+                                            <i className="bi bi-info-circle-fill"></i>
+                                            <span>Pas de header. Le template contient uniquement un corps texte.</span>
+                                        </div>
+                                    )}
+
+                                    {/* Variables header (texte seulement) + corps */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 10 }}>
+                                        {tplForm.typeContenu === 'texte' && (
+                                            <div className="form-group" style={{ margin: 0 }}>
+                                                <label style={{ fontSize: '0.82rem' }}>Variables header <code style={{ fontSize: '0.75rem' }}>{'{{n}}'}</code></label>
+                                                <input type="number" min="0" max="1" className="form-control"
+                                                    value={tplForm.variablesEntete}
+                                                    onChange={e => setTplForm(f => ({ ...f, variablesEntete: Math.max(0, Math.min(1, +e.target.value)) }))} />
+                                                <small className="form-hint">0 ou 1 variable dans le header</small>
+                                            </div>
+                                        )}
+                                        <div className="form-group" style={{ margin: 0 }}>
+                                            <label style={{ fontSize: '0.82rem' }}>Variables corps <code style={{ fontSize: '0.75rem' }}>{'{{1}}'}</code>, <code style={{ fontSize: '0.75rem' }}>{'{{2}}'}</code>…</label>
+                                            <input type="number" min="0" max="10" className="form-control"
+                                                value={tplForm.variablesCorps}
+                                                onChange={e => setTplForm(f => ({ ...f, variablesCorps: Math.max(0, Math.min(10, +e.target.value)) }))} />
+                                            <small className="form-hint">Nb de variables dans le corps du message</small>
+                                        </div>
+                                    </div>
+
+                                    {/* Aperçu du payload API */}
+                                    <div style={{ marginTop: 12, background: '#0f172a', borderRadius: 8, padding: '10px 14px', fontSize: '0.72rem', fontFamily: 'monospace', color: '#94a3b8', overflowX: 'auto' }}>
+                                        <span style={{ color: '#64748b', display: 'block', marginBottom: 4 }}>// Aperçu composants Meta API</span>
+                                        <TplPayloadPreview form={tplForm} />
+                                    </div>
+                                </div>
+
+                                <div className="form-group" style={{ marginTop: 14 }}>
                                     <label>Description</label>
                                     <input className="form-control" placeholder="Usage, contexte..."
                                         value={tplForm.description} onChange={e => setTplForm(f => ({ ...f, description: e.target.value }))} />
@@ -1728,5 +1831,81 @@ export default function Campagnes() {
                 </div>
             )}
         </div>
+    );
+}
+
+/* ── Badge visuel pour le type de contenu du template ── */
+const TPL_TYPE_META = {
+    aucun:    { icon: 'bi-slash-circle',          label: 'Aucun',    color: '#6b7280', bg: '#f3f4f6'  },
+    texte:    { icon: 'bi-fonts',                  label: 'Texte',    color: '#7c3aed', bg: '#ede9fe'  },
+    image:    { icon: 'bi-image-fill',             label: 'Image',    color: '#0369a1', bg: '#e0f2fe'  },
+    document: { icon: 'bi-file-earmark-pdf-fill',  label: 'Document', color: '#b45309', bg: '#fef3c7'  },
+    audio:    { icon: 'bi-mic-fill',               label: 'Audio',    color: '#15803d', bg: '#dcfce7'  },
+};
+function TplTypeBadge({ type }) {
+    const meta = TPL_TYPE_META[type] ?? TPL_TYPE_META.audio;
+    return (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.76rem', fontWeight: 600,
+            background: meta.bg, color: meta.color, padding: '2px 8px', borderRadius: 10 }}>
+            <i className={`bi ${meta.icon}`}></i> {meta.label}
+        </span>
+    );
+}
+
+/* ── Aperçu du payload API Meta pour le template ── */
+function TplPayloadPreview({ form }) {
+    const components = [];
+
+    if (form.typeContenu === 'image') {
+        components.push({
+            type: 'header',
+            parameters: [{ type: 'image', image: { link: '<URL_IMAGE>' } }],
+        });
+    } else if (form.typeContenu === 'document') {
+        components.push({
+            type: 'header',
+            parameters: [{ type: 'document', document: { link: '<URL_DOCUMENT>', filename: 'document.pdf' } }],
+        });
+    } else if (form.typeContenu === 'texte' && form.variablesEntete > 0) {
+        components.push({
+            type: 'header',
+            parameters: [{ type: 'text', text: '<TEXTE_HEADER>' }],
+        });
+    }
+
+    if (form.variablesCorps > 0) {
+        components.push({
+            type: 'body',
+            parameters: Array.from({ length: form.variablesCorps }, (_, i) => ({
+                type: 'text',
+                text: `<VAR_${i + 1}>`,
+            })),
+        });
+    }
+
+    const payload = {
+        type: 'template',
+        template: {
+            name: form.templateName || 'nom_template',
+            language: { code: form.langue || 'fr' },
+            ...(components.length ? { components } : {}),
+        },
+    };
+
+    return (
+        <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+            {JSON.stringify(payload, null, 2)
+                .split('\n')
+                .map((line, i) => {
+                    const isKey   = line.includes('":');
+                    const isStr   = line.includes('"<');
+                    return (
+                        <span key={i} style={{ color: isStr ? '#fbbf24' : isKey ? '#7dd3fc' : '#e2e8f0' }}>
+                            {line}{'\n'}
+                        </span>
+                    );
+                })
+            }
+        </pre>
     );
 }

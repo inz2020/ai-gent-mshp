@@ -21,13 +21,23 @@ function formatTime(date) {
 function formatDate(date) {
     const d = new Date(date);
     const today = new Date();
-    const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+    const yesterday = new Date(today); 
+    yesterday.setDate(today.getDate() - 1);
     if (d.toDateString() === today.toDateString()) return "Aujourd'hui";
     if (d.toDateString() === yesterday.toDateString()) return 'Hier';
     return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
-// Groupe les messages par date
+function formatConvTime(date) {
+    const d = new Date(date);
+    const today = new Date();
+    const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+    if (d.toDateString() === today.toDateString())
+        return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    if (d.toDateString() === yesterday.toDateString()) return 'Hier';
+    return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+}
+
 function groupByDate(messages) {
     const groups = [];
     let lastDate = null;
@@ -52,30 +62,27 @@ export default function Discussions() {
     const [toggling, setToggling]   = useState(false);
     const [blocking, setBlocking]   = useState(false);
     const [lastSync, setLastSync]   = useState(null);
-    const [saveModal, setSaveModal] = useState(null);   // { contactId, whatsappId, nom }
+    const [saveModal, setSaveModal] = useState(null);
     const [saveName, setSaveName]   = useState('');
     const [saving, setSaving]       = useState(false);
     const [savedIds, setSavedIds]   = useState(new Set());
-    const [gpsModal, setGpsModal]   = useState(null);   // { nom, whatsappId, dernierePosition }
-    const [deleteModal, setDeleteModal] = useState(null); // conversation à supprimer
+    const [gpsModal, setGpsModal]   = useState(null);
+    const [deleteModal, setDeleteModal] = useState(null);
     const [deleting, setDeleting]       = useState(false);
-    const threadEndRef              = useRef(null);
-    const textareaRef               = useRef(null);
-    const selectedRef               = useRef(null);
-    const messagesRef               = useRef([]);
+    const threadEndRef  = useRef(null);
+    const textareaRef   = useRef(null);
+    const selectedRef   = useRef(null);
+    const messagesRef   = useRef([]);
 
-    // Garde les refs à jour pour les intervalles (closures)
     useEffect(() => { selectedRef.current = selected; }, [selected]);
     useEffect(() => { messagesRef.current = messages; }, [messages]);
 
-    // ── Polling conversations (8s) ──────────────────────────────
     useEffect(() => {
         fetchConvs();
         const id = setInterval(fetchConvsSilent, 8000);
         return () => clearInterval(id);
     }, []);
 
-    // ── Polling messages du fil ouvert (4s) ────────────────────
     useEffect(() => {
         if (!selected) return;
         const id = setInterval(pollMessages, 4000);
@@ -104,7 +111,6 @@ export default function Discussions() {
             const data = await getConversations();
             setConvs(data);
             setLastSync(new Date());
-            // Met à jour la conversation sélectionnée si elle a changé
             const sel = selectedRef.current;
             if (sel) {
                 const updated = data.find(c => c._id === sel._id);
@@ -119,9 +125,7 @@ export default function Discussions() {
         try {
             const fresh = await getConversationMessages(sel._id);
             const current = messagesRef.current;
-            if (fresh.length > current.length) {
-                setMessages(fresh);
-            }
+            if (fresh.length > current.length) setMessages(fresh);
         } catch { /* silencieux */ }
     }
 
@@ -192,13 +196,11 @@ export default function Discussions() {
         setBlocking(true);
         try {
             const res = await toggleContactBlock(contactId);
-            // Met à jour bloque dans la liste des conversations
             setConvs(prev => prev.map(c =>
                 c.contactId?._id === contactId
                     ? { ...c, contactId: { ...c.contactId, bloque: res.bloque } }
                     : c
             ));
-            // Met à jour la conversation sélectionnée si c'est la même
             if (selected?.contactId?._id === contactId) {
                 setSelected(s => ({ ...s, contactId: { ...s.contactId, bloque: res.bloque } }));
             }
@@ -250,7 +252,6 @@ export default function Discussions() {
 
     function handleTextareaChange(e) {
         setOpText(e.target.value);
-        // Auto-resize
         e.target.style.height = 'auto';
         e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
     }
@@ -259,7 +260,6 @@ export default function Discussions() {
     const contactName = selected?.contactId?.nom ?? 'Inconnu';
     const contactPhone = selected?.contactId?.whatsappId ?? '';
     const contactInitial = contactName[0]?.toUpperCase() ?? '?';
-    const contactIsUnknown = selected?.contactId?.source === 'webhook';
     const contactIsBlocked = selected?.contactId?.bloque === true;
 
     const filtered = convs.filter(c => {
@@ -271,106 +271,358 @@ export default function Discussions() {
     const { paged, page, setPage, totalPages } = usePagination(filtered);
 
     return (
-        <div className="dash-page">
-            <h1 className="dash-page-title">Discussions</h1>
-            <p className="dash-page-sub">Historique des conversations WhatsApp avec Hawa.</p>
+        <div className="dash-page disc-page">
+            {error && (
+                <div className="disc-error">
+                    <i className="bi bi-exclamation-triangle-fill"></i> {error}
+                </div>
+            )}
 
-            {error && <div className="dt-error"><i className="bi bi-exclamation-triangle-fill"></i> {error}</div>}
+            <div className="wa-layout">
+                {/* ══════════ PANNEAU GAUCHE — Liste des conversations ══════════ */}
+                <div className="wa-list-panel">
 
-            <div className="dt-toolbar">
-                <input
-                    className="dt-search"
-                    placeholder="Rechercher par numéro, nom ou statut..."
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                />
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    {lastSync && (
-                        <span style={{ fontSize: '0.75rem', color: '#16a34a', display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#16a34a', display: 'inline-block', animation: 'pulse-live 2s infinite' }} />
-                            Live · {lastSync.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                    {/* Header vert style WhatsApp */}
+                    <div className="wa-list-header">
+                        <span className="wa-list-title">
+                            <i className="bi bi-chat-dots-fill" style={{ marginRight: 8, fontSize: '0.9rem' }}></i>
+                            Discussions
                         </span>
+                        <div className="wa-list-header-btns">
+                            {lastSync && (
+                                <span className="wa-live-sync" title={`Mis à jour à ${lastSync.toLocaleTimeString('fr-FR')}`}>
+                                    <span className="wa-live-sync-dot" />
+                                    {lastSync.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                            )}
+                            <button onClick={fetchConvs} title="Actualiser">
+                                <i className="bi bi-arrow-clockwise"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Barre de recherche */}
+                    <div className="wa-list-searchbar">
+                        <div className="wa-list-search-inner">
+                            <i className="bi bi-search"></i>
+                            <input
+                                placeholder="Rechercher un contact..."
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                            />
+                            {search && (
+                                <button className="wa-search-clear" onClick={() => setSearch('')} title="Effacer">
+                                    <i className="bi bi-x"></i>
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Liste des conversations */}
+                    <div className="wa-conv-list">
+                        {loading ? (
+                            <div className="wa-conv-loading">
+                                <span className="wa-loading-dot" /><span className="wa-loading-dot" /><span className="wa-loading-dot" />
+                            </div>
+                        ) : filtered.length === 0 ? (
+                            <div className="wa-conv-empty">
+                                <i className="bi bi-chat-square-dots" style={{ fontSize: '2rem', opacity: 0.3, display: 'block', marginBottom: 8 }}></i>
+                                Aucune conversation trouvée.
+                            </div>
+                        ) : paged.map(c => {
+                            const isBlocked = c.contactId?.bloque === true;
+                            const isSaved   = c.contactId?.source === 'dashboard' || savedIds.has(c.contactId?._id);
+                            const isUnknown = c.contactId?.source === 'webhook' && !savedIds.has(c.contactId?._id);
+                            const initial   = (c.contactId?.nom?.[0] ?? '?').toUpperCase();
+                            const name      = c.contactId?.nom ?? 'Inconnu';
+                            const phone     = c.contactId?.whatsappId ? `+${c.contactId.whatsappId}` : '—';
+                            const lang      = LANG_LABEL[c.contactId?.langue] ?? c.contactId?.langue ?? '—';
+                            const convTime  = formatConvTime(c.derniereMiseAJour);
+                            const isActive  = selected?._id === c._id;
+
+                            return (
+                                <div
+                                    key={c._id}
+                                    className={`wa-conv-item${isActive ? ' wa-conv-item-active' : ''}${isBlocked ? ' wa-conv-item-blocked' : ''}`}
+                                    onClick={() => openThread(c)}
+                                >
+                                    {/* Avatar */}
+                                    <div className={`wa-conv-avatar${isBlocked ? ' wa-conv-avatar-blocked' : ''}`}>
+                                        {isBlocked ? <i className="bi bi-slash-circle"></i> : initial}
+                                    </div>
+
+                                    {/* Infos */}
+                                    <div className="wa-conv-body">
+                                        <div className="wa-conv-row1">
+                                            <span className="wa-conv-name">
+                                                {name}
+                                                {isSaved && (
+                                                    <i className="bi bi-check-circle-fill" style={{ marginLeft: 5, fontSize: '0.72rem', color: '#25d366' }}></i>
+                                                )}
+                                            </span>
+                                            <span className="wa-conv-time">{convTime}</span>
+                                        </div>
+                                        <div className="wa-conv-row2">
+                                            <span className="wa-conv-preview">
+                                                {phone} · {lang}
+                                            </span>
+                                            <span className={`wa-conv-stat-badge ${STATUT_COLOR[c.statut] ?? 'dt-badge-inactif'}`}>
+                                                {STATUT_LABEL[c.statut] ?? c.statut}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Actions au survol */}
+                                    <div className="wa-conv-actions" onClick={e => e.stopPropagation()}>
+                                        <button
+                                            title="Voir GPS"
+                                            onClick={() => openGpsModal(c)}
+                                        >
+                                            <i className="bi bi-geo-alt-fill"></i>
+                                        </button>
+                                        {isUnknown && (
+                                            <button
+                                                className="wa-act-success"
+                                                title="Enregistrer contact"
+                                                onClick={() => openSaveModal(c)}
+                                            >
+                                                <i className="bi bi-person-plus-fill"></i>
+                                            </button>
+                                        )}
+                                        <button
+                                            className="wa-act-danger"
+                                            title="Supprimer"
+                                            onClick={() => setDeleteModal(c)}
+                                        >
+                                            <i className="bi bi-trash-fill"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Footer pagination */}
+                    <div className="wa-list-footer">
+                        <span>{filtered.length} discussion{filtered.length !== 1 ? 's' : ''}</span>
+                        <Pagination page={page} totalPages={totalPages} onChange={setPage} />
+                    </div>
+                </div>
+
+                {/* ══════════ PANNEAU DROIT — Fenêtre de chat ══════════ */}
+                <div className={`wa-chat-panel${selected ? ' wa-chat-open' : ''}`}>
+                    {selected ? (
+                        <div className="wa-window wa-window-embedded">
+
+                            {/* Header */}
+                            <div className="wa-header">
+                                <button className="wa-back" onClick={closeThread} title="Fermer">
+                                    <i className="bi bi-arrow-left"></i>
+                                </button>
+
+                                <div className="wa-header-avatar">{contactInitial}</div>
+
+                                <div className="wa-header-info">
+                                    <span className="wa-header-name">
+                                        {contactName}
+                                        {contactIsBlocked && (
+                                            <span style={{ marginLeft: 8, fontSize: '0.72rem', background: '#fee2e2', color: '#dc2626', borderRadius: 4, padding: '1px 6px', fontWeight: 600 }}>
+                                                Bloqué
+                                            </span>
+                                        )}
+                                    </span>
+                                    <span className="wa-header-sub">
+                                        {contactPhone ? `+${contactPhone}` : '—'} &nbsp;·&nbsp;
+                                        {isHuman
+                                            ? <><i className="bi bi-person-badge-fill"></i> Mode Humain</>
+                                            : <><i className="bi bi-robot"></i> Mode IA</>
+                                        }
+                                    </span>
+                                </div>
+
+                                <div className="wa-header-actions">
+                                    <button
+                                        className="wa-header-icon-btn"
+                                        onClick={() => openGpsModal(selected)}
+                                        title="Position GPS"
+                                    >
+                                        <i className="bi bi-geo-alt-fill"></i>
+                                    </button>
+                                    <button
+                                        className="wa-header-icon-btn"
+                                        onClick={() => handleToggleBlock(selected.contactId?._id)}
+                                        disabled={blocking}
+                                        title={contactIsBlocked ? 'Débloquer le contact' : 'Bloquer le contact'}
+                                    >
+                                        <i className={`bi ${contactIsBlocked ? 'bi-slash-circle-fill' : 'bi-slash-circle'}`}></i>
+                                    </button>
+                                    <button
+                                        className={`wa-mode-btn ${isHuman ? 'wa-mode-btn-ai' : 'wa-mode-btn-human'}`}
+                                        onClick={handleToggleMode}
+                                        disabled={toggling}
+                                        title={isHuman ? 'Repasser en mode IA' : 'Prendre la main (Mode Humain)'}
+                                    >
+                                        {toggling ? '…' : isHuman
+                                            ? <><RobotIcon /> IA</>
+                                            : <><AgentIcon /> Prendre la main</>
+                                        }
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Fil de messages */}
+                            <div className="wa-chat-bg">
+                                {msgLoad ? (
+                                    <div className="wa-loading">
+                                        <span className="wa-loading-dot" /><span className="wa-loading-dot" /><span className="wa-loading-dot" />
+                                    </div>
+                                ) : messages.length === 0 ? (
+                                    <div className="wa-empty">Aucun message enregistré.</div>
+                                ) : (
+                                    groupByDate(messages).map((item) => {
+                                        if (item.type === 'date') {
+                                            return (
+                                                <div key={item.key} className="wa-date-pill">
+                                                    {item.label}
+                                                </div>
+                                            );
+                                        }
+                                        const m = item.data;
+                                        const isRight = m.emetteurType === 'agent_ia' || m.emetteurType === 'operateur_sante';
+                                        const isOp    = m.emetteurType === 'operateur_sante';
+
+                                        return (
+                                            <div key={m._id} className={`wa-row ${isRight ? 'wa-row-right' : 'wa-row-left'}`}>
+                                                <div className={`wa-bubble ${
+                                                    isRight
+                                                        ? isOp ? 'wa-bubble-op' : 'wa-bubble-ai'
+                                                        : 'wa-bubble-user'
+                                                }`}>
+                                                    {!isRight && (
+                                                        <span className="wa-sender-label">
+                                                            <i className="bi bi-person-fill"></i> Contact
+                                                            {m.langue === 'unknown' && (
+                                                                <span style={{ marginLeft: 6, fontSize: '0.7rem', background: '#fef3c7', color: '#92400e', borderRadius: 3, padding: '1px 5px', fontWeight: 600 }}>
+                                                                    <i className="bi bi-globe"></i> Langue non détectée
+                                                                </span>
+                                                            )}
+                                                        </span>
+                                                    )}
+                                                    {isOp && (
+                                                        <span className="wa-sender-label wa-sender-op"><i className="bi bi-person-badge-fill"></i> Vous</span>
+                                                    )}
+                                                    {m.emetteurType === 'agent_ia' && (
+                                                        <span className="wa-sender-label wa-sender-ai"><i className="bi bi-robot"></i> Hawa</span>
+                                                    )}
+
+                                                    {m.typeContenu === 'location' && m.coordonnees?.latitude != null ? (
+                                                        <a
+                                                            href={`https://www.openstreetmap.org/?mlat=${m.coordonnees.latitude}&mlon=${m.coordonnees.longitude}&zoom=14`}
+                                                            target="_blank" rel="noreferrer"
+                                                            className="wa-location-link"
+                                                        >
+                                                            <i className="bi bi-geo-alt-fill wa-location-icon"></i>
+                                                            <span>
+                                                                Position GPS<br />
+                                                                <small>{m.coordonnees.latitude.toFixed(4)}, {m.coordonnees.longitude.toFixed(4)}</small>
+                                                            </span>
+                                                        </a>
+                                                    ) : m.typeContenu === 'audio' ? (
+                                                        <div className="wa-audio-block">
+                                                            {m.audioUrl ? (
+                                                                <audio controls src={m.audioUrl} className="wa-audio" />
+                                                            ) : (
+                                                                <em className="wa-text-empty"><i className="bi bi-music-note-beamed"></i> Message audio</em>
+                                                            )}
+                                                            {m.texteBrut && m.texteBrut !== '[Audio reçu en mode humain]' && (
+                                                                <div className="wa-audio-transcript">
+                                                                    <span className="wa-transcript-label">
+                                                                        {m.emetteurType === 'agent_ia'
+                                                                            ? <><i className="bi bi-pencil-square"></i> Réponse</>
+                                                                            : <><i className="bi bi-mic-fill"></i> Transcription</>
+                                                                        }
+                                                                    </span>
+                                                                    <em>"{m.texteBrut}"</em>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <p className="wa-text">{m.texteBrut || <em className="wa-text-empty">Message vide</em>}</p>
+                                                    )}
+
+                                                    <div className="wa-meta">
+                                                        <span className="wa-time">{formatTime(m.dateEnvoi)}</span>
+                                                        {isRight && <i className="bi bi-check-all wa-ticks"></i>}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                                <div ref={threadEndRef} />
+                            </div>
+
+                            {/* Barre de saisie */}
+                            {isHuman ? (
+                                <div className="wa-input-bar">
+                                    <button className="wa-input-icon" title="Emoji" tabIndex={-1}>
+                                        <i className="bi bi-emoji-smile"></i>
+                                    </button>
+                                    <textarea
+                                        ref={textareaRef}
+                                        className="wa-input-field"
+                                        placeholder="Écrire un message..."
+                                        value={opText}
+                                        onChange={handleTextareaChange}
+                                        onKeyDown={handleKeyDown}
+                                        rows={1}
+                                        disabled={sending}
+                                        autoFocus
+                                    />
+                                    <button
+                                        className={`wa-send-btn ${opText.trim() ? 'wa-send-btn-active' : ''}`}
+                                        onClick={handleSend}
+                                        disabled={sending || !opText.trim()}
+                                        title="Envoyer"
+                                    >
+                                        {sending ? (
+                                            <i className="bi bi-hourglass-split"></i>
+                                        ) : opText.trim() ? (
+                                            <i className="bi bi-send-fill"></i>
+                                        ) : (
+                                            <i className="bi bi-mic-fill"></i>
+                                        )}
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="wa-input-bar wa-input-bar-disabled">
+                                    <button className="wa-input-icon" disabled>
+                                        <i className="bi bi-emoji-smile"></i>
+                                    </button>
+                                    <div className="wa-input-field wa-input-ai-hint">
+                                        <i className="bi bi-robot"></i> Hawa répond automatiquement — cliquez "Prendre la main" pour écrire
+                                    </div>
+                                    <button className="wa-send-btn" disabled>
+                                        <i className="bi bi-mic-fill"></i>
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="wa-empty-chat">
+                            <i className="bi bi-chat-dots"></i>
+                            <p>Sélectionnez une conversation</p>
+                            <small>
+                                {filtered.length > 0
+                                    ? `${filtered.length} conversation${filtered.length !== 1 ? 's' : ''} disponible${filtered.length !== 1 ? 's' : ''}`
+                                    : 'Aucune conversation'}
+                            </small>
+                        </div>
                     )}
-                    <button className="dt-btn" onClick={fetchConvs}><i className="bi bi-arrow-clockwise"></i> Actualiser</button>
                 </div>
             </div>
 
-            <div className="dt-wrapper">
-                <table className="dt-table">
-                    <thead>
-                        <tr>
-                            <th>Contact</th>
-                            <th>Numéro</th>
-                            <th>Statut</th>
-                            <th>Langue</th>
-                            <th>Messages</th>
-                            <th>Dernière activité</th>
-                            <th>Créée le</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {loading ? (
-                            <tr><td colSpan="8" className="dt-center">Chargement...</td></tr>
-                        ) : filtered.length === 0 ? (
-                            <tr><td colSpan="8" className="dt-center">Aucune discussion trouvée.</td></tr>
-                        ) : paged.map(c => {
-                            const isUnknown = c.contactId?.source === 'webhook';
-                            const isBlocked = c.contactId?.bloque === true;
-                            return (
-                            <tr key={c._id} style={isBlocked ? { opacity: 0.6 } : undefined}>
-                                <td>
-                                    <span className="dt-avatar">{(c.contactId?.nom?.[0] ?? '?').toUpperCase()}</span>
-                                    {c.contactId?.nom ?? 'Inconnu'}
-                                    {isBlocked && <span className="dt-badge dt-badge-danger" style={{ marginLeft: 6, fontSize: '0.7rem' }}>Bloqué</span>}
-                                </td>
-                                <td><span className="dt-mono">{c.contactId?.whatsappId ? `+${c.contactId.whatsappId}` : '—'}</span></td>
-                                <td>
-                                    <span className={`dt-badge ${STATUT_COLOR[c.statut] ?? 'dt-badge-inactif'}`}>
-                                        {STATUT_LABEL[c.statut] ?? c.statut}
-                                    </span>
-                                </td>
-                                <td>{LANG_LABEL[c.contactId?.langue] ?? c.contactId?.langue ?? '—'}</td>
-                                <td style={{ textAlign: 'center' }}>{c.nbMessages}</td>
-                                <td>{new Date(c.derniereMiseAJour).toLocaleString('fr-FR')}</td>
-                                <td>{new Date(c.createdAt).toLocaleDateString('fr-FR')}</td>
-                                <td className="dt-actions">
-                                    <button className="dt-btn dt-btn-edit" onClick={() => openThread(c)}>
-                                        Ouvrir
-                                    </button>
-                                    <button className="dt-btn dt-btn-danger" onClick={() => setDeleteModal(c)} title="Supprimer cette conversation">
-                                        <i className="bi bi-trash-fill"></i> Supprimer
-                                    </button>
-                                    <button
-                                        className="dt-btn"
-                                        onClick={() => openGpsModal(c)}
-                                        title="Voir la dernière position GPS"
-                                        style={{ fontSize: '0.8rem' }}
-                                    >
-                                        <i className="bi bi-geo-alt-fill"></i> GPS
-                                    </button>
-                                    {c.contactId?.source === 'webhook' && !savedIds.has(c.contactId?._id) && (
-                                        <button className="dt-btn dt-btn-primary" onClick={() => openSaveModal(c)} title="Enregistrer dans les contacts">
-                                            + Contact
-                                        </button>
-                                    )}
-                                    {(c.contactId?.source === 'dashboard' || savedIds.has(c.contactId?._id)) && (
-                                        <span className="dt-badge dt-badge-actif" style={{ fontSize: '0.7rem' }}><i className="bi bi-check-lg"></i> Enregistré</span>
-                                    )}
-                                </td>
-                            </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
-            </div>
-
-            <div className="dt-footer">
-                <span>{filtered.length} conversation{filtered.length !== 1 ? 's' : ''}</span>
-                <Pagination page={page} totalPages={totalPages} onChange={setPage} />
-            </div>
-
-            {/* ══════════ MODAL SUPPRESSION CONVERSATION ══════════ */}
+            {/* ══════════ MODAL SUPPRESSION ══════════ */}
             {deleteModal && (
                 <div className="modal-overlay">
                     <div className="modal modal-sm">
@@ -381,7 +633,7 @@ export default function Discussions() {
                         <div className="modal-body" style={{ padding: '20px 24px' }}>
                             <p>Voulez-vous supprimer la conversation de <strong>+{deleteModal.contactId?.whatsappId}</strong>{deleteModal.contactId?.nom ? ` (${deleteModal.contactId.nom})` : ''} ?</p>
                             <p style={{ color: 'var(--red, #dc2626)', fontSize: '0.88rem', marginTop: 8 }}>
-                                Tous les messages seront definitivement supprimés.
+                                Tous les messages seront définitivement supprimés.
                             </p>
                         </div>
                         <div className="modal-footer">
@@ -489,198 +741,10 @@ export default function Discussions() {
                     </div>
                 </div>
             )}
-
-            {/* ══════════ FENÊTRE WHATSAPP ══════════ */}
-            {selected && (
-                <div className="modal-overlay">
-                    <div className="wa-window">
-
-                        {/* ── Header style WhatsApp ── */}
-                        <div className="wa-header">
-                            <button className="wa-back" onClick={closeThread} title="Fermer">
-                                <i className="bi bi-arrow-left"></i>
-                            </button>
-
-                            <div className="wa-header-avatar">{contactInitial}</div>
-
-                            <div className="wa-header-info">
-                                <span className="wa-header-name">
-                                    {contactName}
-                                    {contactIsBlocked && (
-                                        <span style={{ marginLeft: 8, fontSize: '0.72rem', background: '#fee2e2', color: '#dc2626', borderRadius: 4, padding: '1px 6px', fontWeight: 600 }}>
-                                            Bloqué
-                                        </span>
-                                    )}
-                                </span>
-                                <span className="wa-header-sub">
-                                    {contactPhone ? `+${contactPhone}` : '—'} &nbsp;·&nbsp;
-                                    {isHuman ? <><i className="bi bi-person-badge-fill"></i> Mode Humain</> : <><i className="bi bi-robot"></i> Mode IA</>}
-                                </span>
-                            </div>
-
-                            <div className="wa-header-actions">
-                                <button
-                                    className={`wa-mode-btn ${isHuman ? 'wa-mode-btn-ai' : 'wa-mode-btn-human'}`}
-                                    onClick={handleToggleMode}
-                                    disabled={toggling}
-                                    title={isHuman ? 'Repasser en mode IA' : 'Prendre la main (Mode Humain)'}
-                                >
-                                    {toggling ? '…' : isHuman
-                                        ? <><RobotIcon /> IA</>
-                                        : <><AgentIcon /> Prendre la main</>
-                                    }
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* ── Fond chat + bulles ── */}
-                        <div className="wa-chat-bg">
-                            {msgLoad ? (
-                                <div className="wa-loading">
-                                    <span className="wa-loading-dot" /><span className="wa-loading-dot" /><span className="wa-loading-dot" />
-                                </div>
-                            ) : messages.length === 0 ? (
-                                <div className="wa-empty">Aucun message enregistré.</div>
-                            ) : (
-                                groupByDate(messages).map((item) => {
-                                    if (item.type === 'date') {
-                                        return (
-                                            <div key={item.key} className="wa-date-pill">
-                                                {item.label}
-                                            </div>
-                                        );
-                                    }
-                                    const m = item.data;
-                                    const isRight = m.emetteurType === 'agent_ia' || m.emetteurType === 'operateur_sante';
-                                    const isOp    = m.emetteurType === 'operateur_sante';
-
-                                    return (
-                                        <div key={m._id} className={`wa-row ${isRight ? 'wa-row-right' : 'wa-row-left'}`}>
-                                            <div className={`wa-bubble ${
-                                                isRight
-                                                    ? isOp ? 'wa-bubble-op' : 'wa-bubble-ai'
-                                                    : 'wa-bubble-user'
-                                            }`}>
-                                                {/* Étiquette expéditeur (uniquement en bulles gauche) */}
-                                                {!isRight && (
-                                                                    <span className="wa-sender-label">
-                                                        <i className="bi bi-person-fill"></i> Contact
-                                                        {m.langue === 'unknown' && (
-                                                            <span style={{ marginLeft: 6, fontSize: '0.7rem', background: '#fef3c7', color: '#92400e', borderRadius: 3, padding: '1px 5px', fontWeight: 600 }}>
-                                                                <i className="bi bi-globe"></i> Langue non détectée
-                                                            </span>
-                                                        )}
-                                                    </span>
-                                                )}
-                                                {isOp && (
-                                                    <span className="wa-sender-label wa-sender-op"><i className="bi bi-person-badge-fill"></i> Vous</span>
-                                                )}
-                                                {m.emetteurType === 'agent_ia' && (
-                                                    <span className="wa-sender-label wa-sender-ai"><i className="bi bi-robot"></i> Hawa</span>
-                                                )}
-
-                                                {/* Contenu */}
-                                                {m.typeContenu === 'location' && m.coordonnees?.latitude != null ? (
-                                                    <a
-                                                        href={`https://www.openstreetmap.org/?mlat=${m.coordonnees.latitude}&mlon=${m.coordonnees.longitude}&zoom=14`}
-                                                        target="_blank" rel="noreferrer"
-                                                        className="wa-location-link"
-                                                    >
-                                                        <i className="bi bi-geo-alt-fill wa-location-icon"></i>
-                                                        <span>
-                                                            Position GPS<br />
-                                                            <small>{m.coordonnees.latitude.toFixed(4)}, {m.coordonnees.longitude.toFixed(4)}</small>
-                                                        </span>
-                                                    </a>
-                                                ) : m.typeContenu === 'audio' ? (
-                                                    <div className="wa-audio-block">
-                                                        {m.audioUrl ? (
-                                                            <audio controls src={m.audioUrl} className="wa-audio" />
-                                                        ) : (
-                                                            <em className="wa-text-empty"><i className="bi bi-music-note-beamed"></i> Message audio</em>
-                                                        )}
-                                                        {m.texteBrut && m.texteBrut !== '[Audio reçu en mode humain]' && (
-                                                            <div className="wa-audio-transcript">
-                                                                <span className="wa-transcript-label">
-                                                                    {m.emetteurType === 'agent_ia' ? <><i className="bi bi-pencil-square"></i> Réponse</> : <><i className="bi bi-mic-fill"></i> Transcription</>}
-                                                                </span>
-                                                                <em>"{m.texteBrut}"</em>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                ) : (
-                                                    <p className="wa-text">{m.texteBrut || <em className="wa-text-empty">Message vide</em>}</p>
-                                                )}
-
-                                                {/* Heure + coches */}
-                                                <div className="wa-meta">
-                                                    <span className="wa-time">{formatTime(m.dateEnvoi)}</span>
-                                                    {isRight && <i className="bi bi-check-all wa-ticks"></i>}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })
-                            )}
-                            <div ref={threadEndRef} />
-                        </div>
-
-                        {/* ── Barre de saisie style WhatsApp ── */}
-                        {isHuman ? (
-                            <div className="wa-input-bar">
-                                <button className="wa-input-icon" title="Emoji" tabIndex={-1}>
-                                    <i className="bi bi-emoji-smile"></i>
-                                </button>
-
-                                <textarea
-                                    ref={textareaRef}
-                                    className="wa-input-field"
-                                    placeholder="Écrire un message..."
-                                    value={opText}
-                                    onChange={handleTextareaChange}
-                                    onKeyDown={handleKeyDown}
-                                    rows={1}
-                                    disabled={sending}
-                                    autoFocus
-                                />
-
-                                <button
-                                    className={`wa-send-btn ${opText.trim() ? 'wa-send-btn-active' : ''}`}
-                                    onClick={handleSend}
-                                    disabled={sending || !opText.trim()}
-                                    title="Envoyer"
-                                >
-                                    {sending ? (
-                                        <i className="bi bi-hourglass-split"></i>
-                                    ) : opText.trim() ? (
-                                        <i className="bi bi-send-fill"></i>
-                                    ) : (
-                                        <i className="bi bi-mic-fill"></i>
-                                    )}
-                                </button>
-                            </div>
-                        ) : (
-                            /* Mode IA — barre grisée avec hint */
-                            <div className="wa-input-bar wa-input-bar-disabled">
-                                <button className="wa-input-icon" disabled>
-                                    <i className="bi bi-emoji-smile"></i>
-                                </button>
-                                <div className="wa-input-field wa-input-ai-hint">
-                                    <i className="bi bi-robot"></i> Hawa répond automatiquement — cliquez "Prendre la main" pour écrire
-                                </div>
-                                <button className="wa-send-btn" disabled>
-                                    <i className="bi bi-mic-fill"></i>
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
         </div>
     );
 }
 
-/* ── Icônes inline ── */
 function RobotIcon() {
     return <i className="bi bi-robot" style={{ marginRight: 4 }}></i>;
 }
