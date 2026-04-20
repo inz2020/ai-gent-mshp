@@ -446,7 +446,7 @@ export default function Discussions() {
                                         onClick={() => openGpsModal(selected)}
                                         title="Position GPS"
                                     >
-                                        <i className="bi bi-geo-alt-fill"></i>
+                                        <i className="bi bi-geo-alt-fill"></i> <span>Position GPS</span>
                                     </button>
                                     <button
                                         className="wa-header-icon-btn"
@@ -455,6 +455,7 @@ export default function Discussions() {
                                         title={contactIsBlocked ? 'Débloquer le contact' : 'Bloquer le contact'}
                                     >
                                         <i className={`bi ${contactIsBlocked ? 'bi-slash-circle-fill' : 'bi-slash-circle'}`}></i>
+                                        <span>Bloquer le contact</span>
                                     </button>
                                     <button
                                         className={`wa-mode-btn ${isHuman ? 'wa-mode-btn-ai' : 'wa-mode-btn-human'}`}

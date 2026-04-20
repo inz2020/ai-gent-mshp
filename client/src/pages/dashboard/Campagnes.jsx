@@ -1376,7 +1376,7 @@ export default function Campagnes() {
             {/* ══════════════════════════════════════════════════════
                 MODALS — RÉUNIONS / PLAIDOYERS
             ══════════════════════════════════════════════════════ */}
-            {reunionModal && (
+         {/*    {reunionModal && (
                 <div className="modal-overlay">
                     <div className="modal" style={{ maxWidth: 520 }}>
                         <div className="modal-header">
@@ -1440,7 +1440,7 @@ export default function Campagnes() {
                     </div>
                 </div>
             )}
-
+ */}
             {confirmReunion && (
                 <div className="modal-overlay">
                     <div className="modal modal-sm">
