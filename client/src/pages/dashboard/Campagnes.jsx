@@ -100,7 +100,7 @@ export default function Campagnes() {
     const [templates, setTemplates]           = useState([]);
     const [tplModal, setTplModal]             = useState(null); // 'add' | 'edit'
     const [editingTpl, setEditingTpl]         = useState(null);
-    const [tplForm, setTplForm]               = useState({ nom: '', templateName: '', langue: 'fr', description: '', statut: 'actif', typeContenu: 'audio', variablesCorps: 0, variablesEntete: 0 });
+    const [tplForm, setTplForm]               = useState({ nom: '', templateName: '', langue: 'fr', description: '', statut: 'actif', typeContenu: 'audio', variablesCorps: 0, variablesEntete: 0, valeursCorps: [], valeursEntete: [] });
     const [savingTpl, setSavingTpl]           = useState(false);
     const [confirmTpl, setConfirmTpl]         = useState(null);
     const [tplErr, setTplErr]                 = useState('');
@@ -138,8 +138,23 @@ export default function Campagnes() {
     }
 
     // ── Templates WhatsApp CRUD ───────────────────────────────────
-    function openAddTpl()    { setEditingTpl(null); setTplForm({ nom: '', templateName: '', langue: 'fr', description: '', statut: 'actif', typeContenu: 'audio', variablesCorps: 0, variablesEntete: 0 }); setTplErr(''); setTplModal('add'); }
-    function openEditTpl(t)  { setEditingTpl(t); setTplForm({ nom: t.nom, templateName: t.templateName, langue: t.langue, description: t.description || '', statut: t.statut, typeContenu: t.typeContenu || 'audio', variablesCorps: t.variablesCorps ?? 0, variablesEntete: t.variablesEntete ?? 0 }); setTplErr(''); setTplModal('edit'); }
+    function openAddTpl()    { setEditingTpl(null); setTplForm({ nom: '', templateName: '', langue: 'fr', description: '', statut: 'actif', typeContenu: 'audio', variablesCorps: 0, variablesEntete: 0, valeursCorps: [], valeursEntete: [] }); setTplErr(''); setTplModal('add'); }
+    function openEditTpl(t)  {
+        const nbCorps  = t.variablesCorps  ?? 0;
+        const nbEntete = t.variablesEntete ?? 0;
+        setEditingTpl(t);
+        setTplForm({
+            nom: t.nom, templateName: t.templateName, langue: t.langue,
+            description: t.description || '', statut: t.statut,
+            typeContenu: t.typeContenu || 'audio',
+            variablesCorps:  nbCorps,
+            variablesEntete: nbEntete,
+            valeursCorps:  Array.from({ length: nbCorps },  (_, i) => t.valeursCorps?.[i]  ?? ''),
+            valeursEntete: Array.from({ length: nbEntete }, (_, i) => t.valeursEntete?.[i] ?? ''),
+        });
+        setTplErr('');
+        setTplModal('edit');
+    }
     function closeTplModal() { setTplModal(null); setEditingTpl(null); setTplErr(''); }
 
     async function handleSaveTpl(e) {
@@ -1055,8 +1070,8 @@ export default function Campagnes() {
                                 { label: 'Relais assignés',                  ok: totalRelaisAss > 0,     detail: `${totalRelaisAss} relais` },
                                 { label: 'Concessions visitées renseignées', ok: totalConcessions > 0,  detail: totalConcessions },
                                 { label: 'Personnes touchées renseignées',   ok: totalTouches > 0,      detail: totalTouches },
-                                { label: 'Réunions / plaidoyers planifiés',  ok: reunions.length > 0,   detail: `${reunions.length} réunion${reunions.length !== 1 ? 's' : ''}` },
-                            ];
+/*                                 { label: 'Réunions / plaidoyers planifiés',  ok: reunions.length > 0,   detail: `${reunions.length} réunion${reunions.length !== 1 ? 's' : ''}` },
+ */                            ];
                             const score = checks.filter(c => c.ok).length;
 
                             return (
@@ -1093,7 +1108,7 @@ export default function Campagnes() {
                                             { label: 'Total relais assignés',     value: totalRelaisAss,  icon: 'bi-person-walking',  color: '#0a7c4e' },
                                             { label: 'Concessions visitées',      value: totalConcessions, icon: 'bi-house-fill',      color: '#0369a1' },
                                             { label: 'Personnes touchées',        value: totalTouches,     icon: 'bi-people-fill',     color: '#7c3aed' },
-                                            { label: 'Réunions / plaidoyers',     value: reunions.length,  icon: 'bi-mic-fill',        color: '#b45309' },
+                                            /* { label: 'Réunions / plaidoyers',     value: reunions.length,  icon: 'bi-mic-fill',        color: '#b45309' }, */
                                         ].map(({ label, value, icon, color }) => (
                                             <div key={label} style={{ background: '#fff', borderRadius: 10, padding: '16px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
                                                 <i className={`bi ${icon}`} style={{ fontSize: '1.4rem', color, marginBottom: 6, display: 'block' }}></i>
@@ -1680,14 +1695,21 @@ export default function Campagnes() {
                                         </div>
                                     )}
 
-                                    {/* Variables header (texte seulement) + corps */}
+                                    {/* Compteurs de variables */}
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 10 }}>
                                         {tplForm.typeContenu === 'texte' && (
                                             <div className="form-group" style={{ margin: 0 }}>
                                                 <label style={{ fontSize: '0.82rem' }}>Variables header <code style={{ fontSize: '0.75rem' }}>{'{{n}}'}</code></label>
                                                 <input type="number" min="0" max="1" className="form-control"
                                                     value={tplForm.variablesEntete}
-                                                    onChange={e => setTplForm(f => ({ ...f, variablesEntete: Math.max(0, Math.min(1, +e.target.value)) }))} />
+                                                    onChange={e => {
+                                                        const n = Math.max(0, Math.min(1, +e.target.value));
+                                                        setTplForm(f => ({
+                                                            ...f,
+                                                            variablesEntete: n,
+                                                            valeursEntete: Array.from({ length: n }, (_, i) => f.valeursEntete?.[i] ?? ''),
+                                                        }));
+                                                    }} />
                                                 <small className="form-hint">0 ou 1 variable dans le header</small>
                                             </div>
                                         )}
@@ -1695,10 +1717,65 @@ export default function Campagnes() {
                                             <label style={{ fontSize: '0.82rem' }}>Variables corps <code style={{ fontSize: '0.75rem' }}>{'{{1}}'}</code>, <code style={{ fontSize: '0.75rem' }}>{'{{2}}'}</code>…</label>
                                             <input type="number" min="0" max="10" className="form-control"
                                                 value={tplForm.variablesCorps}
-                                                onChange={e => setTplForm(f => ({ ...f, variablesCorps: Math.max(0, Math.min(10, +e.target.value)) }))} />
+                                                onChange={e => {
+                                                    const n = Math.max(0, Math.min(10, +e.target.value));
+                                                    setTplForm(f => ({
+                                                        ...f,
+                                                        variablesCorps: n,
+                                                        valeursCorps: Array.from({ length: n }, (_, i) => f.valeursCorps?.[i] ?? ''),
+                                                    }));
+                                                }} />
                                             <small className="form-hint">Nb de variables dans le corps du message</small>
                                         </div>
                                     </div>
+
+                                    {/* ── Saisie des valeurs — header texte ── */}
+                                    {tplForm.typeContenu === 'texte' && tplForm.variablesEntete > 0 && (
+                                        <div style={{ marginTop: 10 }}>
+                                            <p style={{ fontSize: '0.78rem', fontWeight: 700, color: '#7c3aed', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
+                                                <i className="bi bi-fonts"></i> Valeur du header
+                                            </p>
+                                            {Array.from({ length: tplForm.variablesEntete }, (_, i) => (
+                                                <div key={i} className="tpl-var-row">
+                                                    <span className="tpl-var-tag tpl-var-tag-purple">{'{{' + (i + 1) + '}}'}</span>
+                                                    <input
+                                                        className="form-control"
+                                                        placeholder={`Valeur du header {{${i + 1}}}`}
+                                                        value={tplForm.valeursEntete?.[i] ?? ''}
+                                                        onChange={e => {
+                                                            const vals = [...(tplForm.valeursEntete ?? [])];
+                                                            vals[i] = e.target.value;
+                                                            setTplForm(f => ({ ...f, valeursEntete: vals }));
+                                                        }}
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* ── Saisie des valeurs — corps ── */}
+                                    {tplForm.variablesCorps > 0 && (
+                                        <div style={{ marginTop: 10 }}>
+                                            <p style={{ fontSize: '0.78rem', fontWeight: 700, color: '#0369a1', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
+                                                <i className="bi bi-body-text"></i> Valeurs du corps
+                                            </p>
+                                            {Array.from({ length: tplForm.variablesCorps }, (_, i) => (
+                                                <div key={i} className="tpl-var-row">
+                                                    <span className="tpl-var-tag tpl-var-tag-blue">{'{{' + (i + 1) + '}}'}</span>
+                                                    <input
+                                                        className="form-control"
+                                                        placeholder={`Valeur de {{${i + 1}}}`}
+                                                        value={tplForm.valeursCorps?.[i] ?? ''}
+                                                        onChange={e => {
+                                                            const vals = [...(tplForm.valeursCorps ?? [])];
+                                                            vals[i] = e.target.value;
+                                                            setTplForm(f => ({ ...f, valeursCorps: vals }));
+                                                        }}
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
 
                                     {/* Aperçu du payload API */}
                                     <div style={{ marginTop: 12, background: '#0f172a', borderRadius: 8, padding: '10px 14px', fontSize: '0.72rem', fontFamily: 'monospace', color: '#94a3b8', overflowX: 'auto' }}>
@@ -1800,18 +1877,23 @@ function TplPayloadPreview({ form }) {
             parameters: [{ type: 'document', document: { link: '<URL_DOCUMENT>', filename: 'document.pdf' } }],
         });
     } else if (form.typeContenu === 'texte' && form.variablesEntete > 0) {
+        const hVals = form.valeursEntete ?? [];
         components.push({
             type: 'header',
-            parameters: [{ type: 'text', text: '<TEXTE_HEADER>' }],
+            parameters: Array.from({ length: form.variablesEntete }, (_, i) => ({
+                type: 'text',
+                text: hVals[i] || `<HEADER_${i + 1}>`,
+            })),
         });
     }
 
     if (form.variablesCorps > 0) {
+        const bVals = form.valeursCorps ?? [];
         components.push({
             type: 'body',
             parameters: Array.from({ length: form.variablesCorps }, (_, i) => ({
                 type: 'text',
-                text: `<VAR_${i + 1}>`,
+                text: bVals[i] || `<VAR_${i + 1}>`,
             })),
         });
     }

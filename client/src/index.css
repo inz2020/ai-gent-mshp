@@ -2723,3 +2723,36 @@ tr.row-active td { background: #f0fdf4; }
 .tpl-hint-orange { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
 .tpl-hint-purple { background: #faf5ff; color: #7c3aed; border: 1px solid #ddd6fe; }
 .tpl-hint-gray   { background: #f9fafb; color: #6b7280; border: 1px solid #e5e7eb; }
+
+/* ─── Template — Lignes de saisie des valeurs de variables ──── */
+.tpl-var-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.tpl-var-tag {
+  font-family: monospace;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 4px 9px;
+  border-radius: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.tpl-var-tag-blue   { background: #e0f2fe; color: #0369a1; }
+.tpl-var-tag-purple { background: #ede9fe; color: #7c3aed; }
+
+.tpl-var-row .form-control {
+  flex: 1;
+  padding: 7px 11px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.tpl-var-row .form-control:focus { border-color: var(--green); }

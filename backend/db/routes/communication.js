@@ -383,18 +383,22 @@ router.get('/templates', async (_req, res) => {
 
 router.post('/templates', async (req, res) => {
     try {
-        const { nom, templateName, langue, description, statut, typeContenu, variablesCorps, variablesEntete } = req.body
+        const { nom, templateName, langue, description, statut, typeContenu, variablesCorps, variablesEntete, valeursCorps, valeursEntete } = req.body
         if (!nom?.trim())          return err(res, 400, 'Le nom est requis')
         if (!templateName?.trim()) return err(res, 400, 'Le nom du template Meta est requis')
+        const nbCorps  = Number(variablesCorps  ?? 0)
+        const nbEntete = Number(variablesEntete ?? 0)
         const tpl = await WhatsappTemplate.create({
             nom: nom.trim(),
             templateName: templateName.trim(),
             langue: langue?.trim() || 'fr',
             description: description?.trim() || '',
             statut: statut || 'actif',
-            typeContenu:     typeContenu     || 'audio',
-            variablesCorps:  Number(variablesCorps  ?? 0),
-            variablesEntete: Number(variablesEntete ?? 0),
+            typeContenu:     typeContenu || 'audio',
+            variablesCorps:  nbCorps,
+            variablesEntete: nbEntete,
+            valeursCorps:    (Array.isArray(valeursCorps)  ? valeursCorps  : []).slice(0, nbCorps),
+            valeursEntete:   (Array.isArray(valeursEntete) ? valeursEntete : []).slice(0, nbEntete),
         })
         res.status(201).json(tpl)
     } catch (e) {
@@ -405,7 +409,7 @@ router.post('/templates', async (req, res) => {
 
 router.put('/templates/:id', async (req, res) => {
     try {
-        const { nom, templateName, langue, description, statut, typeContenu, variablesCorps, variablesEntete } = req.body
+        const { nom, templateName, langue, description, statut, typeContenu, variablesCorps, variablesEntete, valeursCorps, valeursEntete } = req.body
         const tpl = await WhatsappTemplate.findById(req.params.id)
         if (!tpl) return err(res, 404, 'Template introuvable')
         if (nom             !== undefined) tpl.nom             = nom.trim()
@@ -416,6 +420,8 @@ router.put('/templates/:id', async (req, res) => {
         if (typeContenu     !== undefined) tpl.typeContenu     = typeContenu
         if (variablesCorps  !== undefined) tpl.variablesCorps  = Number(variablesCorps)
         if (variablesEntete !== undefined) tpl.variablesEntete = Number(variablesEntete)
+        if (valeursCorps    !== undefined) tpl.valeursCorps    = (Array.isArray(valeursCorps)  ? valeursCorps  : []).slice(0, tpl.variablesCorps)
+        if (valeursEntete   !== undefined) tpl.valeursEntete   = (Array.isArray(valeursEntete) ? valeursEntete : []).slice(0, tpl.variablesEntete)
         await tpl.save()
         res.json(tpl)
     } catch (e) {
@@ -514,19 +520,25 @@ function resolvePhone(relais) {
 }
 
 // ── Envoi d'un template (avec composants selon typeContenu) puis du média ──
-async function envoyerAudioRelais(phone, mediaUrl, headers, tplName, tplLang, typeContenu) {
+async function envoyerAudioRelais(phone, mediaUrl, headers, tplName, tplLang, typeContenu, valeursCorps, valeursEntete) {
     const templateName = tplName || process.env.WA_INVITE_TEMPLATE || 'hello_world'
     const templateLang = tplLang || process.env.WA_INVITE_TEMPLATE_LANG_FR || 'fr'
     const type         = typeContenu || 'audio'
     const phoneId      = process.env.PHONE_ID
     const base         = `https://graph.facebook.com/v22.0/${phoneId}/messages`
 
-    // Construire les composants header si le template porte un média en header
+    // Construire les composants selon le type de header
     let components = []
     if (type === 'image' && mediaUrl) {
-        components = [{ type: 'header', parameters: [{ type: 'image', image: { link: mediaUrl } }] }]
+        components.push({ type: 'header', parameters: [{ type: 'image', image: { link: mediaUrl } }] })
     } else if (type === 'document' && mediaUrl) {
-        components = [{ type: 'header', parameters: [{ type: 'document', document: { link: mediaUrl, filename: 'document.pdf' } }] }]
+        components.push({ type: 'header', parameters: [{ type: 'document', document: { link: mediaUrl, filename: 'document.pdf' } }] })
+    } else if (type === 'texte' && valeursEntete?.length > 0) {
+        components.push({ type: 'header', parameters: valeursEntete.map(v => ({ type: 'text', text: v || '' })) })
+    }
+    // Variables du corps {{1}}, {{2}}, …
+    if (valeursCorps?.length > 0) {
+        components.push({ type: 'body', parameters: valeursCorps.map(v => ({ type: 'text', text: v || '' })) })
     }
 
     // Étape 1 — Template (avec ou sans composants header)
@@ -561,10 +573,16 @@ async function diffuserAudioDistrict(record, targets) {
     const audioUrl = record.messageAudio.url
 
     // Résoudre le template associé au record (ou fallback env)
-    let tplName = null, tplLang = null, tplType = 'audio'
+    let tplName = null, tplLang = null, tplType = 'audio', tplValeursCorps = [], tplValeursEntete = []
     if (record.template) {
         const tpl = await WhatsappTemplate.findById(record.template).lean()
-        if (tpl) { tplName = tpl.templateName; tplLang = tpl.langue; tplType = tpl.typeContenu || 'audio' }
+        if (tpl) {
+            tplName         = tpl.templateName
+            tplLang         = tpl.langue
+            tplType         = tpl.typeContenu || 'audio'
+            tplValeursCorps  = tpl.valeursCorps  || []
+            tplValeursEntete = tpl.valeursEntete || []
+        }
     }
 
     let envoyes = 0, echecs = 0
@@ -573,7 +591,7 @@ async function diffuserAudioDistrict(record, targets) {
         const batch = targets.slice(i, i + WA_BATCH_SIZE)
 
         const results = await Promise.allSettled(
-            batch.map(t => envoyerAudioRelais(t.phone, audioUrl, headers, tplName, tplLang, tplType))
+            batch.map(t => envoyerAudioRelais(t.phone, audioUrl, headers, tplName, tplLang, tplType, tplValeursCorps, tplValeursEntete))
         )
 
         for (let j = 0; j < results.length; j++) {

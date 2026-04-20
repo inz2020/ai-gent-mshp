@@ -13,6 +13,10 @@ const WhatsappTemplateSchema = new mongoose.Schema({
     variablesCorps:  { type: Number, default: 0, min: 0, max: 10 },
     // Nombre de variables {{n}} dans le header texte (0 ou 1 en général)
     variablesEntete: { type: Number, default: 0, min: 0, max: 1 },
+    // Valeurs statiques à passer pour chaque variable du corps {{1}}, {{2}}…
+    valeursCorps:    [{ type: String, default: '' }],
+    // Valeur statique pour la variable du header texte {{1}}
+    valeursEntete:   [{ type: String, default: '' }],
 }, { timestamps: true });
 
 WhatsappTemplateSchema.index({ templateName: 1, langue: 1 }, { unique: true });
