@@ -17,6 +17,10 @@ const WhatsappTemplateSchema = new mongoose.Schema({
     valeursCorps:    [{ type: String, default: '' }],
     // Valeur statique pour la variable du header texte {{1}}
     valeursEntete:   [{ type: String, default: '' }],
+    // URL du média du header (image ou document)
+    urlMedia:    { type: String, default: '' },
+    // Nom du fichier affiché (pour header document)
+    nomFichier:  { type: String, default: 'document.pdf' },
 }, { timestamps: true });
 
 WhatsappTemplateSchema.index({ templateName: 1, langue: 1 }, { unique: true });

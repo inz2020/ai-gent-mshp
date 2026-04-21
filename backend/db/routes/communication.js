@@ -383,7 +383,7 @@ router.get('/templates', async (_req, res) => {
 
 router.post('/templates', async (req, res) => {
     try {
-        const { nom, templateName, langue, description, statut, typeContenu, variablesCorps, variablesEntete, valeursCorps, valeursEntete } = req.body
+        const { nom, templateName, langue, description, statut, typeContenu, variablesCorps, variablesEntete, valeursCorps, valeursEntete, urlMedia, nomFichier } = req.body
         if (!nom?.trim())          return err(res, 400, 'Le nom est requis')
         if (!templateName?.trim()) return err(res, 400, 'Le nom du template Meta est requis')
         const nbCorps  = Number(variablesCorps  ?? 0)
@@ -399,6 +399,8 @@ router.post('/templates', async (req, res) => {
             variablesEntete: nbEntete,
             valeursCorps:    (Array.isArray(valeursCorps)  ? valeursCorps  : []).slice(0, nbCorps),
             valeursEntete:   (Array.isArray(valeursEntete) ? valeursEntete : []).slice(0, nbEntete),
+            urlMedia:   urlMedia?.trim()   || '',
+            nomFichier: nomFichier?.trim() || 'document.pdf',
         })
         res.status(201).json(tpl)
     } catch (e) {
@@ -409,7 +411,7 @@ router.post('/templates', async (req, res) => {
 
 router.put('/templates/:id', async (req, res) => {
     try {
-        const { nom, templateName, langue, description, statut, typeContenu, variablesCorps, variablesEntete, valeursCorps, valeursEntete } = req.body
+        const { nom, templateName, langue, description, statut, typeContenu, variablesCorps, variablesEntete, valeursCorps, valeursEntete, urlMedia, nomFichier } = req.body
         const tpl = await WhatsappTemplate.findById(req.params.id)
         if (!tpl) return err(res, 404, 'Template introuvable')
         if (nom             !== undefined) tpl.nom             = nom.trim()
@@ -422,6 +424,8 @@ router.put('/templates/:id', async (req, res) => {
         if (variablesEntete !== undefined) tpl.variablesEntete = Number(variablesEntete)
         if (valeursCorps    !== undefined) tpl.valeursCorps    = (Array.isArray(valeursCorps)  ? valeursCorps  : []).slice(0, tpl.variablesCorps)
         if (valeursEntete   !== undefined) tpl.valeursEntete   = (Array.isArray(valeursEntete) ? valeursEntete : []).slice(0, tpl.variablesEntete)
+        if (urlMedia        !== undefined) tpl.urlMedia        = urlMedia.trim()
+        if (nomFichier      !== undefined) tpl.nomFichier      = nomFichier.trim() || 'document.pdf'
         await tpl.save()
         res.json(tpl)
     } catch (e) {
@@ -554,7 +558,8 @@ async function envoyerAudioRelais(phone, mediaUrl, headers, tplName, tplLang, ty
     }, { headers })
 
     // Étape 2 — Pour le type audio : envoi du fichier audio en message séparé
-    if (type === 'audio' && mediaUrl) {
+    if (type === 'audio') {
+        if (!mediaUrl) throw new Error('Audio URL manquante — impossible d\'envoyer le fichier audio')
         await axios.post(base, {
             messaging_product: 'whatsapp',
             to:   phone,
@@ -570,18 +575,20 @@ async function diffuserAudioDistrict(record, targets) {
         Authorization: `Bearer ${process.env.META_TOKEN}`,
         'Content-Type': 'application/json',
     }
-    const audioUrl = record.messageAudio.url
+    let audioUrl = record.messageAudio?.url || ''
 
     // Résoudre le template associé au record (ou fallback env)
     let tplName = null, tplLang = null, tplType = 'audio', tplValeursCorps = [], tplValeursEntete = []
     if (record.template) {
         const tpl = await WhatsappTemplate.findById(record.template).lean()
         if (tpl) {
-            tplName         = tpl.templateName
-            tplLang         = tpl.langue
-            tplType         = tpl.typeContenu || 'audio'
+            tplName          = tpl.templateName
+            tplLang          = tpl.langue
+            tplType          = tpl.typeContenu || 'audio'
             tplValeursCorps  = tpl.valeursCorps  || []
             tplValeursEntete = tpl.valeursEntete || []
+            // Utiliser l'URL du template si le record n'en a pas
+            if (!audioUrl && tpl.urlMedia) audioUrl = tpl.urlMedia
         }
     }
 

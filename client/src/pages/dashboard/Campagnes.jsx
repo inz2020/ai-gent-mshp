@@ -100,7 +100,7 @@ export default function Campagnes() {
     const [templates, setTemplates]           = useState([]);
     const [tplModal, setTplModal]             = useState(null); // 'add' | 'edit'
     const [editingTpl, setEditingTpl]         = useState(null);
-    const [tplForm, setTplForm]               = useState({ nom: '', templateName: '', langue: 'fr', description: '', statut: 'actif', typeContenu: 'audio', variablesCorps: 0, variablesEntete: 0, valeursCorps: [], valeursEntete: [] });
+    const [tplForm, setTplForm]               = useState({ nom: '', templateName: '', langue: 'fr', description: '', statut: 'actif', typeContenu: 'audio', variablesCorps: 0, variablesEntete: 0, valeursCorps: [], valeursEntete: [], urlMedia: '', nomFichier: '' });
     const [savingTpl, setSavingTpl]           = useState(false);
     const [confirmTpl, setConfirmTpl]         = useState(null);
     const [tplErr, setTplErr]                 = useState('');
@@ -138,7 +138,7 @@ export default function Campagnes() {
     }
 
     // ── Templates WhatsApp CRUD ───────────────────────────────────
-    function openAddTpl()    { setEditingTpl(null); setTplForm({ nom: '', templateName: '', langue: 'fr', description: '', statut: 'actif', typeContenu: 'audio', variablesCorps: 0, variablesEntete: 0, valeursCorps: [], valeursEntete: [] }); setTplErr(''); setTplModal('add'); }
+    function openAddTpl()    { setEditingTpl(null); setTplForm({ nom: '', templateName: '', langue: 'fr', description: '', statut: 'actif', typeContenu: 'audio', variablesCorps: 0, variablesEntete: 0, valeursCorps: [], valeursEntete: [], urlMedia: '', nomFichier: '' }); setTplErr(''); setTplModal('add'); }
     function openEditTpl(t)  {
         const nbCorps  = t.variablesCorps  ?? 0;
         const nbEntete = t.variablesEntete ?? 0;
@@ -151,6 +151,8 @@ export default function Campagnes() {
             variablesEntete: nbEntete,
             valeursCorps:  Array.from({ length: nbCorps },  (_, i) => t.valeursCorps?.[i]  ?? ''),
             valeursEntete: Array.from({ length: nbEntete }, (_, i) => t.valeursEntete?.[i] ?? ''),
+            urlMedia:   t.urlMedia   || '',
+            nomFichier: t.nomFichier || '',
         });
         setTplErr('');
         setTplModal('edit');
@@ -696,7 +698,7 @@ export default function Campagnes() {
                                     {/* Modal erreur diffusion */}
                                     {diffErrModal && (
                                         <div className="modal-overlay" onClick={() => setDiffErrModal(null)}>
-                                            <div className="modal" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
+                                            <div className="modal" style={{ maxWidth: 800 }} onClick={e => e.stopPropagation()}>
                                                 <div className="modal-header" style={{ background: '#fee2e2', borderBottom: '1px solid #fca5a5' }}>
                                                     <h3 style={{ margin: 0, color: '#b91c1c', display: 'flex', alignItems: 'center', gap: 8 }}>
                                                         <i className="bi bi-exclamation-triangle-fill"></i> {diffErrModal.titre}
@@ -1140,7 +1142,7 @@ export default function Campagnes() {
             ══════════════════════════════════════════════════════ */}
             {(modal === 'create' || modal === 'edit') && (
                 <div className="modal-overlay">
-                    <div className="modal" style={{ maxWidth: 680 }}>
+                    <div className="modal" style={{ maxWidth: 800 }}>
                         <div className="modal-header">
                             <h2>{modal === 'create' ? 'Nouvelle campagne' : 'Modifier la campagne'}</h2>
                             <button className="modal-close" onClick={closeModal}><i className="bi bi-x-lg"></i></button>
@@ -1250,7 +1252,7 @@ export default function Campagnes() {
             ══════════════════════════════════════════════════════ */}
             {relaisModal && (
                 <div className="modal-overlay">
-                    <div className="modal" style={{ maxWidth: 480 }}>
+                    <div className="modal" style={{ maxWidth: 800 }}>
                         <div className="modal-header">
                             <h2>{editingRelais ? 'Modifier le relais' : 'Nouveau relais communautaire'}</h2>
                             <button className="modal-close" onClick={() => setRelaisModal(false)}><i className="bi bi-x-lg"></i></button>
@@ -1482,12 +1484,13 @@ export default function Campagnes() {
             {/* ── Modal Modifier / Créer ── */}
             {mobRelaisModal === 'edit' && mobRelaisDistrict && (
                 <div className="modal-overlay">
-                    <div className="modal" style={{ maxWidth: 560 }}>
+                    <div className="modal" style={{ maxWidth: 800 }}>
                         <div className="modal-header">
                             <h2>{mobRelaisRecord ? 'Modifier' : 'Configurer'} — {mobRelaisDistrict.nom}</h2>
                             <button className="modal-close" onClick={() => setMobRelaisModal(null)}><i className="bi bi-x-lg"></i></button>
                         </div>
-                        <form onSubmit={handleMobRelaisSubmit} className="modal-form">
+                        <form onSubmit={handleMobRelaisSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+                        <div className="modal-form">
                             {mobRelaisErr && <div className="modal-error"><i className="bi bi-exclamation-triangle-fill"></i> {mobRelaisErr}</div>}
 
                             {/* Sélection des relais du district */}
@@ -1578,6 +1581,7 @@ export default function Campagnes() {
                                 })()}
                             </div>
 
+                        </div>
                             <div className="modal-footer">
                                 <button type="button" className="dt-btn" onClick={() => setMobRelaisModal(null)}>Annuler</button>
                                 <button type="submit" className="dt-btn dt-btn-primary" disabled={savingMobRelais}>
@@ -1592,7 +1596,7 @@ export default function Campagnes() {
             {/* ── Modal Template WhatsApp Ajouter / Modifier ── */}
             {tplModal && (
                 <div className="modal-overlay">
-                    <div className="modal" style={{ maxWidth: 540 }}>
+                    <div className="modal" style={{ maxWidth: 800 }}>
                         <div className="modal-header">
                             <h2><i className="bi bi-whatsapp" style={{ color: '#25d366', marginRight: 6 }}></i>{tplModal === 'add' ? 'Ajouter un template' : 'Modifier le template'}</h2>
                             <button className="modal-close" onClick={closeTplModal}><i className="bi bi-x-lg"></i></button>
@@ -1663,42 +1667,68 @@ export default function Campagnes() {
                                         </div>
                                     </div>
 
-                                    {/* Hint contextuel selon le type */}
-                                    {tplForm.typeContenu === 'audio' && (
-                                        <div className="tpl-hint tpl-hint-green">
-                                            <i className="bi bi-info-circle-fill"></i>
-                                            <span>Le template ouvre la fenêtre de conversation, puis l'audio est envoyé en message séparé.</span>
-                                        </div>
-                                    )}
+                                    {/* ══ VALEURS DU HEADER ══ */}
+
+                                    {/* Image : URL */}
                                     {tplForm.typeContenu === 'image' && (
-                                        <div className="tpl-hint tpl-hint-blue">
-                                            <i className="bi bi-info-circle-fill"></i>
-                                            <span>Le header du template est une <strong>IMAGE</strong>. Une URL d'image sera requise comme paramètre <code>header</code> lors de la diffusion.</span>
-                                        </div>
-                                    )}
-                                    {tplForm.typeContenu === 'document' && (
-                                        <div className="tpl-hint tpl-hint-orange">
-                                            <i className="bi bi-info-circle-fill"></i>
-                                            <span>Le header du template est un <strong>DOCUMENT</strong> (PDF). Une URL de document sera requise comme paramètre <code>header</code> lors de la diffusion.</span>
-                                        </div>
-                                    )}
-                                    {tplForm.typeContenu === 'texte' && (
-                                        <div className="tpl-hint tpl-hint-purple">
-                                            <i className="bi bi-info-circle-fill"></i>
-                                            <span>Le header est du <strong>TEXTE</strong>. Si le header contient une variable <code>{'{{1}}'}</code>, indiquez ci-dessous le nombre de variables.</span>
-                                        </div>
-                                    )}
-                                    {tplForm.typeContenu === 'aucun' && (
-                                        <div className="tpl-hint tpl-hint-gray">
-                                            <i className="bi bi-info-circle-fill"></i>
-                                            <span>Pas de header. Le template contient uniquement un corps texte.</span>
+                                        <div style={{ marginTop: 8 }}>
+                                            <div className="form-group" style={{ margin: 0 }}>
+                                                <label style={{ fontSize: '0.82rem', color: '#0369a1' }}>
+                                                    <i className="bi bi-image-fill" style={{ marginRight: 5 }}></i>
+                                                    URL de l'image du header <span style={{ color: '#dc2626' }}>*</span>
+                                                </label>
+                                                <input
+                                                    className="form-control"
+                                                    placeholder="https://exemple.com/image.jpg"
+                                                    value={tplForm.urlMedia ?? ''}
+                                                    onChange={e => setTplForm(f => ({ ...f, urlMedia: e.target.value }))}
+                                                />
+                                                <small className="form-hint">URL publique de l'image à envoyer dans le header du template</small>
+                                            </div>
                                         </div>
                                     )}
 
-                                    {/* Compteurs de variables */}
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 10 }}>
-                                        {tplForm.typeContenu === 'texte' && (
+                                    {/* Document : URL + nom de fichier */}
+                                    {tplForm.typeContenu === 'document' && (
+                                        <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 10 }}>
                                             <div className="form-group" style={{ margin: 0 }}>
+                                                <label style={{ fontSize: '0.82rem', color: '#b45309' }}>
+                                                    <i className="bi bi-file-earmark-pdf-fill" style={{ marginRight: 5 }}></i>
+                                                    URL du document <span style={{ color: '#dc2626' }}>*</span>
+                                                </label>
+                                                <input
+                                                    className="form-control"
+                                                    placeholder="https://exemple.com/fichier.pdf"
+                                                    value={tplForm.urlMedia ?? ''}
+                                                    onChange={e => setTplForm(f => ({ ...f, urlMedia: e.target.value }))}
+                                                />
+                                                <small className="form-hint">URL publique du PDF / document</small>
+                                            </div>
+                                            <div className="form-group" style={{ margin: 0 }}>
+                                                <label style={{ fontSize: '0.82rem', color: '#b45309' }}>Nom du fichier</label>
+                                                <input
+                                                    className="form-control"
+                                                    placeholder="document.pdf"
+                                                    value={tplForm.nomFichier ?? ''}
+                                                    onChange={e => setTplForm(f => ({ ...f, nomFichier: e.target.value }))}
+                                                />
+                                                <small className="form-hint">Affiché à la réception</small>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Audio */}
+                                    {tplForm.typeContenu === 'audio' && (
+                                        <div className="tpl-hint tpl-hint-green" style={{ marginTop: 8 }}>
+                                            <i className="bi bi-info-circle-fill"></i>
+                                            <span>Le template ouvre la fenêtre 24 h, puis l'audio uploadé dans la mobilisation est envoyé en message séparé.</span>
+                                        </div>
+                                    )}
+
+                                    {/* Texte header : nb variables */}
+                                    {tplForm.typeContenu === 'texte' && (
+                                        <div style={{ marginTop: 8 }}>
+                                            <div className="form-group" style={{ margin: 0, maxWidth: 300 }}>
                                                 <label style={{ fontSize: '0.82rem' }}>Variables header <code style={{ fontSize: '0.75rem' }}>{'{{n}}'}</code></label>
                                                 <input type="number" min="0" max="1" className="form-control"
                                                     value={tplForm.variablesEntete}
@@ -1710,11 +1740,44 @@ export default function Campagnes() {
                                                             valeursEntete: Array.from({ length: n }, (_, i) => f.valeursEntete?.[i] ?? ''),
                                                         }));
                                                     }} />
-                                                <small className="form-hint">0 ou 1 variable dans le header</small>
                                             </div>
-                                        )}
-                                        <div className="form-group" style={{ margin: 0 }}>
-                                            <label style={{ fontSize: '0.82rem' }}>Variables corps <code style={{ fontSize: '0.75rem' }}>{'{{1}}'}</code>, <code style={{ fontSize: '0.75rem' }}>{'{{2}}'}</code>…</label>
+                                            {tplForm.variablesEntete > 0 && (
+                                                <div style={{ marginTop: 8 }}>
+                                                    <p style={{ fontSize: '0.78rem', fontWeight: 700, color: '#7c3aed', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
+                                                        <i className="bi bi-fonts"></i> Valeur du header
+                                                    </p>
+                                                    {Array.from({ length: tplForm.variablesEntete }, (_, i) => (
+                                                        <div key={i} className="tpl-var-row">
+                                                            <span className="tpl-var-tag tpl-var-tag-purple">{'{{' + (i + 1) + '}}'}</span>
+                                                            <input
+                                                                className="form-control"
+                                                                placeholder={`Valeur du header {{${i + 1}}}`}
+                                                                value={tplForm.valeursEntete?.[i] ?? ''}
+                                                                onChange={e => {
+                                                                    const vals = [...(tplForm.valeursEntete ?? [])];
+                                                                    vals[i] = e.target.value;
+                                                                    setTplForm(f => ({ ...f, valeursEntete: vals }));
+                                                                }}
+                                                            />
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Aucun */}
+                                    {tplForm.typeContenu === 'aucun' && (
+                                        <div className="tpl-hint tpl-hint-gray" style={{ marginTop: 8 }}>
+                                            <i className="bi bi-info-circle-fill"></i>
+                                            <span>Pas de header. Le template contient uniquement un corps texte.</span>
+                                        </div>
+                                    )}
+
+                                    {/* ══ VARIABLES DU CORPS ══ */}
+                                    <div style={{ marginTop: 12, borderTop: '1px dashed #e5e7eb', paddingTop: 10 }}>
+                                        <div className="form-group" style={{ margin: 0, maxWidth: 500 }}>
+                                            <label style={{ fontSize: '0.82rem' }}>Variables corps <code style={{ fontSize: '0.75rem' }}>{'{{1}}'}</code> … <code style={{ fontSize: '0.75rem' }}>{'{{n}}'}</code></label>
                                             <input type="number" min="0" max="10" className="form-control"
                                                 value={tplForm.variablesCorps}
                                                 onChange={e => {
@@ -1725,63 +1788,42 @@ export default function Campagnes() {
                                                         valeursCorps: Array.from({ length: n }, (_, i) => f.valeursCorps?.[i] ?? ''),
                                                     }));
                                                 }} />
-                                            <small className="form-hint">Nb de variables dans le corps du message</small>
+                                            <small className="form-hint">Nombre de variables dans le corps</small>
                                         </div>
+
+                                        {tplForm.variablesCorps > 0 && (
+                                            <div style={{ marginTop: 8 }}>
+                                                <p style={{ fontSize: '0.78rem', fontWeight: 700, color: '#0369a1', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
+                                                    <i className="bi bi-body-text"></i> Valeurs des variables du corps
+                                                </p>
+                                                {Array.from({ length: tplForm.variablesCorps }, (_, i) => (
+                                                    <div key={i} className="tpl-var-row">
+                                                        <span className="tpl-var-tag tpl-var-tag-blue">{'{{' + (i + 1) + '}}'}</span>
+                                                        <input
+                                                            className="form-control"
+                                                            placeholder={`Valeur de {{${i + 1}}}`}
+                                                            value={tplForm.valeursCorps?.[i] ?? ''}
+                                                            onChange={e => {
+                                                                const vals = [...(tplForm.valeursCorps ?? [])];
+                                                                vals[i] = e.target.value;
+                                                                setTplForm(f => ({ ...f, valeursCorps: vals }));
+                                                            }}
+                                                        />
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
 
-                                    {/* ── Saisie des valeurs — header texte ── */}
-                                    {tplForm.typeContenu === 'texte' && tplForm.variablesEntete > 0 && (
-                                        <div style={{ marginTop: 10 }}>
-                                            <p style={{ fontSize: '0.78rem', fontWeight: 700, color: '#7c3aed', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
-                                                <i className="bi bi-fonts"></i> Valeur du header
-                                            </p>
-                                            {Array.from({ length: tplForm.variablesEntete }, (_, i) => (
-                                                <div key={i} className="tpl-var-row">
-                                                    <span className="tpl-var-tag tpl-var-tag-purple">{'{{' + (i + 1) + '}}'}</span>
-                                                    <input
-                                                        className="form-control"
-                                                        placeholder={`Valeur du header {{${i + 1}}}`}
-                                                        value={tplForm.valeursEntete?.[i] ?? ''}
-                                                        onChange={e => {
-                                                            const vals = [...(tplForm.valeursEntete ?? [])];
-                                                            vals[i] = e.target.value;
-                                                            setTplForm(f => ({ ...f, valeursEntete: vals }));
-                                                        }}
-                                                    />
-                                                </div>
-                                            ))}
+                                    {/* ══ APERÇU COLLAPSIBLE ══ */}
+                                    <details style={{ marginTop: 10 }}>
+                                        <summary style={{ fontSize: '0.78rem', color: '#64748b', cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            <i className="bi bi-code-slash"></i> Aperçu du payload Meta API
+                                        </summary>
+                                        <div style={{ marginTop: 8, background: '#0f172a', borderRadius: 8, padding: '10px 14px', fontSize: '0.72rem', fontFamily: 'monospace', color: '#94a3b8', overflowX: 'auto', maxHeight: 280, overflowY: 'auto' }}>
+                                            <TplPayloadPreview form={tplForm} />
                                         </div>
-                                    )}
-
-                                    {/* ── Saisie des valeurs — corps ── */}
-                                    {tplForm.variablesCorps > 0 && (
-                                        <div style={{ marginTop: 10 }}>
-                                            <p style={{ fontSize: '0.78rem', fontWeight: 700, color: '#0369a1', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
-                                                <i className="bi bi-body-text"></i> Valeurs du corps
-                                            </p>
-                                            {Array.from({ length: tplForm.variablesCorps }, (_, i) => (
-                                                <div key={i} className="tpl-var-row">
-                                                    <span className="tpl-var-tag tpl-var-tag-blue">{'{{' + (i + 1) + '}}'}</span>
-                                                    <input
-                                                        className="form-control"
-                                                        placeholder={`Valeur de {{${i + 1}}}`}
-                                                        value={tplForm.valeursCorps?.[i] ?? ''}
-                                                        onChange={e => {
-                                                            const vals = [...(tplForm.valeursCorps ?? [])];
-                                                            vals[i] = e.target.value;
-                                                            setTplForm(f => ({ ...f, valeursCorps: vals }));
-                                                        }}
-                                                    />
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    {/* Aperçu du payload API */}
-                                    <div style={{ marginTop: 12, background: '#0f172a', borderRadius: 8, padding: '10px 14px', fontSize: '0.72rem', fontFamily: 'monospace', color: '#94a3b8', overflowX: 'auto' }}>
-                                        <span style={{ color: '#64748b', display: 'block', marginBottom: 4 }}>// Aperçu composants Meta API</span>
-                                        <TplPayloadPreview form={tplForm} />
-                                    </div>
+                                    </details>
                                 </div>
 
                                 <div className="form-group" style={{ marginTop: 14 }}>
@@ -1869,12 +1911,12 @@ function TplPayloadPreview({ form }) {
     if (form.typeContenu === 'image') {
         components.push({
             type: 'header',
-            parameters: [{ type: 'image', image: { link: '<URL_IMAGE>' } }],
+            parameters: [{ type: 'image', image: { link: form.urlMedia || '<URL_IMAGE>' } }],
         });
     } else if (form.typeContenu === 'document') {
         components.push({
             type: 'header',
-            parameters: [{ type: 'document', document: { link: '<URL_DOCUMENT>', filename: 'document.pdf' } }],
+            parameters: [{ type: 'document', document: { link: form.urlMedia || '<URL_DOCUMENT>', filename: form.nomFichier || 'document.pdf' } }],
         });
     } else if (form.typeContenu === 'texte' && form.variablesEntete > 0) {
         const hVals = form.valeursEntete ?? [];
