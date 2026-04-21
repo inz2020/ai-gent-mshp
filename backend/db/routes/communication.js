@@ -524,30 +524,31 @@ function resolvePhone(relais) {
 }
 
 // ── Envoi d'un template (avec composants selon typeContenu) puis du média ──
-async function envoyerAudioRelais(phone, mediaUrl, headers, tplName, tplLang, typeContenu, valeursCorps, valeursEntete) {
+// audioUrl    = URL du fichier MP3 à envoyer en message audio (depuis la mobilisation)
+// headerMediaUrl = URL du media pour le header du template (image/document, depuis la config template)
+async function envoyerAudioRelais(phone, audioUrl, headerMediaUrl, headers, tplName, tplLang, typeContenu, valeursCorps, valeursEntete) {
     const templateName = tplName || process.env.WA_INVITE_TEMPLATE || 'hello_world'
     const templateLang = tplLang || process.env.WA_INVITE_TEMPLATE_LANG_FR || 'fr'
-    const type         = typeContenu || 'audio'
+    const type         = typeContenu || 'aucun'
     const phoneId      = process.env.PHONE_ID
     const base         = `https://graph.facebook.com/v22.0/${phoneId}/messages`
 
-    // Construire les composants selon le type de header
+    // Construire les composants header du template selon son type
     let components = []
-    if (type === 'image' && mediaUrl) {
-        components.push({ type: 'header', parameters: [{ type: 'image', image: { link: mediaUrl } }] })
-    } else if (type === 'document' && mediaUrl) {
-        components.push({ type: 'header', parameters: [{ type: 'document', document: { link: mediaUrl, filename: 'document.pdf' } }] })
+    if (type === 'image' && headerMediaUrl) {
+        components.push({ type: 'header', parameters: [{ type: 'image', image: { link: headerMediaUrl } }] })
+    } else if (type === 'document' && headerMediaUrl) {
+        components.push({ type: 'header', parameters: [{ type: 'document', document: { link: headerMediaUrl, filename: 'document.pdf' } }] })
     } else if (type === 'texte' && valeursEntete?.length > 0) {
         components.push({ type: 'header', parameters: valeursEntete.map(v => ({ type: 'text', text: v || '' })) })
     }
-    // Variables du corps {{1}}, {{2}}, …
     if (valeursCorps?.length > 0) {
         components.push({ type: 'body', parameters: valeursCorps.map(v => ({ type: 'text', text: v || '' })) })
     }
 
-    console.log(`[ENV_AUDIO] phone=${phone} type=${type} tpl=${templateName}/${templateLang} url=${mediaUrl || '(vide)'}`)
+    console.log(`[ENV_AUDIO] phone=${phone} tplType=${type} tpl=${templateName}/${templateLang} audioUrl=${audioUrl || '(vide)'} headerMedia=${headerMediaUrl || '(vide)'}`)
 
-    // Étape 1 — Template (avec ou sans composants header)
+    // Étape 1 — Template WhatsApp (ouvre la fenêtre 24h)
     const r1 = await axios.post(base, {
         messaging_product: 'whatsapp',
         to:   phone,
@@ -560,20 +561,16 @@ async function envoyerAudioRelais(phone, mediaUrl, headers, tplName, tplLang, ty
     }, { headers })
     console.log(`[ENV_AUDIO] étape1 template wamid=${r1.data?.messages?.[0]?.id ?? 'inconnu'}`)
 
-    // Étape 2 — Pour le type audio : envoi du fichier audio en message séparé
-    if (type === 'audio') {
-        if (!mediaUrl) throw new Error('Audio URL manquante — impossible d\'envoyer le fichier audio')
-        console.log(`[ENV_AUDIO] étape2 envoi audio → ${mediaUrl}`)
-        const r2 = await axios.post(base, {
-            messaging_product: 'whatsapp',
-            to:   phone,
-            type: 'audio',
-            audio: { link: mediaUrl },
-        }, { headers })
-        console.log(`[ENV_AUDIO] étape2 audio wamid=${r2.data?.messages?.[0]?.id ?? 'inconnu'} statut=${r2.data?.messages?.[0]?.message_status ?? '?'}`)
-    } else {
-        console.log(`[ENV_AUDIO] type=${type} → pas d'audio séparé envoyé`)
-    }
+    // Étape 2 — Envoi du fichier audio en message séparé (toujours, quelle que soit le type du header template)
+    if (!audioUrl) throw new Error('Audio URL manquante — impossible d\'envoyer le fichier audio')
+    console.log(`[ENV_AUDIO] étape2 envoi audio → ${audioUrl}`)
+    const r2 = await axios.post(base, {
+        messaging_product: 'whatsapp',
+        to:   phone,
+        type: 'audio',
+        audio: { link: audioUrl },
+    }, { headers })
+    console.log(`[ENV_AUDIO] étape2 audio wamid=${r2.data?.messages?.[0]?.id ?? 'inconnu'}`)
 }
 
 // ── Moteur d'envoi en arrière-plan ────────────────────────────
@@ -582,22 +579,25 @@ async function diffuserAudioDistrict(record, targets) {
         Authorization: `Bearer ${process.env.META_TOKEN}`,
         'Content-Type': 'application/json',
     }
-    let audioUrl = record.messageAudio?.url || ''
+    // audioUrl = fichier MP3 uploadé dans la mobilisation (toujours envoyé en étape 2)
+    const audioUrl = record.messageAudio?.url || ''
 
     // Résoudre le template associé au record (ou fallback env)
-    let tplName = null, tplLang = null, tplType = 'audio', tplValeursCorps = [], tplValeursEntete = []
+    let tplName = null, tplLang = null, tplType = 'aucun', tplValeursCorps = [], tplValeursEntete = [], tplHeaderMedia = ''
     if (record.template) {
         const tpl = await WhatsappTemplate.findById(record.template).lean()
         if (tpl) {
-            tplName          = tpl.templateName
-            tplLang          = tpl.langue
-            tplType          = tpl.typeContenu || 'audio'
+            tplName        = tpl.templateName
+            tplLang        = tpl.langue
+            tplType        = tpl.typeContenu || 'aucun'
             tplValeursCorps  = tpl.valeursCorps  || []
             tplValeursEntete = tpl.valeursEntete || []
-            // Utiliser l'URL du template si le record n'en a pas
-            if (!audioUrl && tpl.urlMedia) audioUrl = tpl.urlMedia
+            // URL media pour le HEADER du template (image/document) — distinct de l'audio à diffuser
+            tplHeaderMedia = tpl.urlMedia || ''
         }
     }
+
+    console.log(`[DIFFUSION] audioUrl=${audioUrl || '(vide)'} tplHeaderMedia=${tplHeaderMedia || '(vide)'}`)
 
     let envoyes = 0, echecs = 0
 
@@ -605,7 +605,7 @@ async function diffuserAudioDistrict(record, targets) {
         const batch = targets.slice(i, i + WA_BATCH_SIZE)
 
         const results = await Promise.allSettled(
-            batch.map(t => envoyerAudioRelais(t.phone, audioUrl, headers, tplName, tplLang, tplType, tplValeursCorps, tplValeursEntete))
+            batch.map(t => envoyerAudioRelais(t.phone, audioUrl, tplHeaderMedia, headers, tplName, tplLang, tplType, tplValeursCorps, tplValeursEntete))
         )
 
         for (let j = 0; j < results.length; j++) {
