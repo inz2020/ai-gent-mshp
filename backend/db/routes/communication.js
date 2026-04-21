@@ -533,6 +533,11 @@ async function envoyerAudioRelais(phone, audioUrl, headerMediaUrl, headers, tplN
     const phoneId      = process.env.PHONE_ID
     const base         = `https://graph.facebook.com/v22.0/${phoneId}/messages`
 
+    // Valider que le media header est fourni si requis
+    if ((type === 'image' || type === 'document') && !headerMediaUrl) {
+        throw new Error(`Template "${templateName}" requiert un header ${type} mais aucune URL media n'est configurée dans le template.`)
+    }
+
     // Construire les composants header du template selon son type
     let components = []
     if (type === 'image' && headerMediaUrl) {
