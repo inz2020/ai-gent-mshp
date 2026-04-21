@@ -545,8 +545,10 @@ async function envoyerAudioRelais(phone, mediaUrl, headers, tplName, tplLang, ty
         components.push({ type: 'body', parameters: valeursCorps.map(v => ({ type: 'text', text: v || '' })) })
     }
 
+    console.log(`[ENV_AUDIO] phone=${phone} type=${type} tpl=${templateName}/${templateLang} url=${mediaUrl || '(vide)'}`)
+
     // Étape 1 — Template (avec ou sans composants header)
-    await axios.post(base, {
+    const r1 = await axios.post(base, {
         messaging_product: 'whatsapp',
         to:   phone,
         type: 'template',
@@ -556,16 +558,21 @@ async function envoyerAudioRelais(phone, mediaUrl, headers, tplName, tplLang, ty
             ...(components.length ? { components } : {}),
         },
     }, { headers })
+    console.log(`[ENV_AUDIO] étape1 template wamid=${r1.data?.messages?.[0]?.id ?? 'inconnu'}`)
 
     // Étape 2 — Pour le type audio : envoi du fichier audio en message séparé
     if (type === 'audio') {
         if (!mediaUrl) throw new Error('Audio URL manquante — impossible d\'envoyer le fichier audio')
-        await axios.post(base, {
+        console.log(`[ENV_AUDIO] étape2 envoi audio → ${mediaUrl}`)
+        const r2 = await axios.post(base, {
             messaging_product: 'whatsapp',
             to:   phone,
             type: 'audio',
             audio: { link: mediaUrl },
         }, { headers })
+        console.log(`[ENV_AUDIO] étape2 audio wamid=${r2.data?.messages?.[0]?.id ?? 'inconnu'} statut=${r2.data?.messages?.[0]?.message_status ?? '?'}`)
+    } else {
+        console.log(`[ENV_AUDIO] type=${type} → pas d'audio séparé envoyé`)
     }
 }
 
