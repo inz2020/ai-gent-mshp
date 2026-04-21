@@ -5,7 +5,7 @@ import {
     getReunions, createReunion, updateReunion, deleteReunion,
     getMobilisationRelais, createMobilisationRelais, updateMobilisationRelais, deleteMobilisationRelais,
     diffuserMobilisationRelais, diffuserToutCampagne,
-    uploadMobilisationAudio,
+    uploadMobilisationAudio, uploadTemplateMedia,
     getWhatsappTemplates, createWhatsappTemplate, updateWhatsappTemplate, deleteWhatsappTemplate,
     getDistricts, getStructures,
 } from '../../api/index.js';
@@ -105,6 +105,8 @@ export default function Campagnes() {
     const [confirmTpl, setConfirmTpl]         = useState(null);
     const [tplErr, setTplErr]                 = useState('');
     const [searchTpl, setSearchTpl]           = useState('');
+    const [uploadingTplMedia, setUploadingTplMedia] = useState(false);
+    const tplMediaInputRef = useRef(null);
 
     // ── Init ─────────────────────────────────────────────────────
     useEffect(() => { fetchAll(); }, []);
@@ -158,6 +160,18 @@ export default function Campagnes() {
         setTplModal('edit');
     }
     function closeTplModal() { setTplModal(null); setEditingTpl(null); setTplErr(''); }
+
+    async function handleTplMediaUpload(e) {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        e.target.value = '';
+        setUploadingTplMedia(true);
+        try {
+            const res = await uploadTemplateMedia(file);
+            setTplForm(f => ({ ...f, urlMedia: res.url, nomFichier: res.nom }));
+        } catch (ex) { setTplErr(ex.message); }
+        finally { setUploadingTplMedia(false); }
+    }
 
     async function handleSaveTpl(e) {
         e.preventDefault();
@@ -1669,51 +1683,67 @@ export default function Campagnes() {
 
                                     {/* ══ VALEURS DU HEADER ══ */}
 
-                                    {/* Image : URL */}
+                                    {/* Image : upload depuis ordinateur */}
                                     {tplForm.typeContenu === 'image' && (
                                         <div style={{ marginTop: 8 }}>
-                                            <div className="form-group" style={{ margin: 0 }}>
-                                                <label style={{ fontSize: '0.82rem', color: '#0369a1' }}>
-                                                    <i className="bi bi-image-fill" style={{ marginRight: 5 }}></i>
-                                                    URL de l'image du header <span style={{ color: '#dc2626' }}>*</span>
-                                                </label>
-                                                <input
-                                                    className="form-control"
-                                                    placeholder="https://exemple.com/image.jpg"
-                                                    value={tplForm.urlMedia ?? ''}
-                                                    onChange={e => setTplForm(f => ({ ...f, urlMedia: e.target.value }))}
-                                                />
-                                                <small className="form-hint">URL publique de l'image à envoyer dans le header du template</small>
+                                            <label style={{ fontSize: '0.82rem', color: '#0369a1', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
+                                                <i className="bi bi-image-fill"></i>
+                                                Image du header <span style={{ color: '#dc2626' }}>*</span>
+                                            </label>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                                                <button type="button" className="dt-btn" onClick={() => tplMediaInputRef.current?.click()} disabled={uploadingTplMedia}>
+                                                    <i className="bi bi-upload"></i> {uploadingTplMedia ? 'Envoi...' : 'Choisir une image'}
+                                                </button>
+                                                <input ref={tplMediaInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleTplMediaUpload} />
+                                                {tplForm.urlMedia && <span style={{ fontSize: '0.8rem', color: '#0a7c4e' }}><i className="bi bi-check-circle-fill"></i> Image chargée</span>}
                                             </div>
+                                            {tplForm.urlMedia && (
+                                                <img src={tplForm.urlMedia} alt="header" style={{ marginTop: 8, maxHeight: 120, maxWidth: '100%', borderRadius: 8, border: '1px solid #e5e7eb', objectFit: 'cover' }} />
+                                            )}
+                                            {/* Possibilité de coller une URL directement */}
+                                            <input
+                                                className="form-control"
+                                                placeholder="ou coller une URL publique…"
+                                                value={tplForm.urlMedia ?? ''}
+                                                onChange={e => setTplForm(f => ({ ...f, urlMedia: e.target.value }))}
+                                                style={{ marginTop: 8 }}
+                                            />
                                         </div>
                                     )}
 
-                                    {/* Document : URL + nom de fichier */}
+                                    {/* Document : upload depuis ordinateur */}
                                     {tplForm.typeContenu === 'document' && (
-                                        <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 10 }}>
-                                            <div className="form-group" style={{ margin: 0 }}>
-                                                <label style={{ fontSize: '0.82rem', color: '#b45309' }}>
-                                                    <i className="bi bi-file-earmark-pdf-fill" style={{ marginRight: 5 }}></i>
-                                                    URL du document <span style={{ color: '#dc2626' }}>*</span>
-                                                </label>
+                                        <div style={{ marginTop: 8 }}>
+                                            <label style={{ fontSize: '0.82rem', color: '#b45309', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
+                                                <i className="bi bi-file-earmark-pdf-fill"></i>
+                                                Document du header <span style={{ color: '#dc2626' }}>*</span>
+                                            </label>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                                                <button type="button" className="dt-btn" onClick={() => tplMediaInputRef.current?.click()} disabled={uploadingTplMedia}>
+                                                    <i className="bi bi-upload"></i> {uploadingTplMedia ? 'Envoi...' : 'Choisir un fichier'}
+                                                </button>
+                                                <input ref={tplMediaInputRef} type="file" accept=".pdf,.doc,.docx,application/*" style={{ display: 'none' }} onChange={handleTplMediaUpload} />
+                                                {tplForm.urlMedia && (
+                                                    <span style={{ fontSize: '0.8rem', color: '#0a7c4e' }}>
+                                                        <i className="bi bi-check-circle-fill"></i> {tplForm.nomFichier || 'Fichier chargé'}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 10, marginTop: 8 }}>
                                                 <input
                                                     className="form-control"
-                                                    placeholder="https://exemple.com/fichier.pdf"
+                                                    placeholder="ou coller une URL publique…"
                                                     value={tplForm.urlMedia ?? ''}
                                                     onChange={e => setTplForm(f => ({ ...f, urlMedia: e.target.value }))}
                                                 />
-                                                <small className="form-hint">URL publique du PDF / document</small>
-                                            </div>
-                                            <div className="form-group" style={{ margin: 0 }}>
-                                                <label style={{ fontSize: '0.82rem', color: '#b45309' }}>Nom du fichier</label>
                                                 <input
                                                     className="form-control"
                                                     placeholder="document.pdf"
                                                     value={tplForm.nomFichier ?? ''}
                                                     onChange={e => setTplForm(f => ({ ...f, nomFichier: e.target.value }))}
                                                 />
-                                                <small className="form-hint">Affiché à la réception</small>
                                             </div>
+                                            <small className="form-hint" style={{ marginTop: 4, display: 'block' }}>Nom du fichier affiché à la réception</small>
                                         </div>
                                     )}
 

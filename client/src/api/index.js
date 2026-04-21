@@ -62,6 +62,19 @@ export const deleteMobilisationRelais = (id)         => request(`${Communication
 export const diffuserMobilisationRelais = (id)           => request(`${Communication}/mobilisation-relais/${id}/diffuser`,                              { method: 'POST', headers: authHeaders() });
 export const diffuserToutCampagne       = (campagneId)   => request(`${Communication}/mobilisation-relais/campagne/${campagneId}/diffuser-tout`,        { method: 'POST', headers: authHeaders() });
 
+export async function uploadTemplateMedia(file) {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`${BASE_URL}${Communication}/templates/upload-media`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        body: form,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Erreur upload.');
+    return data; // { url, publicId, nom }
+}
+
 export async function uploadMobilisationAudio(file) {
     const form = new FormData();
     form.append('file', file);

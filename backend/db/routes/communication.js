@@ -381,6 +381,26 @@ router.get('/templates', async (_req, res) => {
     } catch (e) { err(res, 500, e.message) }
 })
 
+// POST /templates/upload-media — upload image/document header vers Cloudinary
+router.post('/templates/upload-media', upload.single('file'), async (req, res) => {
+    if (!req.file) return err(res, 400, 'Aucun fichier reçu.')
+    try {
+        const isImage = req.file.mimetype.startsWith('image/')
+        const result = await new Promise((resolve, reject) => {
+            cloudinary.uploader.upload_stream(
+                {
+                    resource_type: isImage ? 'image' : 'raw',
+                    folder: 'template_media',
+                    use_filename: true,
+                    unique_filename: true,
+                },
+                (e, r) => e ? reject(e) : resolve(r)
+            ).end(req.file.buffer)
+        })
+        res.json({ url: result.secure_url, publicId: result.public_id, nom: req.file.originalname })
+    } catch (e) { err(res, 500, 'Erreur upload : ' + e.message) }
+})
+
 router.post('/templates', async (req, res) => {
     try {
         const { nom, templateName, langue, description, statut, typeContenu, variablesCorps, variablesEntete, valeursCorps, valeursEntete, urlMedia, nomFichier } = req.body
