@@ -13,7 +13,6 @@ import BroadcastMessage from '../db/models/BroadcastMessage.js';
 import Broadcast from '../db/models/Broadcast.js';
 import { generateTTS, ttsOpenAI, ttsElevenLabs, sttElevenLabs, prepareVoiceText, uploadAudio, convertToOggOpus, preprocessAudio } from '../lib/audio.js';
 import { getErrorAudioUrl, ERROR_TEXTS } from '../lib/errorAudio.js';
-import { Mongoose } from 'mongoose';
 
 const router = express.Router();
 
@@ -276,34 +275,60 @@ function isPositionFresh(contact) {
 }
 
 // Cooldown anti-spam : évite de redemander la position plus d'une fois par heure
-const locationOfferedAt = new Map(); // phone → timestamp
+const locationOfferedAt    = new Map(); // phone → timestamp
+// Utilisateurs en attente de confirmation "voulez-vous les centres proches ?"
+const locationConfirmPending = new Map(); // phone → { lang, at }
 
 function canOfferLocation(userPhone) {
     const last = locationOfferedAt.get(userPhone);
     return !last || Date.now() - last > 3_600_000; // 1h
 }
-
 function markLocationOffered(userPhone) {
     locationOfferedAt.set(userPhone, Date.now());
 }
 
-/**
- * Envoie d'abord un message audio en Hausa expliquant ce qu'il faut faire,
- * puis le bouton natif WhatsApp "Envoyer ma position".
- * Conçu pour des utilisateurs analphabètes qui ne lisent pas le texte.
- * lang : 'ha' (défaut) ou 'fr'
- */
+// Détecte si le texte est une confirmation (oui/non) en FR ou Hausa
+function detectLocationConfirm(text) {
+    const t = text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    const YES = ['oui', 'ok', 'yes', 'bien sur', 'daccord', 'volontiers', 'eh', 'i', 'toh', 'ee', 'ina son'];
+    const NO  = ['non', 'no', 'pas', 'ayi', 'a a', 'aa'];
+    const isYes = YES.some(w => t === w || t.startsWith(w + ' ') || t.endsWith(' ' + w));
+    const isNo  = NO.some(w =>  t === w || t.startsWith(w + ' ') || t.endsWith(' ' + w));
+    return { isYes, isNo };
+}
+
+// Pose la question "voulez-vous les centres proches ?" avant d'envoyer le bouton GPS
+async function askLocationConfirmation(userPhone, lang, contact) {
+    if (!canOfferLocation(userPhone)) return;
+
+    // Si position fraîche → on peut directement calculer après confirmation
+    const hasFreshPos = isPositionFresh(contact);
+
+    const question = lang === 'ha'
+        ? 'Shin kuna son mu nemo cibiyoyin rigakafi mafi kusa da ku? Ka amsa "Eh" ko "A\'a".'
+        : 'Souhaitez-vous que je vous propose les centres de vaccination les plus proches ? Répondez Oui ou Non.';
+
+    // Hausa → audio + texte (utilisateurs souvent analphabètes)
+    if (lang === 'ha') {
+        await sendAudioReply(userPhone, question, 'ha').catch(() => {});
+    }
+    await sendWhatsAppText(userPhone, question);
+
+    locationConfirmPending.set(userPhone, { lang, hasFreshPos, at: Date.now() });
+    markLocationOffered(userPhone);
+    console.log(`[LOC-CONFIRM] Question envoyée à ${userPhone} (${lang})`);
+}
+
+// Envoie l'audio d'instruction puis le bouton GPS natif WhatsApp
 async function sendLocationRequest(userPhone, lang = 'ha') {
-    // Audio explicatif AVANT le bouton (pour les analphabètes)
     const introText = lang === 'fr'
-        ? 'Pour trouver le centre de vaccination le plus proche de chez vous, appuyez sur le bouton ci-dessous pour partager votre position.'
+        ? 'Pour trouver le centre de vaccination le plus proche, appuyez sur le bouton ci-dessous pour partager votre position.'
         : 'Don nemo cibiyar rigakafi mafi kusa da kai, danna maballin da ke kasa don raba wurin ka.';
 
     await sendAudioReply(userPhone, introText, lang).catch(e =>
-        console.warn('[LOC-REQ] Audio intro échoué (non bloquant):', e.message)
+        console.warn('[LOC-REQ] Audio intro échoué:', e.message)
     );
 
-    // Bouton natif WhatsApp de partage de position
     try {
         await axios.post(
             `https://graph.facebook.com/v22.0/${process.env.PHONE_ID}/messages`,
@@ -319,10 +344,9 @@ async function sendLocationRequest(userPhone, lang = 'ha') {
             },
             { headers: { Authorization: `Bearer ${process.env.META_TOKEN}`, 'Content-Type': 'application/json' } }
         );
-        markLocationOffered(userPhone);
-        console.log(`[LOC-REQ] Demande de localisation (${lang}) envoyée à ${userPhone}`);
+        console.log(`[LOC-REQ] Bouton GPS envoyé à ${userPhone} (${lang})`);
     } catch (err) {
-        console.warn(`[LOC-REQ] Échec bouton location à ${userPhone}:`, err.response?.data?.error?.message ?? err.message);
+        console.warn(`[LOC-REQ] Échec bouton location:`, err.response?.data?.error?.message ?? err.message);
     }
 }
 
@@ -381,18 +405,19 @@ async function sendAudioReply(to, text, lang = 'fr') {
     }
 
     // Conversion MP3→OGG Opus si nécessaire (ElevenLabs ne retourne pas OGG nativement)
+    let uploadFormat = 'ogg';
     if (needsOggConversion) {
         try {
             ttsBuffer = await convertToOggOpus(ttsBuffer);
         } catch (convErr) {
             console.warn('[TTS] Conversion OGG échouée, upload MP3 de secours:', convErr.message);
-            needsOggConversion = false; // reset pour uploader en mp3
+            uploadFormat = 'mp3';
         }
     }
 
-    // Envoi audio — OGG Opus = bulle vocale WhatsApp
+    // Envoi audio — OGG Opus = bulle vocale WhatsApp, MP3 = fichier audio
     try {
-        const uploaded = await uploadAudio(ttsBuffer, 'chatbot_audio', 'ogg');
+        const uploaded = await uploadAudio(ttsBuffer, 'chatbot_audio', uploadFormat);
         await axios.post(
             `https://graph.facebook.com/v22.0/${process.env.PHONE_ID}/messages`,
             { messaging_product: 'whatsapp', to, type: 'audio', audio: { link: uploaded.secure_url } },
@@ -511,6 +536,34 @@ async function processText(userText, userPhone, phoneNumId = null) {
         console.log(`[BLOCKED] ${userPhone} — message texte ignoré (contact bloqué)`);
         return;
     }
+
+    // ── Interception confirmation géoloc ────────────────────────
+    if (locationConfirmPending.has(userPhone)) {
+        const pending = locationConfirmPending.get(userPhone);
+        const { isYes, isNo } = detectLocationConfirm(userText);
+        if (isYes) {
+            locationConfirmPending.delete(userPhone);
+            console.log(`[LOC-CONFIRM] ${userPhone} a confirmé → envoi bouton GPS`);
+            if (pending.hasFreshPos && contact.dernierePosition?.latitude) {
+                // Position déjà connue et fraîche → calcul direct
+                await processLocation(contact.dernierePosition.latitude, contact.dernierePosition.longitude, userPhone);
+            } else {
+                await sendLocationRequest(userPhone, pending.lang);
+            }
+            return;
+        }
+        if (isNo) {
+            locationConfirmPending.delete(userPhone);
+            const refus = pending.lang === 'ha' ? 'To, lafiya. Idan kana bukata, tambaya ni.' : 'D\'accord, pas de problème. N\'hésitez pas si vous avez besoin.';
+            if (pending.lang === 'ha') await sendAudioReply(userPhone, refus, 'ha').catch(() => {});
+            else await sendWhatsAppText(userPhone, refus);
+            console.log(`[LOC-CONFIRM] ${userPhone} a refusé`);
+            return;
+        }
+        // Ni oui ni non → on laisse continuer le traitement normal
+        locationConfirmPending.delete(userPhone);
+    }
+
     const conv    = await getOrCreateConversation(contact._id);
 
     // Mode humain → enregistre sans réponse IA (détection légère suffisante ici)
@@ -678,16 +731,11 @@ async function processText(userText, userPhone, phoneNumId = null) {
         console.error('[DB] Erreur persistance text:', dbErr.message);
     }
 
-    // Détection contextuelle (texte) : si l'utilisateur OU la réponse IA mentionne un centre proche
+    // Détection contextuelle : si centres de santé mentionnés → demander confirmation d'abord
     if ((wantsNearbyCenter(userText) || wantsNearbyCenter(reply)) && canOfferLocation(userPhone)) {
         const contactLangForLoc = lang === 'ha' ? 'ha' : 'fr';
-        if (isPositionFresh(contact)) {
-            console.log(`[TEXT] Centre mentionné (user/IA), position fraîche → centres proches envoyés directement`);
-            await processLocation(contact.dernierePosition.latitude, contact.dernierePosition.longitude, userPhone);
-        } else {
-            console.log(`[TEXT] Centre mentionné (user/IA), position absente → demande géoloc (${contactLangForLoc})`);
-            await sendLocationRequest(userPhone, contactLangForLoc);
-        }
+        console.log(`[TEXT] Centre mentionné → demande de confirmation géoloc (${contactLangForLoc})`);
+        await askLocationConfirmation(userPhone, contactLangForLoc, contact);
     }
 }
 
@@ -922,6 +970,30 @@ async function processAudio(mediaId, userPhone, phoneNumId = null) {
 
    
 
+    // ── Confirmation géoloc par vocal ───────────────────────────
+    if (locationConfirmPending.has(userPhone)) {
+        const pending = locationConfirmPending.get(userPhone);
+        const { isYes, isNo } = detectLocationConfirm(transcription.text);
+        if (isYes) {
+            locationConfirmPending.delete(userPhone);
+            console.log(`[LOC-CONFIRM] ${userPhone} a confirmé par vocal → bouton GPS`);
+            if (pending.hasFreshPos && contact.dernierePosition?.latitude) {
+                await processLocation(contact.dernierePosition.latitude, contact.dernierePosition.longitude, userPhone);
+            } else {
+                await sendLocationRequest(userPhone, pending.lang);
+            }
+            return;
+        }
+        if (isNo) {
+            locationConfirmPending.delete(userPhone);
+            const refus = pending.lang === 'ha' ? 'To, lafiya. Idan kana bukata, tambaya ni.' : 'D\'accord, pas de problème.';
+            await sendAudioReply(userPhone, refus, pending.lang).catch(() => {});
+            console.log(`[LOC-CONFIRM] ${userPhone} a refusé par vocal`);
+            return;
+        }
+        locationConfirmPending.delete(userPhone);
+    }
+
     // La langue est celle détectée au Pass 1 (source de vérité).
     // knownLang est ignoré — on se fie à ce que l'utilisateur parle MAINTENANT.
     const finalLang = detectedLang;
@@ -1019,17 +1091,11 @@ DOKOKI MASU WAJIBI :
         console.error('[DB] Erreur persistance audio:', dbErr.message);
     }
 
-    // Demande géolocalisation uniquement si la réponse IA mentionne un centre de santé.
-    // (évite le spam de localisation après chaque audio)
+    // Si centres de santé mentionnés → demander confirmation avant d'envoyer le bouton GPS
     if (wantsNearbyCenter(replyText) && canOfferLocation(userPhone)) {
         const contactLangForLoc = contact.langue === 'ha' ? 'ha' : 'fr';
-        if (isPositionFresh(contact)) {
-            console.log(`[AUDIO] Réponse IA → centre mentionné, position fraîche → centres proches envoyés directement`);
-            await processLocation(contact.dernierePosition.latitude, contact.dernierePosition.longitude, userPhone);
-        } else {
-            console.log(`[AUDIO] Réponse IA → centre mentionné, position absente → demande géoloc (${contactLangForLoc})`);
-            await sendLocationRequest(userPhone, contactLangForLoc);
-        }
+        console.log(`[AUDIO] Centre mentionné → demande de confirmation géoloc (${contactLangForLoc})`);
+        await askLocationConfirmation(userPhone, contactLangForLoc, contact);
     }
     } finally {
         // Nettoyage garanti des fichiers temporaires, même en cas d'exception

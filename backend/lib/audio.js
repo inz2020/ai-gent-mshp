@@ -5,7 +5,6 @@
 import axios from 'axios';
 import FormData from 'form-data';
 import fs from 'fs';
-import path from 'path';
 import { v2 as cloudinary } from 'cloudinary';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegPath from 'ffmpeg-static';
