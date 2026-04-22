@@ -28,16 +28,19 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_KEY });
 function detectTextLanguage(text) {
     if (!text || text.trim().length === 0) return 'unknown';
 
-    // 1. Caractères spéciaux Hausa = signal fort et direct
+    // 1. Caractères spéciaux Hausa = signal fort → Hausa direct
     if (/[ƙɗɓ]/.test(text)) return 'ha';
+
+    // 2. Accents français typiques (é/è/ê/à/â/ù/ô/î/ï/ë/ç) absents du Hausa → Français direct
+    if (/[éèêëàâùûôîïç]/.test(text)) return 'fr';
 
     const normalized = text.toLowerCase()
         .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-    // 2. Phrases multi-mots Hausa (signal fort)
+    // 3. Phrases multi-mots Hausa (signal fort)
     if (getHausaPhrases().some(phrase => normalized.includes(phrase))) return 'ha';
 
-    // 3. Dictionnaire Hausa — score de proportion (pas de jugement sur un seul mot)
+    // 4. Dictionnaire Hausa — score de proportion
     const words = normalized.split(/\s+/).map(w => w.replace(/[^a-z]/g, '')).filter(w => w.length >= 2);
     if (words.length === 0) return 'fr';
 
@@ -538,8 +541,7 @@ async function processText(userText, userPhone, phoneNumId = null) {
         if (isNo) {
             locationConfirmPending.delete(userPhone);
             const refus = pending.lang === 'ha' ? 'To, lafiya. Idan kana bukata, tambaya ni.' : 'D\'accord, pas de problème. N\'hésitez pas si vous avez besoin.';
-            if (pending.lang === 'ha') await sendAudioReply(userPhone, refus, 'ha').catch(() => {});
-            else await sendWhatsAppText(userPhone, refus);
+            await sendWhatsAppText(userPhone, refus);
             console.log(`[LOC-CONFIRM] ${userPhone} a refusé`);
             return;
         }
@@ -580,7 +582,7 @@ async function processText(userText, userPhone, phoneNumId = null) {
             ? 'Sannu! Ni ce Hawa, wakiliyan lafiya. Ina nan domin taimakawa game da rigakafi, lafiyar jariri, da shawarar lafiya. Me kuke bukata?'
             : 'Bonjour ! Je suis Hawa, votre agente de santé communautaire. Je suis là pour vous aider sur la vaccination, la santé de votre bébé et les consultations. Quelle est votre question ?';
         console.log('greetReply:', greetReply)
-            await sendWhatsAppText(userPhone, greetReply);
+        await sendWhatsAppText(userPhone, greetReply);
         try {
             await saveMessages(contact._id, greetLang === 'ha' ? 'ha' : 'fr', { humanText: userText, aiText: greetReply });
         } catch (dbErr) {
@@ -672,43 +674,26 @@ async function processText(userText, userPhone, phoneNumId = null) {
     }
 
     if (!reply) {
-        // Principe : texte → erreur texte (FR), audio → erreur audio (HA)
-        if (lang === 'fr') {
-            const errMsg = "Je n'ai pas compris votre message. Pouvez-vous le reformuler différemment ?";
-            await sendWhatsAppText(userPhone, errMsg);
-            try {
-                await saveMessages(contact._id, lang, { humanText: userText, aiText: errMsg });
-            } catch (dbErr) {
-                console.error('[DB] Erreur persistance message inconnu:', dbErr.message);
-            }
-        } else {
-            const errKey = 'quality_ha';
-            await sendErrorAudio(userPhone, errKey, 'ha');
-            try {
-                await saveMessages(contact._id, lang, { humanText: userText, aiText: ERROR_TEXTS[errKey], aiIsAudio: true });
-            } catch (dbErr) {
-                console.error('[DB] Erreur persistance message inconnu:', dbErr.message);
-            }
+        // Texte → erreur texte toujours (la modalité suit l'entrée, pas la langue)
+        const errMsg = lang === 'ha'
+            ? 'Ban fahimci saƙon ku. Don Allah sake rubuta shi.'
+            : "Je n'ai pas compris votre message. Pouvez-vous le reformuler différemment ?";
+        await sendWhatsAppText(userPhone, errMsg);
+        try {
+            await saveMessages(contact._id, lang, { humanText: userText, aiText: errMsg });
+        } catch (dbErr) {
+            console.error('[DB] Erreur persistance message inconnu:', dbErr.message);
         }
         return;
     }
 
-    // Principe fondamental : message texte → réponse texte / message audio → réponse audio
-    // Hausa → audio (utilisateurs souvent analphabètes)
-    // Français → texte
-    let aiAudioUpload = null;
-    if (lang === 'ha') {
-        aiAudioUpload = await sendAudioReply(userPhone, reply, 'ha');
-    } else {
-        await sendWhatsAppText(userPhone, reply);
-    }
+    // Texte → texte toujours (la langue ne change pas la modalité de réponse)
+    await sendWhatsAppText(userPhone, reply);
 
     try {
         await saveMessages(contact._id, lang, {
             humanText: userText,
             aiText: reply,
-            audioUrl: aiAudioUpload?.secure_url ?? '',
-            cloudinaryId: aiAudioUpload?.public_id ?? '',
         });
     } catch (dbErr) {
         console.error('[DB] Erreur persistance text:', dbErr.message);
