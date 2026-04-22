@@ -5,6 +5,7 @@
 import axios from 'axios';
 import FormData from 'form-data';
 import fs from 'fs';
+import path from 'path';
 import { v2 as cloudinary } from 'cloudinary';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegPath from 'ffmpeg-static';
@@ -120,18 +121,50 @@ export async function ttsOpenAI(text) {
         return Buffer.from(res.data);
     }
 
-    // Fallback OpenAI si pas de VOICE_ID_FR defini
+    // Fallback OpenAI — response_format opus = OGG Opus (vocal WhatsApp natif)
     const res = await axios.post(
         'https://api.openai.com/v1/audio/speech',
         {
             model: 'tts-1-hd',
             voice: 'nova',
             input: text,
-            speed: 0.90
+            speed: 0.90,
+            response_format: 'opus',
         },
         { headers: { Authorization: `Bearer ${process.env.OPENAI_KEY}` }, responseType: 'arraybuffer' }
     );
     return Buffer.from(res.data);
+}
+
+/**
+ * Convertit un buffer audio (MP3/WAV/…) en OGG Opus via ffmpeg.
+ * WhatsApp affiche OGG Opus comme bulle vocale, pas comme fichier audio.
+ */
+export function convertToOggOpus(inputBuffer) {
+    return new Promise((resolve, reject) => {
+        const tmpId  = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        const inPath  = `tts_in_${tmpId}.mp3`;
+        const outPath = `tts_out_${tmpId}.ogg`;
+
+        fs.writeFileSync(inPath, inputBuffer);
+
+        ffmpeg(inPath)
+            .audioCodec('libopus')
+            .audioFrequency(48000)
+            .audioChannels(1)
+            .format('ogg')
+            .on('end', () => {
+                const result = fs.readFileSync(outPath);
+                fs.unlink(inPath,  () => {});
+                fs.unlink(outPath, () => {});
+                resolve(result);
+            })
+            .on('error', (err) => {
+                fs.unlink(inPath,  () => {});
+                reject(new Error(`convertToOggOpus: ${err.message}`));
+            })
+            .save(outPath);
+    });
 }
 
 /**
@@ -196,10 +229,10 @@ export async function sttElevenLabs(filePath, langCode = 'hau') {
 /**
  * Upload un Buffer audio sur Cloudinary et retourne { secure_url, public_id }
  */
-export async function uploadAudio(buffer, folder = 'chatbot_audio') {
+export async function uploadAudio(buffer, folder = 'chatbot_audio', format = 'mp3') {
     return new Promise((resolve, reject) => {
         cloudinary.uploader.upload_stream(
-            { resource_type: 'video', format: 'mp3', folder },
+            { resource_type: 'video', format, folder },
             (err, result) => err ? reject(err) : resolve(result)
         ).end(buffer);
     });

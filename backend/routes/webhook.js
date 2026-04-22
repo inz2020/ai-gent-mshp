@@ -11,8 +11,9 @@ import Message from '../db/models/Message.js';
 import Structure from '../db/models/Structure.js';
 import BroadcastMessage from '../db/models/BroadcastMessage.js';
 import Broadcast from '../db/models/Broadcast.js';
-import { generateTTS, ttsOpenAI, ttsElevenLabs, sttElevenLabs, prepareVoiceText, uploadAudio, preprocessAudio } from '../lib/audio.js';
+import { generateTTS, ttsOpenAI, ttsElevenLabs, sttElevenLabs, prepareVoiceText, uploadAudio, convertToOggOpus, preprocessAudio } from '../lib/audio.js';
 import { getErrorAudioUrl, ERROR_TEXTS } from '../lib/errorAudio.js';
+import { Mongoose } from 'mongoose';
 
 const router = express.Router();
 
@@ -44,8 +45,8 @@ function detectTextLanguage(text) {
     const hausaCount = words.filter(w => getHausaWords().has(w)).length;
     const ratio = hausaCount / words.length;
 
-    // Seuil : au moins 2 mots Hausa ET 30% des mots de la phrase
-    const isHausa = hausaCount >= 2 && ratio >= 0.30;
+    // Seuil : 1 mot Hausa suffit si message court (≤3 mots), sinon 30% minimum
+    const isHausa = hausaCount >= 1 && (words.length <= 3 ? ratio >= 0.25 : ratio >= 0.30);
 
     console.log(`[LANG] Dictionnaire — HA: ${hausaCount}/${words.length} mots (${Math.round(ratio * 100)}%) → ${isHausa ? 'ha' : 'fr'}`);
 
@@ -117,6 +118,7 @@ async function getOrCreateContact(whatsappId, phoneNumberId = null) {
 
 async function getOrCreateConversation(contactId) {
     // Cherche ouvert OU escalade_humain — sinon on crée une nouvelle conversation
+    /// $in est un operateur MongonDB qui vérifie les valeurs dans une liste. C'est equivalent en SQL à where satut in ('', '')
     let conv = await Conversation.findOne({ contactId, statut: { $in: ['ouvert', 'escalade_humain'] } });
     if (!conv) {
         conv = await Conversation.create({ contactId });
@@ -165,7 +167,8 @@ async function saveMessages(contactId, langue, { humanText, aiText, humanAudioUr
 
 // GET /webhook — Validation Meta
 router.get('/', (req, res) => {
-    const mode = req.query['hub.mode'];
+    //hub est le nom du paramètre URL envoyé par Meta pour la vérification du webhook
+    const mode = req.query['hub.mode']; //subscription
     const token = req.query['hub.verify_token'];
     const challenge = req.query['hub.challenge'];
 
@@ -341,30 +344,34 @@ async function sendAudioReply(to, text, lang = 'fr') {
     let ttsBuffer;
     const voiceText = prepareVoiceText(text, lang);
 
+    let needsOggConversion = false; // true si le buffer vient d'ElevenLabs (MP3)
+
     if (lang === 'ha') {
-        // Tentative 1 : ElevenLabs (meilleur pour Hausa)
+        // Tentative 1 : ElevenLabs (meilleur pour Hausa) — retourne MP3, conversion OGG nécessaire
         try {
             ttsBuffer = await ttsElevenLabs(voiceText);
+            needsOggConversion = true;
         } catch (e1) {
-            console.warn('[TTS] ElevenLabs échoué (ha), fallback OpenAI shimmer:', e1.message);
-            // Tentative 2 : OpenAI shimmer (lit le Hausa en romanisation)
+            console.warn('[TTS] ElevenLabs échoué (ha), fallback OpenAI opus:', e1.message);
+            // Tentative 2 : OpenAI (retourne déjà OGG Opus)
             try {
                 ttsBuffer = await ttsOpenAI(voiceText);
             } catch (e2) {
-                console.error('[TTS] OpenAI shimmer aussi échoué, dernier recours texte:', e2.message);
+                console.error('[TTS] OpenAI aussi échoué, dernier recours texte:', e2.message);
                 await sendWhatsAppText(to, text);
                 return null;
             }
         }
     } else {
-        // Tentative 1 : OpenAI shimmer (optimal pour FR)
+        // Tentative 1 : OpenAI opus (OGG Opus natif, optimal pour FR)
         try {
             ttsBuffer = await ttsOpenAI(voiceText);
         } catch (e1) {
-            console.warn('[TTS] OpenAI shimmer échoué (fr), fallback ElevenLabs:', e1.message);
-            // Tentative 2 : ElevenLabs multilingue
+            console.warn('[TTS] OpenAI échoué (fr), fallback ElevenLabs:', e1.message);
+            // Tentative 2 : ElevenLabs — retourne MP3, conversion OGG nécessaire
             try {
                 ttsBuffer = await ttsElevenLabs(voiceText);
+                needsOggConversion = true;
             } catch (e2) {
                 console.error('[TTS] ElevenLabs aussi échoué, dernier recours texte:', e2.message);
                 await sendWhatsAppText(to, text);
@@ -373,15 +380,25 @@ async function sendAudioReply(to, text, lang = 'fr') {
         }
     }
 
-    // Envoi audio
+    // Conversion MP3→OGG Opus si nécessaire (ElevenLabs ne retourne pas OGG nativement)
+    if (needsOggConversion) {
+        try {
+            ttsBuffer = await convertToOggOpus(ttsBuffer);
+        } catch (convErr) {
+            console.warn('[TTS] Conversion OGG échouée, upload MP3 de secours:', convErr.message);
+            needsOggConversion = false; // reset pour uploader en mp3
+        }
+    }
+
+    // Envoi audio — OGG Opus = bulle vocale WhatsApp
     try {
-        const uploaded = await uploadAudio(ttsBuffer, 'chatbot_audio');
+        const uploaded = await uploadAudio(ttsBuffer, 'chatbot_audio', 'ogg');
         await axios.post(
             `https://graph.facebook.com/v22.0/${process.env.PHONE_ID}/messages`,
             { messaging_product: 'whatsapp', to, type: 'audio', audio: { link: uploaded.secure_url } },
             { headers: { Authorization: `Bearer ${process.env.META_TOKEN}`, 'Content-Type': 'application/json' } }
         );
-        console.log(`[TTS] Réponse audio envoyée à ${to} (${lang})`);
+        console.log(`[TTS] Vocal OGG envoyé à ${to} (${lang})`);
         return uploaded;
     } catch (sendErr) {
         console.error('[TTS] Échec upload/envoi audio, dernier recours texte:', sendErr.message);
@@ -519,12 +536,16 @@ async function processText(userText, userPhone, phoneNumId = null) {
         const norm = kw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
         return normalizedForGreeting === norm || normalizedForGreeting.startsWith(norm + ' ') || normalizedForGreeting.endsWith(' ' + norm);
     });
+    console.log('isGreting:', isGreeting)
     if (isGreeting) {
         const greetLang = detectTextLanguage(userText);
+        console.log('userText from processsText:', userText)
+         console.log('greetLang:', greetLang)
         const greetReply = greetLang === 'ha'
             ? 'Sannu! Ni ce Hawa, wakiliyan lafiya. Ina nan domin taimakawa game da rigakafi, lafiyar jariri, da shawarar lafiya. Me kuke bukata?'
             : 'Bonjour ! Je suis Hawa, votre agente de santé communautaire. Je suis là pour vous aider sur la vaccination, la santé de votre bébé et les consultations. Quelle est votre question ?';
-        await sendWhatsAppText(userPhone, greetReply);
+        console.log('greetReply:', greetReply)
+            await sendWhatsAppText(userPhone, greetReply);
         try {
             await saveMessages(contact._id, greetLang === 'ha' ? 'ha' : 'fr', { humanText: userText, aiText: greetReply });
         } catch (dbErr) {
