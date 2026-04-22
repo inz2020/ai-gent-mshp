@@ -264,15 +264,6 @@ function wantsNearbyCenter(text) {
     return NEARBY_CENTER_KEYWORDS.some(kw => lower.includes(kw));
 }
 
-/**
- * Retourne true si le contact a une position GPS récente (moins de 30 jours).
- */
-function isPositionFresh(contact) {
-    const pos = contact.dernierePosition;
-    if (!pos?.latitude || !pos?.longitude || !pos?.updatedAt) return false;
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    return new Date(pos.updatedAt) > thirtyDaysAgo;
-}
 
 // Cooldown anti-spam : évite de redemander la position plus d'une fois par heure
 const locationOfferedAt    = new Map(); // phone → timestamp
@@ -301,12 +292,9 @@ function detectLocationConfirm(text) {
 async function askLocationConfirmation(userPhone, lang, contact) {
     if (!canOfferLocation(userPhone)) return;
 
-    // Si position fraîche → on peut directement calculer après confirmation
-    const hasFreshPos = isPositionFresh(contact);
-
     const question = lang === 'ha'
         ? 'Shin kuna son mu nemo cibiyoyin rigakafi mafi kusa da ku? Ka amsa "Eh" ko "A\'a".'
-        : 'Souhaitez-vous que je vous propose les centres de vaccination les plus proches ? Répondez Oui ou Non.';
+        : 'Souhaitez-vous que je vous propose les centres de vaccination les plus proches de votre position actuelle ? Répondez Oui ou Non.';
 
     // Hausa → audio + texte (utilisateurs souvent analphabètes)
     if (lang === 'ha') {
@@ -314,7 +302,7 @@ async function askLocationConfirmation(userPhone, lang, contact) {
     }
     await sendWhatsAppText(userPhone, question);
 
-    locationConfirmPending.set(userPhone, { lang, hasFreshPos, at: Date.now() });
+    locationConfirmPending.set(userPhone, { lang, at: Date.now() });
     markLocationOffered(userPhone);
     console.log(`[LOC-CONFIRM] Question envoyée à ${userPhone} (${lang})`);
 }
@@ -543,13 +531,8 @@ async function processText(userText, userPhone, phoneNumId = null) {
         const { isYes, isNo } = detectLocationConfirm(userText);
         if (isYes) {
             locationConfirmPending.delete(userPhone);
-            console.log(`[LOC-CONFIRM] ${userPhone} a confirmé → envoi bouton GPS`);
-            if (pending.hasFreshPos && contact.dernierePosition?.latitude) {
-                // Position déjà connue et fraîche → calcul direct
-                await processLocation(contact.dernierePosition.latitude, contact.dernierePosition.longitude, userPhone);
-            } else {
-                await sendLocationRequest(userPhone, pending.lang);
-            }
+            console.log(`[LOC-CONFIRM] ${userPhone} a confirmé → envoi bouton GPS (position en temps réel)`);
+            await sendLocationRequest(userPhone, pending.lang);
             return;
         }
         if (isNo) {
@@ -976,12 +959,8 @@ async function processAudio(mediaId, userPhone, phoneNumId = null) {
         const { isYes, isNo } = detectLocationConfirm(transcription.text);
         if (isYes) {
             locationConfirmPending.delete(userPhone);
-            console.log(`[LOC-CONFIRM] ${userPhone} a confirmé par vocal → bouton GPS`);
-            if (pending.hasFreshPos && contact.dernierePosition?.latitude) {
-                await processLocation(contact.dernierePosition.latitude, contact.dernierePosition.longitude, userPhone);
-            } else {
-                await sendLocationRequest(userPhone, pending.lang);
-            }
+            console.log(`[LOC-CONFIRM] ${userPhone} a confirmé par vocal → bouton GPS (position en temps réel)`);
+            await sendLocationRequest(userPhone, pending.lang);
             return;
         }
         if (isNo) {
