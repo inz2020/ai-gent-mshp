@@ -536,11 +536,10 @@ async function processText(userText, userPhone, phoneNumId = null) {
         const norm = kw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
         return normalizedForGreeting === norm || normalizedForGreeting.startsWith(norm + ' ') || normalizedForGreeting.endsWith(' ' + norm);
     });
-    console.log('isGreting:', isGreeting)
+
     if (isGreeting) {
         const greetLang = detectTextLanguage(userText);
-        console.log('userText from processsText:', userText)
-         console.log('greetLang:', greetLang)
+        
         const greetReply = greetLang === 'ha'
             ? 'Sannu! Ni ce Hawa, wakiliyan lafiya. Ina nan domin taimakawa game da rigakafi, lafiyar jariri, da shawarar lafiya. Me kuke bukata?'
             : 'Bonjour ! Je suis Hawa, votre agente de santé communautaire. Je suis là pour vous aider sur la vaccination, la santé de votre bébé et les consultations. Quelle est votre question ?';
