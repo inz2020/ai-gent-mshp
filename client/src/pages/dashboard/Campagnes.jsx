@@ -82,7 +82,7 @@ export default function Campagnes() {
     const [mobRelaisModal, setMobRelaisModal]       = useState(null); // 'view' | 'edit' | null
     const [mobRelaisDistrict, setMobRelaisDistrict] = useState(null); // district courant
     const [mobRelaisRecord, setMobRelaisRecord]     = useState(null); // enregistrement existant
-    const [mobRelaisForm, setMobRelaisForm]         = useState({ relaisIds: [], concessionsVisitees: 0, personnesTouchees: 0, messageAudio: { url: '', nom: '', publicId: '' }, templateId: '' });
+    const [mobRelaisForm, setMobRelaisForm]         = useState({ relaisIds: [],  messageAudio: { url: '', nom: '', publicId: '' }, templateId: '' });
     const [savingMobRelais, setSavingMobRelais]     = useState(false);
     const [confirmMobRelais, setConfirmMobRelais]   = useState(null);
     const [mobRelaisErr, setMobRelaisErr]           = useState('');
@@ -376,8 +376,8 @@ export default function Campagnes() {
         setMobRelaisRecord(record ?? null);
         setMobRelaisForm({
             relaisIds:           record?.relais?.map(r => r._id) ?? [],
-            concessionsVisitees: record?.concessionsVisitees ?? 0,
-            personnesTouchees:   record?.personnesTouchees   ?? 0,
+          
+          
             messageAudio:        record?.messageAudio ?? { url: '', nom: '', publicId: '' },
             templateId:          record?.template?._id ?? '',
         });
@@ -411,8 +411,8 @@ export default function Campagnes() {
                 campagneId:          activeCampagne._id,
                 districtId:          mobRelaisDistrict._id,
                 relaisIds:           mobRelaisForm.relaisIds,
-                concessionsVisitees: Number(mobRelaisForm.concessionsVisitees),
-                personnesTouchees:   Number(mobRelaisForm.personnesTouchees),
+              
+               
                 messageAudio:        mobRelaisForm.messageAudio,
                 templateId:          mobRelaisForm.templateId || null,
             };
@@ -774,8 +774,7 @@ export default function Campagnes() {
                                                     <tr>
                                                         <th>District</th>
                                                         <th style={{ textAlign: 'center' }}>Nb relais <i className="bi bi-calculator" style={{ fontSize: '0.75rem', color: '#94a3b8' }} title="Calculé automatiquement"></i></th>
-                                                        <th style={{ textAlign: 'center' }}>Concessions</th>
-                                                        <th style={{ textAlign: 'center' }}>Personnes</th>
+                                                       
                                                         <th>Message audio</th>
                                                         <th style={{ textAlign: 'center' }}>Diffusion</th>
                                                         <th>Actions</th>
@@ -797,12 +796,8 @@ export default function Campagnes() {
                                                                 <td style={{ textAlign: 'center' }}>
                                                                     <span className={`dt-badge ${nbRel > 0 ? 'dt-badge-actif' : 'dt-badge-inactif'}`}>{nbRel}</span>
                                                                 </td>
-                                                                <td style={{ textAlign: 'center' }}>
-                                                                    {rec ? rec.concessionsVisitees : <span className="dt-muted">—</span>}
-                                                                </td>
-                                                                <td style={{ textAlign: 'center' }}>
-                                                                    {rec ? rec.personnesTouchees : <span className="dt-muted">—</span>}
-                                                                </td>
+                                                              
+                                                               
                                                                 <td style={{ fontSize: '0.82rem' }}>
                                                                     {rec?.messageAudio?.nom
                                                                         ? <><i className="bi bi-file-music-fill" style={{ marginRight: 4, color: '#0a7c4e' }}></i>{rec.messageAudio.nom}</>
@@ -1077,17 +1072,13 @@ export default function Campagnes() {
                             const distConfigures  = campDist.filter(d => mobMap[d._id]).length;
                             const distAvecAudio   = campDist.filter(d => mobMap[d._id]?.messageAudio?.url).length;
                             const totalRelaisAss  = relais.length;
-                            const totalConcessions = mobRelais.reduce((s, m) => s + (m.concessionsVisitees ?? 0), 0);
-                            const totalTouches     = mobRelais.reduce((s, m) => s + (m.personnesTouchees   ?? 0), 0);
-
+                           
                             const checks = [
                                 { label: 'Districts configurés',             ok: distConfigures === campDist.length && campDist.length > 0, detail: `${distConfigures} / ${campDist.length}` },
                                 { label: 'Messages audio enregistrés',       ok: distAvecAudio  === campDist.length && campDist.length > 0, detail: `${distAvecAudio} / ${campDist.length}` },
                                 { label: 'Relais assignés',                  ok: totalRelaisAss > 0,     detail: `${totalRelaisAss} relais` },
-                                { label: 'Concessions visitées renseignées', ok: totalConcessions > 0,  detail: totalConcessions },
-                                { label: 'Personnes touchées renseignées',   ok: totalTouches > 0,      detail: totalTouches },
-/*                                 { label: 'Réunions / plaidoyers planifiés',  ok: reunions.length > 0,   detail: `${reunions.length} réunion${reunions.length !== 1 ? 's' : ''}` },
- */                            ];
+                          
+ ];
                             const score = checks.filter(c => c.ok).length;
 
                             return (
@@ -1122,9 +1113,7 @@ export default function Campagnes() {
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
                                         {[
                                             { label: 'Total relais assignés',     value: totalRelaisAss,  icon: 'bi-person-walking',  color: '#0a7c4e' },
-                                            { label: 'Concessions visitées',      value: totalConcessions, icon: 'bi-house-fill',      color: '#0369a1' },
-                                            { label: 'Personnes touchées',        value: totalTouches,     icon: 'bi-people-fill',     color: '#7c3aed' },
-                                            /* { label: 'Réunions / plaidoyers',     value: reunions.length,  icon: 'bi-mic-fill',        color: '#b45309' }, */
+                                           
                                         ].map(({ label, value, icon, color }) => (
                                             <div key={label} style={{ background: '#fff', borderRadius: 10, padding: '16px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
                                                 <i className={`bi ${icon}`} style={{ fontSize: '1.4rem', color, marginBottom: 6, display: 'block' }}></i>
@@ -1445,14 +1434,8 @@ export default function Campagnes() {
                                             <div style={{ fontSize: '1.6rem', fontWeight: 700, color: '#0a7c4e' }}>{mobRelaisRecord.relais?.length ?? 0}</div>
                                             <div style={{ fontSize: '0.8rem', color: '#64748b' }}>Relais assignés</div>
                                         </div>
-                                        <div style={{ background: '#f0fdf4', borderRadius: 8, padding: '12px 16px', textAlign: 'center' }}>
-                                            <div style={{ fontSize: '1.6rem', fontWeight: 700, color: '#0a7c4e' }}>{mobRelaisRecord.concessionsVisitees}</div>
-                                            <div style={{ fontSize: '0.8rem', color: '#64748b' }}>Concessions visitées</div>
-                                        </div>
-                                        <div style={{ background: '#f0fdf4', borderRadius: 8, padding: '12px 16px', textAlign: 'center' }}>
-                                            <div style={{ fontSize: '1.6rem', fontWeight: 700, color: '#0a7c4e' }}>{mobRelaisRecord.personnesTouchees}</div>
-                                            <div style={{ fontSize: '0.8rem', color: '#64748b' }}>Personnes touchées</div>
-                                        </div>
+                                       
+                                        
                                         <div style={{ background: '#fefce8', borderRadius: 8, padding: '12px 16px', textAlign: 'center' }}>
                                             {mobRelaisRecord.messageAudio?.url ? (
                                                 <>
@@ -1531,20 +1514,7 @@ export default function Campagnes() {
                                 })()}
                             </div>
 
-                            <div className="form-row">
-                                <div className="form-group">
-                                    <label>Concessions visitées</label>
-                                    <input type="number" min="0"
-                                        value={mobRelaisForm.concessionsVisitees}
-                                        onChange={e => setMobRelaisForm(f => ({ ...f, concessionsVisitees: e.target.value }))} />
-                                </div>
-                                <div className="form-group">
-                                    <label>Personnes touchées</label>
-                                    <input type="number" min="0"
-                                        value={mobRelaisForm.personnesTouchees}
-                                        onChange={e => setMobRelaisForm(f => ({ ...f, personnesTouchees: e.target.value }))} />
-                                </div>
-                            </div>
+            
 
                             <div className="form-group">
                                 <label>Message audio</label>

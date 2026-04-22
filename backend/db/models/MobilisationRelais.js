@@ -12,8 +12,8 @@ const MobilisationRelaisSchema = new mongoose.Schema({
         nom:      { type: String, default: '' },
         publicId: { type: String, default: '' },
     },
-    concessionsVisitees: { type: Number, default: 0 },
-    personnesTouchees:   { type: Number, default: 0 },
+  /*   concessionsVisitees: { type: Number, default: 0 },
+    personnesTouchees:   { type: Number, default: 0 }, */
 
     diffusion: {
         statut:    { type: String, enum: ['inactif', 'en_cours', 'termine', 'erreur'], default: 'inactif' },

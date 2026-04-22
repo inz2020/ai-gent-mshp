@@ -476,15 +476,15 @@ router.get('/mobilisation-relais', async (req, res) => {
 
 // POST /mobilisation-relais
 router.post('/mobilisation-relais', async (req, res) => {
-    const { campagneId, districtId, relaisIds, concessionsVisitees, personnesTouchees, messageAudio, templateId } = req.body
+    const { campagneId, districtId, relaisIds,  messageAudio, templateId } = req.body
     if (!campagneId || !districtId) return err(res, 400, 'campagneId et districtId requis')
     try {
         const record = await MobilisationRelais.create({
             campagne: campagneId,
             district: districtId,
             relais:   relaisIds ?? [],
-            concessionsVisitees: concessionsVisitees ?? 0,
-            personnesTouchees:   personnesTouchees   ?? 0,
+           /*  concessionsVisitees: concessionsVisitees ?? 0,
+            personnesTouchees:   personnesTouchees   ?? 0, */
             messageAudio: messageAudio ?? { url: '', nom: '', publicId: '' },
             template: templateId || null,
         })
@@ -504,10 +504,10 @@ router.put('/mobilisation-relais/:id', async (req, res) => {
     try {
         const record = await MobilisationRelais.findById(req.params.id)
         if (!record) return err(res, 404, 'Enregistrement introuvable')
-        const { relaisIds, concessionsVisitees, personnesTouchees, messageAudio, templateId } = req.body
+        const { relaisIds, messageAudio, templateId } = req.body
         if (relaisIds            !== undefined) record.relais              = relaisIds
-        if (concessionsVisitees  !== undefined) record.concessionsVisitees = concessionsVisitees
-        if (personnesTouchees    !== undefined) record.personnesTouchees   = personnesTouchees
+       /*  if (concessionsVisitees  !== undefined) record.concessionsVisitees = concessionsVisitees
+        if (personnesTouchees    !== undefined) record.personnesTouchees   = personnesTouchees */
         if (messageAudio         !== undefined) record.messageAudio        = messageAudio
         if (templateId           !== undefined) record.template            = templateId || null
         await record.save()
