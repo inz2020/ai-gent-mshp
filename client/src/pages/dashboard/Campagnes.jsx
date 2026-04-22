@@ -8,6 +8,7 @@ import {
     uploadMobilisationAudio, uploadTemplateMedia,
     getWhatsappTemplates, createWhatsappTemplate, updateWhatsappTemplate, deleteWhatsappTemplate,
     getDistricts, getStructures,
+    getSpots, createSpot, updateSpot, deleteSpot, diffuserSpot, uploadSpotAudio,
 } from '../../api/index.js';
 import { usePagination } from '../../hooks/usePagination.js';
 import { useSort } from '../../hooks/useSort.js';
@@ -96,6 +97,20 @@ export default function Campagnes() {
     const [diffErrModal, setDiffErrModal] = useState(null); // { titre, message, log }
     const pollingRef = useRef(null);
 
+    // ── Spots de campagne ─────────────────────────────────────────
+    const EMPTY_SPOT = { nom: '', langue: '', audio: { url: '', publicId: '', nom: '' } };
+    const [spots, setSpots]               = useState([]);
+    const [loadingSpots, setLoadingSpots] = useState(false);
+    const [spotModal, setSpotModal]       = useState(null); // 'add' | 'edit'
+    const [editingSpot, setEditingSpot]   = useState(null);
+    const [spotForm, setSpotForm]         = useState(EMPTY_SPOT);
+    const [savingSpot, setSavingSpot]     = useState(false);
+    const [confirmSpot, setConfirmSpot]   = useState(null);
+    const [spotErr, setSpotErr]           = useState('');
+    const [diffusingSpot, setDiffusingSpot] = useState(null); // spot._id en cours
+    const [uploadingSpotAudio, setUploadingSpotAudio] = useState(false);
+    const spotAudioInputRef = useRef(null);
+
     // ── Templates WhatsApp ────────────────────────────────────────
     const [templates, setTemplates]           = useState([]);
     const [tplModal, setTplModal]             = useState(null); // 'add' | 'edit'
@@ -137,6 +152,71 @@ export default function Campagnes() {
             setRelais(r); setStructures(s); setReunions(rp); setMobRelais(mr);
         } catch (e) { setError(e.message); }
         finally { setLoadingMob(false); setLoadingReu(false); setLoadingMobRelais(false); }
+    }
+
+    async function loadSpots() {
+        if (!activeCampagne) return;
+        setLoadingSpots(true);
+        try { setSpots(await getSpots(activeCampagne._id)); }
+        catch (e) { setSpotErr(e.message); }
+        finally { setLoadingSpots(false); }
+    }
+
+    // Charge les spots quand on arrive sur l'onglet
+    useEffect(() => { if (activeTab === 'spots' && activeCampagne) loadSpots(); }, [activeTab, activeCampagne?._id]);
+
+    // ── Spots CRUD ───────────────────────────────────────────────
+    function openAddSpot()   { setEditingSpot(null); setSpotForm(EMPTY_SPOT); setSpotErr(''); setSpotModal('add'); }
+    function openEditSpot(s) { setEditingSpot(s); setSpotForm({ nom: s.nom, langue: s.langue, audio: { ...s.audio } }); setSpotErr(''); setSpotModal('edit'); }
+    function closeSpotModal() { setSpotModal(null); setEditingSpot(null); setSpotErr(''); }
+
+    async function handleSpotAudioUpload(e) {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        e.target.value = '';
+        setUploadingSpotAudio(true);
+        try {
+            const res = await uploadSpotAudio(file);
+            setSpotForm(f => ({ ...f, audio: { url: res.url, publicId: res.publicId, nom: res.nom } }));
+        } catch (ex) { setSpotErr(ex.message); }
+        finally { setUploadingSpotAudio(false); }
+    }
+
+    async function handleSaveSpot(e) {
+        e.preventDefault();
+        if (!spotForm.nom.trim()) return setSpotErr('Le nom est requis.');
+        if (!spotForm.audio?.url) return setSpotErr('Veuillez uploader un fichier audio.');
+        setSavingSpot(true); setSpotErr('');
+        try {
+            if (editingSpot) {
+                const updated = await updateSpot(editingSpot._id, spotForm);
+                setSpots(ss => ss.map(s => s._id === updated._id ? updated : s));
+            } else {
+                const created = await createSpot({ ...spotForm, campagne: activeCampagne._id });
+                setSpots(ss => [created, ...ss]);
+            }
+            closeSpotModal();
+        } catch (ex) { setSpotErr(ex.message); }
+        finally { setSavingSpot(false); }
+    }
+
+    async function handleDeleteSpot() {
+        if (!confirmSpot) return;
+        try {
+            await deleteSpot(confirmSpot._id);
+            setSpots(ss => ss.filter(s => s._id !== confirmSpot._id));
+        } catch (ex) { setSpotErr(ex.message); }
+        finally { setConfirmSpot(null); }
+    }
+
+    async function handleDiffuserSpot(spot) {
+        setDiffusingSpot(spot._id);
+        try {
+            const res = await diffuserSpot(spot._id);
+            setSuccess(res.message);
+            await loadSpots();
+        } catch (ex) { setError(ex.message); }
+        finally { setDiffusingSpot(null); }
     }
 
     // ── Templates WhatsApp CRUD ───────────────────────────────────
@@ -1020,10 +1100,158 @@ export default function Campagnes() {
                         </button>
                     </div>
                 ) : (
-                    <div className="camp-placeholder">
-                        <i className="bi bi-megaphone-fill camp-placeholder-icon"></i>
-                        <h3>Spots — <span style={{ color: '#0a7c4e' }}>{activeCampagne.nom}</span></h3>
-                        <p>Fonctionnalité à venir — gestion des spots radio et audiovisuels.</p>
+                    <div className="camp-section">
+                        <div className="camp-section-header">
+                            <h3><i className="bi bi-megaphone-fill"></i> Spots — <span style={{ color: '#0a7c4e' }}>{activeCampagne.nom}</span></h3>
+                            <button className="dt-btn dt-btn-primary" onClick={openAddSpot}>
+                                <i className="bi bi-plus-lg"></i> Nouveau spot
+                            </button>
+                        </div>
+
+                        {spotErr && <div className="dt-alert dt-alert-error">{spotErr}</div>}
+
+                        {loadingSpots ? (
+                            <div className="dt-center" style={{ padding: '2rem' }}>Chargement…</div>
+                        ) : spots.length === 0 ? (
+                            <div className="camp-placeholder" style={{ padding: '3rem 0' }}>
+                                <i className="bi bi-megaphone camp-placeholder-icon"></i>
+                                <p>Aucun spot pour cette campagne. Créez-en un pour commencer.</p>
+                            </div>
+                        ) : (
+                            <div className="dt-wrapper">
+                                <table className="dt-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Nom</th>
+                                            <th>Langue</th>
+                                            <th>Fichier audio</th>
+                                            <th>Diffusion</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {spots.map(s => (
+                                            <tr key={s._id}>
+                                                <td><strong>{s.nom}</strong></td>
+                                                <td>
+                                                    <span className="dt-badge dt-badge-lang">{s.langue}</span>
+                                                </td>
+                                                <td>
+                                                    {s.audio?.url ? (
+                                                        <audio controls src={s.audio.url} style={{ height: 32, maxWidth: 220 }} />
+                                                    ) : (
+                                                        <span className="dt-muted">—</span>
+                                                    )}
+                                                </td>
+                                                <td>
+                                                    {s.diffusion?.statut === 'inactif' && <span className="dt-badge dt-badge-inactif">Non diffusé</span>}
+                                                    {s.diffusion?.statut === 'en_cours' && <span className="dt-badge dt-badge-warning">En cours</span>}
+                                                    {s.diffusion?.statut === 'termine' && (
+                                                        <span className="dt-badge dt-badge-actif">
+                                                            {s.diffusion.envoyes}/{s.diffusion.total} envoyés
+                                                        </span>
+                                                    )}
+                                                    {s.diffusion?.statut === 'erreur' && <span className="dt-badge dt-badge-error">Erreur</span>}
+                                                </td>
+                                                <td className="dt-actions">
+                                                    <button className="dt-btn dt-btn-primary"
+                                                        onClick={() => handleDiffuserSpot(s)}
+                                                        disabled={diffusingSpot === s._id || !s.audio?.url}
+                                                        title="Diffuser ce spot aux relais">
+                                                        {diffusingSpot === s._id
+                                                            ? <><i className="bi bi-hourglass-split"></i> Envoi…</>
+                                                            : <><i className="bi bi-send-fill"></i> Diffuser</>
+                                                        }
+                                                    </button>
+                                                    <button className="dt-btn dt-btn-edit" onClick={() => openEditSpot(s)} title="Modifier">
+                                                        <i className="bi bi-pencil-fill"></i>
+                                                    </button>
+                                                    <button className="dt-btn dt-btn-danger" onClick={() => setConfirmSpot(s)} title="Supprimer">
+                                                        <i className="bi bi-trash-fill"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+
+                        {/* Modal add/edit spot */}
+                        {spotModal && (
+                            <div className="modal-overlay" onClick={closeSpotModal}>
+                                <div className="modal-box" onClick={e => e.stopPropagation()}>
+                                    <div className="modal-header">
+                                        <h3>{spotModal === 'add' ? 'Nouveau spot' : 'Modifier le spot'}</h3>
+                                        <button className="modal-close" onClick={closeSpotModal}>✕</button>
+                                    </div>
+                                    <form onSubmit={handleSaveSpot}>
+                                        <div className="modal-form">
+                                            {spotErr && <div className="dt-alert dt-alert-error">{spotErr}</div>}
+
+                                            <div className="form-group">
+                                                <label>Nom du spot *</label>
+                                                <input className="form-control" value={spotForm.nom}
+                                                    onChange={e => setSpotForm(f => ({ ...f, nom: e.target.value }))}
+                                                    placeholder="Ex: Spot ouverture JNV — Hausa" required />
+                                            </div>
+
+                                            <div className="form-group">
+                                                <label>Langue *</label>
+                                                <input className="form-control" value={spotForm.langue}
+                                                    onChange={e => setSpotForm(f => ({ ...f, langue: e.target.value }))}
+                                                    placeholder="Ex: Français, Hausa, Zarma, Fulfuldé…" required />
+                                            </div>
+
+                                            <div className="form-group">
+                                                <label>Fichier audio *</label>
+                                                <input type="file" accept="audio/*" ref={spotAudioInputRef}
+                                                    style={{ display: 'none' }} onChange={handleSpotAudioUpload} />
+                                                <button type="button" className="dt-btn dt-btn-edit"
+                                                    onClick={() => spotAudioInputRef.current?.click()}
+                                                    disabled={uploadingSpotAudio}>
+                                                    {uploadingSpotAudio
+                                                        ? <><i className="bi bi-hourglass-split"></i> Upload…</>
+                                                        : <><i className="bi bi-upload"></i> Choisir un fichier audio</>
+                                                    }
+                                                </button>
+                                                {spotForm.audio?.url && (
+                                                    <div style={{ marginTop: 8 }}>
+                                                        <audio controls src={spotForm.audio.url} style={{ height: 36, width: '100%' }} />
+                                                        <small className="dt-muted">{spotForm.audio.nom}</small>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="modal-footer">
+                                            <button type="button" className="dt-btn dt-btn-secondary" onClick={closeSpotModal}>Annuler</button>
+                                            <button type="submit" className="dt-btn dt-btn-primary" disabled={savingSpot}>
+                                                {savingSpot ? 'Enregistrement…' : 'Enregistrer'}
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Confirm delete spot */}
+                        {confirmSpot && (
+                            <div className="modal-overlay" onClick={() => setConfirmSpot(null)}>
+                                <div className="modal-box modal-box-sm" onClick={e => e.stopPropagation()}>
+                                    <div className="modal-header">
+                                        <h3>Supprimer le spot</h3>
+                                        <button className="modal-close" onClick={() => setConfirmSpot(null)}>✕</button>
+                                    </div>
+                                    <div style={{ padding: '1rem 1.5rem' }}>
+                                        <p>Supprimer <strong>{confirmSpot.nom}</strong> ? Cette action est irréversible.</p>
+                                    </div>
+                                    <div className="modal-footer">
+                                        <button className="dt-btn dt-btn-secondary" onClick={() => setConfirmSpot(null)}>Annuler</button>
+                                        <button className="dt-btn dt-btn-danger" onClick={handleDeleteSpot}>Supprimer</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )
             )}

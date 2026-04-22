@@ -317,6 +317,26 @@ export const updateCampagne  = (id, d) => request(`/api/campagnes/${id}`, { meth
 export const deleteCampagne  = (id)    => request(`/api/campagnes/${id}`, { method: 'DELETE', headers: authHeaders() });
 export const lancerCampagne  = (id)    => request(`/api/campagnes/${id}/envoyer`, { method: 'POST', headers: authHeaders() });
 
+// ── Spots de campagne ─────────────────────────────────────────
+export const getSpots       = (campagneId) => request(`/api/campagnes/spots?campagne=${campagneId}`, { headers: authHeaders() });
+export const createSpot     = (data)       => request('/api/campagnes/spots', { method: 'POST', headers: authHeaders(), body: JSON.stringify(data) });
+export const updateSpot     = (id, d)      => request(`/api/campagnes/spots/${id}`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(d) });
+export const deleteSpot     = (id)         => request(`/api/campagnes/spots/${id}`, { method: 'DELETE', headers: authHeaders() });
+export const diffuserSpot   = (id)         => request(`/api/campagnes/spots/${id}/diffuser`, { method: 'POST', headers: authHeaders() });
+
+export async function uploadSpotAudio(file) {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`${BASE_URL}/api/campagnes/spots/upload`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        body: form,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Erreur upload.');
+    return data; // { url, publicId, nom }
+}
+
 export async function uploadCampagneMedia(file, mediaType) {
     const form = new FormData();
     form.append('file', file);
