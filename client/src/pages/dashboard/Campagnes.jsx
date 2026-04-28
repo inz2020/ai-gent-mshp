@@ -770,8 +770,6 @@ export default function Campagnes() {
                                                     ) : pagedDistricts.map(d => {
                                                         const rec    = mobMap[d._id];
                                                         const nbRel  = relaisParDistrict[d._id] ?? 0;
-                                                      
-                                                        const statut = diff?.statut ?? 'inactif';
                                                         return (
                                                             <tr key={d._id}>
                                                                 <td><strong>{d.nom}</strong></td>
