@@ -727,7 +727,8 @@ export default function Campagnes() {
                                             </button>
                                             <button className="dt-btn dt-btn-edit"
                                                 onClick={() => { setSelected(c); setForm({ nom: c.nom, type: c.type, produit: c.produit ?? '', dateDebut: c.dateDebut?.slice(0,10) ?? '', dateFin: c.dateFin?.slice(0,10) ?? '', districts: c.districts?.map(d => d._id) ?? [] }); setFormError(''); setModal('edit'); }}
-                                                disabled={c.statut === 'en_cours'}>
+                                                disabled={c.statut === 'terminee'}
+                                                title={c.statut === 'terminee' ? 'Campagne terminée — modification impossible' : 'Modifier'}>
                                                 <i className="bi bi-pencil-fill"></i>
                                             </button>
                                             {(c.statut === 'brouillon' || c.statut === 'annulee') && (
@@ -739,7 +740,8 @@ export default function Campagnes() {
                                             )}
                                             <button className="dt-btn dt-btn-danger"
                                                 onClick={() => { setSelected(c); setFormError(''); setModal('delete'); }}
-                                                disabled={c.statut === 'en_cours'}>
+                                                disabled={c.statut === 'terminee'}
+                                                title={c.statut === 'terminee' ? 'Campagne terminée — suppression impossible' : 'Supprimer'}>
                                                 <i className="bi bi-trash-fill"></i>
                                             </button>
                                         </td>
@@ -1382,76 +1384,78 @@ export default function Campagnes() {
             ══════════════════════════════════════════════════════ */}
             {(modal === 'create' || modal === 'edit') && (
                 <div className="modal-overlay">
-                    <div className="modal" style={{ maxWidth: 800 }}>
+                    <div className="modal" style={{ maxWidth: 800, maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
                         <div className="modal-header">
                             <h2>{modal === 'create' ? 'Nouvelle campagne' : 'Modifier la campagne'}</h2>
                             <button className="modal-close" onClick={closeModal}><i className="bi bi-x-lg"></i></button>
                         </div>
-                        <form onSubmit={handleCampagneSubmit} className="modal-form">
-                            {formError && <div className="modal-error"><i className="bi bi-exclamation-triangle-fill"></i> {formError}</div>}
+                        <form onSubmit={handleCampagneSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                            <div className="modal-form" style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
+                                {formError && <div className="modal-error"><i className="bi bi-exclamation-triangle-fill"></i> {formError}</div>}
 
-                            <div style={{ background: '#f8fafc', borderRadius: 8, padding: '14px 16px', marginBottom: 16 }}>
-                                <p style={{ fontWeight: 600, fontSize: '0.88rem', marginBottom: 12, color: '#475569' }}>Informations générales</p>
-                                <div className="form-row">
-                                    <div className="form-group">
-                                        <label>Nom <span className="req">*</span></label>
-                                        <input value={form.nom} onChange={e => setField('nom', e.target.value)} placeholder="Ex : JNV Avril 2025" required />
+                                <div style={{ background: '#f8fafc', borderRadius: 8, padding: '14px 16px', marginBottom: 16 }}>
+                                    <p style={{ fontWeight: 600, fontSize: '0.88rem', marginBottom: 12, color: '#475569' }}>Informations générales</p>
+                                    <div className="form-row">
+                                        <div className="form-group">
+                                            <label>Nom <span className="req">*</span></label>
+                                            <input value={form.nom} onChange={e => setField('nom', e.target.value)} placeholder="Ex : JNV Avril 2025" required />
+                                        </div>
+                                        <div className="form-group">
+                                            <label>Type <span className="req">*</span></label>
+                                            <select value={form.type} onChange={e => setField('type', e.target.value)}>
+                                                {TYPES_CAMPAGNE.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                                            </select>
+                                        </div>
                                     </div>
-                                    <div className="form-group">
-                                        <label>Type <span className="req">*</span></label>
-                                        <select value={form.type} onChange={e => setField('type', e.target.value)}>
-                                            {TYPES_CAMPAGNE.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                                        </select>
+                                    <div className="form-row">
+                                        <div className="form-group">
+                                            <label>Produit</label>
+                                            <input value={form.produit} onChange={e => setField('produit', e.target.value)} placeholder="Ex : VPO, Pentavalent..." />
+                                        </div>
+                                    </div>
+                                    <div className="form-row">
+                                        <div className="form-group">
+                                            <label>Date de début <span className="req">*</span></label>
+                                            <input type="date" value={form.dateDebut} onChange={e => setField('dateDebut', e.target.value)} required />
+                                        </div>
+                                        <div className="form-group">
+                                            <label>Date de fin <span className="req">*</span></label>
+                                            <input type="date" value={form.dateFin} onChange={e => setField('dateFin', e.target.value)} required />
+                                        </div>
                                     </div>
                                 </div>
-                                <div className="form-row">
-                                    <div className="form-group">
-                                        <label>Produit</label>
-                                        <input value={form.produit} onChange={e => setField('produit', e.target.value)} placeholder="Ex : VPO, Pentavalent..." />
-                                    </div>
-                                </div>
-                                <div className="form-row">
-                                    <div className="form-group">
-                                        <label>Date de début <span className="req">*</span></label>
-                                        <input type="date" value={form.dateDebut} onChange={e => setField('dateDebut', e.target.value)} required />
-                                    </div>
-                                    <div className="form-group">
-                                        <label>Date de fin <span className="req">*</span></label>
-                                        <input type="date" value={form.dateFin} onChange={e => setField('dateFin', e.target.value)} required />
-                                    </div>
-                                </div>
-                            </div>
 
-                            <div style={{ background: '#f8fafc', borderRadius: 8, padding: '14px 16px', marginBottom: 16 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                                    <p style={{ fontWeight: 600, fontSize: '0.88rem', margin: 0, color: '#475569' }}>
-                                        Districts <span style={{ color: '#94a3b8', fontWeight: 400 }}>({form.districts.length} sélectionné{form.districts.length !== 1 ? 's' : ''})</span>
-                                    </p>
-                                    <button type="button" className="dt-btn" style={{ fontSize: '0.78rem', padding: '3px 10px' }}
-                                        onClick={toggleAllDistricts}>
-                                        {districts.every(d => form.districts.includes(d._id)) ? 'Aucun' : 'Tout'}
-                                    </button>
+                                <div style={{ background: '#f8fafc', borderRadius: 8, padding: '14px 16px', marginBottom: 4 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                                        <p style={{ fontWeight: 600, fontSize: '0.88rem', margin: 0, color: '#475569' }}>
+                                            Districts <span style={{ color: '#94a3b8', fontWeight: 400 }}>({form.districts.length} sélectionné{form.districts.length !== 1 ? 's' : ''})</span>
+                                        </p>
+                                        <button type="button" className="dt-btn" style={{ fontSize: '0.78rem', padding: '3px 10px' }}
+                                            onClick={toggleAllDistricts}>
+                                            {districts.every(d => form.districts.includes(d._id)) ? 'Aucun' : 'Tout'}
+                                        </button>
+                                    </div>
+                                    <input
+                                        className="dt-search"
+                                        placeholder="Rechercher un district..."
+                                        value={districtSearch}
+                                        onChange={e => setDistrictSearch(e.target.value)}
+                                        style={{ marginBottom: 8, width: '100%', boxSizing: 'border-box' }}
+                                    />
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px 12px', maxHeight: 280, overflowY: 'auto', paddingRight: 4 }}>
+                                        {districts
+                                            .filter(d => d.nom.toLowerCase().includes(districtSearch.toLowerCase()))
+                                            .map(d => (
+                                                <label key={d._id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.83rem', cursor: 'pointer' }}>
+                                                    <input type="checkbox" checked={form.districts.includes(d._id)} onChange={() => toggleDistrict(d._id)} />
+                                                    {d.nom}
+                                                </label>
+                                            ))}
+                                    </div>
+                                    {form.districts.length === 0 && (
+                                        <p style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: 6 }}>Aucun district = tous les contacts</p>
+                                    )}
                                 </div>
-                                <input
-                                    className="dt-search"
-                                    placeholder="Rechercher un district..."
-                                    value={districtSearch}
-                                    onChange={e => setDistrictSearch(e.target.value)}
-                                    style={{ marginBottom: 8, width: '100%', boxSizing: 'border-box' }}
-                                />
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px 12px', maxHeight: 180, overflowY: 'auto' }}>
-                                    {districts
-                                        .filter(d => d.nom.toLowerCase().includes(districtSearch.toLowerCase()))
-                                        .map(d => (
-                                            <label key={d._id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.83rem', cursor: 'pointer' }}>
-                                                <input type="checkbox" checked={form.districts.includes(d._id)} onChange={() => toggleDistrict(d._id)} />
-                                                {d.nom}
-                                            </label>
-                                        ))}
-                                </div>
-                                {form.districts.length === 0 && (
-                                    <p style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: 6 }}>Aucun district = tous les contacts</p>
-                                )}
                             </div>
 
                             <div className="modal-footer">

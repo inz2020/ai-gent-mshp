@@ -244,7 +244,7 @@ router.put('/:id', requireAuth, requireRole('admin', 'staff'), async (req, res) 
     try {
         const campagne = await Campagne.findById(req.params.id);
         if (!campagne) return res.status(404).json({ message: 'Campagne introuvable.' });
-        if (campagne.statut === 'en_cours') return res.status(400).json({ message: 'Impossible de modifier une campagne en cours.' });
+        if (campagne.statut === 'terminee') return res.status(400).json({ message: 'Impossible de modifier une campagne terminée.' });
 
         const fields = ['nom', 'type', 'produit', 'dateDebut', 'dateFin', 'districts', 'statut'];
         fields.forEach(f => { if (req.body[f] !== undefined) campagne[f] = req.body[f]; });
@@ -263,7 +263,7 @@ router.delete('/:id', requireAuth, requireRole('admin'), async (req, res) => {
     try {
         const campagne = await Campagne.findById(req.params.id);
         if (!campagne) return res.status(404).json({ message: 'Campagne introuvable.' });
-        if (campagne.statut === 'en_cours') return res.status(400).json({ message: 'Impossible de supprimer une campagne en cours.' });
+        if (campagne.statut === 'terminee') return res.status(400).json({ message: 'Impossible de supprimer une campagne terminée.' });
         await campagne.deleteOne();
         res.json({ message: 'Campagne supprimée.' });
     } catch (err) {
