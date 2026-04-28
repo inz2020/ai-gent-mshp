@@ -254,6 +254,8 @@ const NEARBY_CENTER_KEYWORDS = [
     // Français — intent localisation clair
     'où vacciner', 'où se vacciner', 'où faire vacciner',
     'centre le plus proche', 'csi le plus proche', 'plus proche de moi', 'plus proche de chez moi',
+    'centre de santé le plus proche', 'centre de santé proche', 'csi proche',
+    'centre de vaccination le plus proche', 'centre de vaccination proche',
     'trouver un centre', 'trouver un csi', 'centre de vaccination près',
     'adresse du centre', 'adresse csi', 'adresse du csi',
     'où aller pour vacciner', 'où je peux aller',
@@ -276,7 +278,7 @@ const locationConfirmPending = new Map(); // phone → { lang, at }
 
 function canOfferLocation(userPhone) {
     const last = locationOfferedAt.get(userPhone);
-    return !last || Date.now() - last > 3_600_000; // 1h
+    return !last || Date.now() - last > 120_000; // 2 min anti-doublon
 }
 function markLocationOffered(userPhone) {
     locationOfferedAt.set(userPhone, Date.now());
@@ -341,6 +343,24 @@ async function sendLocationRequest(userPhone, lang = 'ha') {
         console.log(`[LOC-REQ] Bouton GPS envoyé à ${userPhone} (${lang})`);
     } catch (err) {
         console.warn(`[LOC-REQ] Échec bouton location:`, err.response?.data?.error?.message ?? err.message);
+    }
+}
+
+// Envoie un pin de carte WhatsApp pour un centre de santé
+async function sendLocationPin(to, lat, lng, name, address) {
+    try {
+        await axios.post(
+            `https://graph.facebook.com/v22.0/${process.env.PHONE_ID}/messages`,
+            {
+                messaging_product: 'whatsapp',
+                to,
+                type: 'location',
+                location: { latitude: lat, longitude: lng, name, address },
+            },
+            { headers: { Authorization: `Bearer ${process.env.META_TOKEN}`, 'Content-Type': 'application/json' } }
+        );
+    } catch (err) {
+        console.warn(`[LOC-PIN] Échec pin carte pour ${name}:`, err.response?.data?.error?.message ?? err.message);
     }
 }
 
@@ -600,12 +620,13 @@ async function processText(userText, userPhone, phoneNumId = null) {
         const nearLang = detectTextLanguage(userText) === 'ha' ? 'ha' : 'fr';
         console.log(`[TEXT] Demande de centres proches détectée (${nearLang}) → géoloc directe`);
         if (canOfferLocation(userPhone)) {
+            // Première demande ou > 2 min : poser la question de confirmation
             await askLocationConfirmation(userPhone, nearLang, contact);
         } else {
-            const cooldownMsg = nearLang === 'ha'
-                ? 'Na riga na tambayi wurin ka kwanan nan. Je cibiyar lafiya kusa da kai kai tsaye.'
-                : 'Je vous ai déjà proposé de partager votre position récemment. Rendez-vous directement au CSI le plus proche de chez vous.';
-            await sendWhatsAppText(userPhone, cooldownMsg);
+            // Demande répétée dans les 2 min : bouton GPS direct (position peut avoir changé)
+            console.log(`[TEXT] Re-demande GPS (< 2 min) → bouton direct sans confirmation`);
+            await sendLocationRequest(userPhone, nearLang);
+            markLocationOffered(userPhone);
         }
         return;
     }
@@ -1015,12 +1036,13 @@ async function processAudio(mediaId, userPhone, phoneNumId = null) {
     if (wantsNearbyCenter(transcription.text)) {
         console.log(`[AUDIO] Demande centres proches → géoloc directe (${finalLang})`);
         if (canOfferLocation(userPhone)) {
+            // Première demande ou > 2 min : poser la question de confirmation
             await askLocationConfirmation(userPhone, finalLang, contact, true);
         } else {
-            const cooldownMsg = finalLang === 'ha'
-                ? 'Na riga na tambayi wurin ka. Je cibiyar lafiya kusa da kai kai tsaye.'
-                : 'Je vous ai déjà proposé de partager votre position récemment. Rendez-vous directement au CSI le plus proche.';
-            await sendAudioReply(userPhone, cooldownMsg, finalLang);
+            // Re-demande dans les 2 min : bouton GPS direct (position peut avoir changé)
+            console.log(`[AUDIO] Re-demande GPS (< 2 min) → bouton direct sans confirmation`);
+            await sendLocationRequest(userPhone, finalLang);
+            markLocationOffered(userPhone);
         }
         try {
             await saveMessages(contact._id, finalLang, { humanText: transcription.text, humanAudioUrl, aiText: '[Demande géolocalisation]' });
@@ -1250,21 +1272,34 @@ async function processLocation(lat, lng, userPhone, phoneNumId = null) {
         ? `Cibiyoyin rigakafi mafi kusa da kai su ne: ${audioLines.join(' ')}`
         : `Les centres de vaccination les plus proches sont : ${audioLines.join(' ')}`;
 
-    // Texte structuré avec emoji pour la lisibilité
+    // Texte enrichi : type, distance, numéro de contact si disponible
     const textLines = nearest.map((s, i) => {
         const km = s.distance.toFixed(1);
+        const contact = s.contactUrgence ? `\n   📞 ${s.contactUrgence}` : '';
         return contactLang === 'ha'
-            ? `${i + 1}. ${s.nom} — ${km} km`
-            : `${i + 1}. ${s.nom} — ${km} km`;
+            ? `${i + 1}. *${s.nom}* (${s.type}) — ${km} km${contact}`
+            : `${i + 1}. *${s.nom}* (${s.type}) — ${km} km${contact}`;
     });
 
     const textMessage = contactLang === 'ha'
-        ? `📍 *Cibiyoyin rigakafi mafi kusa:*\n\n${textLines.join('\n')}`
-        : `📍 *Centres de vaccination les plus proches :*\n\n${textLines.join('\n')}`;
+        ? `📍 *Cibiyoyin rigakafi mafi kusa:*\n\n${textLines.join('\n\n')}`
+        : `📍 *Centres de vaccination les plus proches :*\n\n${textLines.join('\n\n')}`;
 
     await sendAudioReply(userPhone, audioText, contactLang);
     await sendWhatsAppText(userPhone, textMessage);
-    console.log(`[LOC] ${nearest.length} structures envoyées (audio + texte, ${contactLang}) à ${userPhone}`);
+
+    // Pins de carte WhatsApp pour chaque centre (cliquables → navigation directe)
+    for (const s of nearest) {
+        if (s.coordonnees?.latitude && s.coordonnees?.longitude) {
+            const district = s.districtId?.nom ?? '';
+            const address = district
+                ? `${s.type} — District ${district}`
+                : s.type;
+            await sendLocationPin(userPhone, s.coordonnees.latitude, s.coordonnees.longitude, s.nom, address);
+        }
+    }
+
+    console.log(`[LOC] ${nearest.length} structures envoyées (audio + texte + pins carte, ${contactLang}) à ${userPhone}`);
 
     // ── Persistance des messages ──
     try {
