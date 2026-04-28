@@ -152,6 +152,8 @@ export default function Campagnes() {
             setRelais(r); setStructures(s); setReunions(rp); setMobRelais(mr);
         } catch (e) { setError(e.message); }
         finally { setLoadingMob(false); setLoadingReu(false); setLoadingMobRelais(false); }
+        // Spots chargés séparément — une erreur ici ne bloque pas le reste
+        getSpots(activeCampagne._id).then(setSpots).catch(() => {});
     }
 
     async function loadSpots() {
@@ -879,9 +881,16 @@ export default function Campagnes() {
                                                               
                                                                
                                                                 <td style={{ fontSize: '0.82rem' }}>
-                                                                    {rec?.messageAudio?.nom
-                                                                        ? <><i className="bi bi-file-music-fill" style={{ marginRight: 4, color: '#0a7c4e' }}></i>{rec.messageAudio.nom}</>
-                                                                        : <span className="dt-muted">—</span>}
+                                                                    {rec?.messageAudio?.url ? (() => {
+                                                                        const matchSpot = spots.find(sp => sp.audio?.url === rec.messageAudio.url);
+                                                                        return (
+                                                                            <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                                                                <i className="bi bi-megaphone-fill" style={{ color: '#0a7c4e' }}></i>
+                                                                                {rec.messageAudio.nom}
+                                                                                {matchSpot && <span className="dt-badge dt-badge-lang">{matchSpot.langue}</span>}
+                                                                            </span>
+                                                                        );
+                                                                    })() : <span className="dt-muted">—</span>}
                                                                 </td>
                                                                 <td style={{ textAlign: 'center' }}>
                                                                     {!rec ? <span className="dt-muted">—</span> : (
@@ -1745,24 +1754,48 @@ export default function Campagnes() {
             
 
                             <div className="form-group">
-                                <label>Message audio</label>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                                    <button type="button" className="dt-btn"
-                                        onClick={() => audioInputRef.current?.click()}
-                                        disabled={uploadingAudio}>
-                                        <i className="bi bi-upload"></i> {uploadingAudio ? 'Envoi...' : 'Choisir fichier'}
-                                    </button>
-                                    <input ref={audioInputRef} type="file" accept="audio/*" style={{ display: 'none' }}
-                                        onChange={handleAudioUpload} />
-                                    {mobRelaisForm.messageAudio?.nom && (
-                                        <span style={{ fontSize: '0.83rem', color: '#0a7c4e' }}>
-                                            <i className="bi bi-file-music-fill"></i> {mobRelaisForm.messageAudio.nom}
-                                        </span>
-                                    )}
-                                </div>
-                                {mobRelaisForm.messageAudio?.url && (
-                                    <audio controls src={mobRelaisForm.messageAudio.url}
-                                        style={{ width: '100%', marginTop: 8, height: 36 }} />
+                                <label><i className="bi bi-megaphone-fill" style={{ marginRight: 5, color: '#0a7c4e' }}></i>Spot audio</label>
+                                {spots.length === 0 ? (
+                                    <div style={{ fontSize: '0.83rem', color: '#94a3b8', padding: '8px 0' }}>
+                                        Aucun spot disponible — créez des spots dans l'onglet <strong>Spots</strong> d'abord.
+                                    </div>
+                                ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                        {spots.map(sp => {
+                                            const selected = mobRelaisForm.messageAudio?.url === sp.audio?.url;
+                                            return (
+                                                <label key={sp._id} style={{
+                                                    display: 'flex', flexDirection: 'column', gap: 6,
+                                                    border: `2px solid ${selected ? '#0a7c4e' : '#e2e8f0'}`,
+                                                    borderRadius: 8, padding: '10px 14px', cursor: 'pointer',
+                                                    background: selected ? '#f0fdf4' : '#fff',
+                                                    transition: 'all 0.15s',
+                                                }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                        <input type="radio" name="spotSelection"
+                                                            checked={selected}
+                                                            onChange={() => setMobRelaisForm(f => ({
+                                                                ...f,
+                                                                messageAudio: { url: sp.audio.url, nom: sp.nom, publicId: sp.audio.publicId ?? '' }
+                                                            }))} />
+                                                        <strong style={{ fontSize: '0.88rem' }}>{sp.nom}</strong>
+                                                        <span className="dt-badge dt-badge-lang" style={{ marginLeft: 'auto' }}>{sp.langue}</span>
+                                                    </div>
+                                                    {sp.audio?.url && (
+                                                        <audio controls src={sp.audio.url}
+                                                            style={{ height: 32, width: '100%' }}
+                                                            onClick={e => e.stopPropagation()} />
+                                                    )}
+                                                </label>
+                                            );
+                                        })}
+                                        {mobRelaisForm.messageAudio?.url && (
+                                            <button type="button" style={{ alignSelf: 'flex-start', fontSize: '0.78rem', color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                                                onClick={() => setMobRelaisForm(f => ({ ...f, messageAudio: { url: '', nom: '', publicId: '' } }))}>
+                                                ✕ Désélectionner
+                                            </button>
+                                        )}
+                                    </div>
                                 )}
                             </div>
 
