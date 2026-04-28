@@ -4,7 +4,6 @@ import {
     getRelais, createRelais, updateRelais, deleteRelais,
     getReunions, createReunion, updateReunion, deleteReunion,
     getMobilisationRelais, createMobilisationRelais, updateMobilisationRelais, deleteMobilisationRelais,
-    diffuserMobilisationRelais, diffuserToutCampagne,
     uploadMobilisationAudio, uploadTemplateMedia,
     getWhatsappTemplates, createWhatsappTemplate, updateWhatsappTemplate, deleteWhatsappTemplate,
     getDistricts, getStructures,
@@ -91,11 +90,6 @@ export default function Campagnes() {
     const [uploadingAudio, setUploadingAudio]       = useState(false);
     const audioInputRef = useRef(null);
 
-    // ── Diffusion WhatsApp ────────────────────────────────────────
-    const [diffusing, setDiffusing]     = useState(false);  // "tout diffuser" en cours
-    const [diffErrMsg, setDiffErrMsg]   = useState('');
-    const [diffSuccMsg, setDiffSuccMsg] = useState('');
-    const [diffErrModal, setDiffErrModal] = useState(null); // { titre, message, log }
     const pollingRef = useRef(null);
 
     // ── Spots de campagne ─────────────────────────────────────────
@@ -539,54 +533,6 @@ export default function Campagnes() {
         return () => { if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; } };
     }, [mobRelais, activeCampagne?._id]);
 
-    async function handleDiffuser(record) {
-        setDiffErrMsg(''); setDiffSuccMsg('');
-        try {
-            const res = await diffuserMobilisationRelais(record._id);
-            setDiffSuccMsg(res.message + (res.sansNumero?.length ? ` (${res.sansNumero.length} sans numéro ignoré${res.sansNumero.length > 1 ? 's' : ''})` : ''));
-            setTimeout(() => setDiffSuccMsg(''), 6000);
-            setMobRelais(prev => prev.map(m =>
-                m._id === record._id
-                    ? { ...m, diffusion: { ...m.diffusion, statut: 'en_cours', total: res.total, envoyes: 0, echecs: 0 } }
-                    : m
-            ));
-        } catch (e) {
-            // Récupérer le errorLog si la diffusion a partiellement tourné
-            const rec = mobRelais.find(m => m._id === record._id);
-            setDiffErrModal({
-                titre: `Erreur — District ${record.district?.nom || ''}`,
-                message: e.message,
-                log: rec?.diffusion?.errorLog || '',
-            });
-        }
-    }
-
-    async function handleDiffuserTout() {
-        if (!activeCampagne) return;
-        if (!confirm(`Diffuser les messages audio vers tous les relais de la campagne "${activeCampagne.nom}" ?`)) return;
-        setDiffusing(true); setDiffErrMsg(''); setDiffSuccMsg('');
-        try {
-            const res = await diffuserToutCampagne(activeCampagne._id);
-            setDiffSuccMsg(res.message);
-            setTimeout(() => setDiffSuccMsg(''), 6000);
-            const fresh = await getMobilisationRelais(activeCampagne._id);
-            setMobRelais(fresh);
-        } catch (e) {
-            // Récupérer les errorLogs de tous les districts en erreur
-            const fresh = await getMobilisationRelais(activeCampagne._id).catch(() => mobRelais);
-            setMobRelais(fresh);
-            const logsErreur = fresh
-                .filter(m => m.diffusion?.statut === 'erreur' && m.diffusion?.errorLog)
-                .map(m => `[${m.district?.nom || m.district}]\n${m.diffusion.errorLog}`)
-                .join('\n\n');
-            setDiffErrModal({
-                titre: 'Erreur — Diffusion globale',
-                message: e.message,
-                log: logsErreur,
-            });
-        }
-        finally { setDiffusing(false); }
-    }
 
     // ── Recherche mobilisation ────────────────────────────────────
     const [searchDistrict, setSearchDistrict] = useState('');
@@ -784,61 +730,13 @@ export default function Campagnes() {
                                 return acc;
                             }, {});
                             // Helpers badge diffusion
-                            const DIFF_BADGE = { inactif: 'dt-badge-inactif', en_cours: 'dt-badge-warning', termine: 'dt-badge-actif', erreur: 'dt-badge-danger' };
-                            const DIFF_LABEL = { inactif: '—', en_cours: 'En cours…', termine: 'Envoyé', erreur: 'Erreur' };
-                            const canDiffuse = rec => rec && rec.messageAudio?.url && rec.relais?.length > 0 && rec.diffusion?.statut !== 'en_cours';
-                            const nbDistrictsOk = campDistricts.filter(d => { const r = mobMap[d._id]; return r && r.messageAudio?.url && r.relais?.length > 0; }).length;
                             return (
                                 <div className="mob-section">
-                                    {/* Messages flash diffusion */}
-                                    {diffErrMsg  && <div className="dt-error"  style={{ marginBottom: 8 }}><i className="bi bi-exclamation-triangle-fill"></i> {diffErrMsg}</div>}
-                                    {diffSuccMsg && <div className="dt-success" style={{ marginBottom: 8 }}><i className="bi bi-check-lg"></i> {diffSuccMsg}</div>}
-
-                                    {/* Modal erreur diffusion */}
-                                    {diffErrModal && (
-                                        <div className="modal-overlay" onClick={() => setDiffErrModal(null)}>
-                                            <div className="modal" style={{ maxWidth: 800 }} onClick={e => e.stopPropagation()}>
-                                                <div className="modal-header" style={{ background: '#fee2e2', borderBottom: '1px solid #fca5a5' }}>
-                                                    <h3 style={{ margin: 0, color: '#b91c1c', display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                        <i className="bi bi-exclamation-triangle-fill"></i> {diffErrModal.titre}
-                                                    </h3>
-                                                    <button className="modal-close" onClick={() => setDiffErrModal(null)}>&times;</button>
-                                                </div>
-                                                <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                                                    <div style={{ background: '#fff1f2', border: '1px solid #fca5a5', borderRadius: 6, padding: '10px 14px', color: '#b91c1c', fontWeight: 500 }}>
-                                                        <i className="bi bi-x-circle-fill" style={{ marginRight: 6 }}></i>
-                                                        {diffErrModal.message}
-                                                    </div>
-                                                    {diffErrModal.log && (
-                                                        <div>
-                                                            <div style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                                                <i className="bi bi-terminal-fill" style={{ marginRight: 4 }}></i>Journal d'erreurs
-                                                            </div>
-                                                            <pre style={{ margin: 0, background: '#1e1e2e', color: '#f8f8f2', borderRadius: 6, padding: '10px 14px', fontSize: 12, overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 260 }}>
-                                                                {diffErrModal.log}
-                                                            </pre>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <div className="modal-footer">
-                                                    <button className="dt-btn dt-btn-secondary" onClick={() => setDiffErrModal(null)}>Fermer</button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-
                                     <div className="mob-section-header">
                                         <h3 className="mob-section-title">
                                             <i className="bi bi-geo-alt-fill"></i> Relais par District
                                         </h3>
                                         <div style={{ display: 'flex', gap: 8 }}>
-                                            <button className="dt-btn dt-btn-primary"
-                                                onClick={handleDiffuserTout}
-                                                disabled={diffusing || nbDistrictsOk === 0}
-                                                title={nbDistrictsOk === 0 ? 'Configurez au moins un district avec audio + relais' : `Diffuser vers ${nbDistrictsOk} district(s)`}>
-                                                <i className={`bi ${diffusing ? 'bi-hourglass-split' : 'bi-broadcast'}`}></i>
-                                                {diffusing ? 'Envoi…' : 'Tout diffuser'}
-                                            </button>
                                             <button className="dt-btn" onClick={loadMobilisationData}>
                                                 <i className="bi bi-arrow-clockwise"></i>
                                             </button>
@@ -860,8 +758,7 @@ export default function Campagnes() {
                                                         <th>District</th>
                                                         <th style={{ textAlign: 'center' }}>Nb relais <i className="bi bi-calculator" style={{ fontSize: '0.75rem', color: '#94a3b8' }} title="Calculé automatiquement"></i></th>
                                                        
-                                                        <th>Message audio</th>
-                                                        <th style={{ textAlign: 'center' }}>Diffusion</th>
+                                                        
                                                         <th>Actions</th>
                                                     </tr>
                                                 </thead>
@@ -873,48 +770,13 @@ export default function Campagnes() {
                                                     ) : pagedDistricts.map(d => {
                                                         const rec    = mobMap[d._id];
                                                         const nbRel  = relaisParDistrict[d._id] ?? 0;
-                                                        const diff   = rec?.diffusion;
+                                                      
                                                         const statut = diff?.statut ?? 'inactif';
                                                         return (
                                                             <tr key={d._id}>
                                                                 <td><strong>{d.nom}</strong></td>
                                                                 <td style={{ textAlign: 'center' }}>
                                                                     <span className={`dt-badge ${nbRel > 0 ? 'dt-badge-actif' : 'dt-badge-inactif'}`}>{nbRel}</span>
-                                                                </td>
-                                                              
-                                                               
-                                                                <td style={{ fontSize: '0.82rem' }}>
-                                                                    {rec?.messageAudio?.url ? (() => {
-                                                                        const matchSpot = spots.find(sp => sp.audio?.url === rec.messageAudio.url);
-                                                                        return (
-                                                                            <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                                                                <i className="bi bi-megaphone-fill" style={{ color: '#0a7c4e' }}></i>
-                                                                                {rec.messageAudio.nom}
-                                                                                {matchSpot && <span className="dt-badge dt-badge-lang">{matchSpot.langue}</span>}
-                                                                            </span>
-                                                                        );
-                                                                    })() : <span className="dt-muted">—</span>}
-                                                                </td>
-                                                                <td style={{ textAlign: 'center' }}>
-                                                                    {!rec ? <span className="dt-muted">—</span> : (
-                                                                        <div>
-                                                                            <span className={`dt-badge ${DIFF_BADGE[statut]}`}>
-                                                                                {statut === 'en_cours' && <i className="bi bi-arrow-repeat" style={{ marginRight: 3 }}></i>}
-                                                                                {DIFF_LABEL[statut]}
-                                                                            </span>
-                                                                            {(statut === 'termine' || statut === 'en_cours') && diff.total > 0 && (
-                                                                                <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 2 }}>
-                                                                                    {diff.envoyes}/{diff.total}
-                                                                                    {diff.echecs > 0 && <span style={{ color: '#dc2626' }}> · {diff.echecs} échec{diff.echecs > 1 ? 's' : ''}</span>}
-                                                                                </div>
-                                                                            )}
-                                                                            {diff.dateEnvoi && (
-                                                                                <div style={{ fontSize: '0.70rem', color: '#94a3b8' }}>
-                                                                                    {new Date(diff.dateEnvoi).toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                    )}
                                                                 </td>
                                                                 <td>
                                                                     <div style={{ display: 'flex', gap: 6 }}>
@@ -925,13 +787,6 @@ export default function Campagnes() {
                                                                         <button className="dt-btn dt-btn-edit"
                                                                             onClick={() => openEditMobRelais(d, rec)} title="Modifier">
                                                                             <i className="bi bi-pencil-fill"></i>
-                                                                        </button>
-                                                                        <button
-                                                                            className={`dt-btn ${canDiffuse(rec) ? 'dt-btn-primary' : ''}`}
-                                                                            onClick={() => canDiffuse(rec) && handleDiffuser(rec)}
-                                                                            disabled={!canDiffuse(rec)}
-                                                                            title={!rec ? 'Configurez ce district d\'abord' : !rec.messageAudio?.url ? 'Aucun audio' : !rec.relais?.length ? 'Aucun relais assigné' : statut === 'en_cours' ? 'Envoi en cours' : 'Diffuser l\'audio WhatsApp'}>
-                                                                            <i className={`bi ${statut === 'en_cours' ? 'bi-hourglass-split' : 'bi-broadcast'}`}></i>
                                                                         </button>
                                                                         {rec && (
                                                                             <button className="dt-btn dt-btn-danger"
