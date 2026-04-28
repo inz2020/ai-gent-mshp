@@ -1045,25 +1045,25 @@ export default function Campagnes() {
                         {/* Modal add/edit spot */}
                         {spotModal && (
                             <div className="modal-overlay" onClick={closeSpotModal}>
-                                <div className="modal-box" onClick={e => e.stopPropagation()}>
+                                <div className="modal" onClick={e => e.stopPropagation()}>
                                     <div className="modal-header">
-                                        <h3>{spotModal === 'add' ? 'Nouveau spot' : 'Modifier le spot'}</h3>
+                                        <h2>{spotModal === 'add' ? 'Nouveau spot' : 'Modifier le spot'}</h2>
                                         <button className="modal-close" onClick={closeSpotModal}>✕</button>
                                     </div>
                                     <form onSubmit={handleSaveSpot}>
                                         <div className="modal-form">
-                                            {spotErr && <div className="dt-alert dt-alert-error">{spotErr}</div>}
+                                            {spotErr && <div className="modal-error">{spotErr}</div>}
 
                                             <div className="form-group">
                                                 <label>Nom du spot *</label>
-                                                <input className="form-control" value={spotForm.nom}
+                                                <input value={spotForm.nom}
                                                     onChange={e => setSpotForm(f => ({ ...f, nom: e.target.value }))}
                                                     placeholder="Ex: Spot ouverture JNV — Hausa" required />
                                             </div>
 
                                             <div className="form-group">
                                                 <label>Langue *</label>
-                                                <input className="form-control" value={spotForm.langue}
+                                                <input value={spotForm.langue}
                                                     onChange={e => setSpotForm(f => ({ ...f, langue: e.target.value }))}
                                                     placeholder="Ex: Français, Hausa, Zarma, Fulfuldé…" required />
                                             </div>
@@ -1102,12 +1102,12 @@ export default function Campagnes() {
                         {/* Confirm delete spot */}
                         {confirmSpot && (
                             <div className="modal-overlay" onClick={() => setConfirmSpot(null)}>
-                                <div className="modal-box modal-box-sm" onClick={e => e.stopPropagation()}>
+                                <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
                                     <div className="modal-header">
-                                        <h3>Supprimer le spot</h3>
+                                        <h2>Supprimer le spot</h2>
                                         <button className="modal-close" onClick={() => setConfirmSpot(null)}>✕</button>
                                     </div>
-                                    <div style={{ padding: '1rem 1.5rem' }}>
+                                    <div className="modal-body">
                                         <p>Supprimer <strong>{confirmSpot.nom}</strong> ? Cette action est irréversible.</p>
                                     </div>
                                     <div className="modal-footer">
@@ -1525,19 +1525,7 @@ export default function Campagnes() {
                                         </div>
                                        
                                         
-                                        <div style={{ background: '#fefce8', borderRadius: 8, padding: '12px 16px', textAlign: 'center' }}>
-                                            {mobRelaisRecord.messageAudio?.url ? (
-                                                <>
-                                                    <audio controls src={mobRelaisRecord.messageAudio.url}
-                                                        style={{ width: '100%', height: 36 }} />
-                                                    <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 4 }}>
-                                                        {mobRelaisRecord.messageAudio.nom}
-                                                    </div>
-                                                </>
-                                            ) : (
-                                                <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Aucun message audio</span>
-                                            )}
-                                        </div>
+                                       
                                     </div>
                                     {mobRelaisRecord.relais?.length > 0 && (
                                         <>
