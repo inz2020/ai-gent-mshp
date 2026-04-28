@@ -29,7 +29,8 @@ const TABS = [
     { key: 'mobilisation',  label: 'Mobilisation Sociale', icon: 'bi-people-fill'        },
     { key: 'spots',         label: 'Spots',                icon: 'bi-megaphone-fill'     },
     { key: 'validation',    label: 'Validation Campagne',  icon: 'bi-patch-check-fill'   },
-    { key: 'rapports',      label: 'Rapports',             icon: 'bi-bar-chart-fill'     },
+/*     { key: 'rapports',      label: 'Rapports',             icon: 'bi-bar-chart-fill'     },
+ */
 ];
 
 export default function Campagnes() {
@@ -1371,13 +1372,7 @@ export default function Campagnes() {
             {/* ══════════════════════════════════════════════════════
                 ONGLET 5 — RAPPORTS
             ══════════════════════════════════════════════════════ */}
-            {activeTab === 'rapports' && (
-                <div className="camp-placeholder">
-                    <i className="bi bi-bar-chart-fill camp-placeholder-icon"></i>
-                    <h3>Rapports</h3>
-                    <p>Fonctionnalité à venir — synthèse et export des rapports de campagnes.</p>
-                </div>
-            )}
+         
 
             {/* ══════════════════════════════════════════════════════
                 MODALS — CAMPAGNES

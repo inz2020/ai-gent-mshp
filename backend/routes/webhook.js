@@ -248,20 +248,21 @@ async function processStatuses(statuses) {
     }
 }
 
-// Mots-clés indiquant que l'utilisateur cherche un centre de santé proche
+// Phrases explicites de recherche de localisation — NE PAS ajouter des mots génériques
+// comme "vaccin", "santé", "lafiya" : trop de faux positifs sur des questions médicales normales
 const NEARBY_CENTER_KEYWORDS = [
-    // Français
-    'csi', 'centre', 'santé', 'sante', 'sanitaire',
-    'vaccination', 'vaccin', 'vacciner', 'vaccins',
-    'proche', 'prox', 'plus proche', 'trouver',
-    'où vacciner', 'où se vacciner', 'adresse',
-    // Hausa
-    'kusa', 'cibiyar', 'rigakafi', 'lafiya',
+    // Français — intent localisation clair
+    'où vacciner', 'où se vacciner', 'où faire vacciner',
+    'centre le plus proche', 'csi le plus proche', 'plus proche de moi', 'plus proche de chez moi',
+    'trouver un centre', 'trouver un csi', 'centre de vaccination près',
+    'adresse du centre', 'adresse csi', 'adresse du csi',
+    'où aller pour vacciner', 'où je peux aller',
+    'où est le csi', 'comment aller au csi',
+    // Hausa — formulations de recherche de lieu
+    'cibiyar kusa', 'ina cibiyar', 'ina ake rigakafi',
+    'nemo cibiyar', 'nemi cibiyar', 'cibiyar rigakafi kusa',
 ];
 
-/**
- * Retourne true si le texte indique que l'utilisateur cherche un centre de santé.
- */
 function wantsNearbyCenter(text) {
     const lower = text.toLowerCase();
     return NEARBY_CENTER_KEYWORDS.some(kw => lower.includes(kw));
