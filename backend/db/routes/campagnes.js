@@ -148,31 +148,42 @@ router.post('/spots/:id/diffuser', requireAuth, requireRole('admin', 'staff'), a
         spot.diffusion.errorLog  = '';
         await spot.save();
 
+        console.log(`[SPOT] Diffusion lancée — spot=${spot._id} campagne=${campagne.nom} relais=${relaisList.length} audioUrl=${spot.audio.url}`);
         res.json({ message: `Diffusion lancée vers ${relaisList.length} relais.`, total: relaisList.length });
 
         // Envoi asynchrone après réponse HTTP
         const META_TOKEN   = process.env.META_TOKEN;
-        const PHONE_NUM_ID = process.env.PHONE_NUM_ID;
+        const PHONE_NUM_ID = process.env.PHONE_ID;
+        const base         = `https://graph.facebook.com/v22.0/${PHONE_NUM_ID}/messages`;
+        const headers      = { Authorization: `Bearer ${META_TOKEN}`, 'Content-Type': 'application/json' };
         let envoyes = 0; let echecs = 0; const errors = [];
 
+        console.log(`[SPOT] PHONE_ID=${PHONE_NUM_ID} META_TOKEN=${META_TOKEN ? 'ok' : 'MANQUANT'}`);
+
         await Promise.allSettled(relaisList.map(async (relais) => {
-            const phone = relais.telephone?.replace(/\D/g, '');
-            if (!phone) { echecs++; errors.push(`Relais ${relais.nom}: pas de téléphone`); return; }
+            const raw   = relais.telephone?.replace(/\s+/g, '').replace(/^\+/, '') ?? '';
+            const phone = raw.length >= 8 ? raw : null;
+            if (!phone) {
+                echecs++;
+                errors.push(`Relais ${relais.nom}: pas de téléphone`);
+                console.warn(`[SPOT] skip ${relais.nom} — pas de numéro`);
+                return;
+            }
             try {
-                await axios.post(
-                    `https://graph.facebook.com/v22.0/${PHONE_NUM_ID}/messages`,
-                    {
-                        messaging_product: 'whatsapp',
-                        to: phone,
-                        type: 'audio',
-                        audio: { link: spot.audio.url },
-                    },
-                    { headers: { Authorization: `Bearer ${META_TOKEN}`, 'Content-Type': 'application/json' } }
-                );
+                console.log(`[SPOT] envoi → ${phone} (${relais.nom})`);
+                const r = await axios.post(base, {
+                    messaging_product: 'whatsapp',
+                    to: phone,
+                    type: 'audio',
+                    audio: { link: spot.audio.url },
+                }, { headers });
                 envoyes++;
+                console.log(`[SPOT] ok ${phone} wamid=${r.data?.messages?.[0]?.id ?? 'inconnu'}`);
             } catch (err) {
                 echecs++;
-                errors.push(`${relais.nom}: ${err.response?.data?.error?.message ?? err.message}`);
+                const msg = err.response?.data?.error?.message ?? err.message;
+                errors.push(`${relais.nom}: ${msg}`);
+                console.error(`[SPOT] fail ${phone} (${relais.nom}): ${msg}`);
             }
         }));
 
@@ -181,6 +192,7 @@ router.post('/spots/:id/diffuser', requireAuth, requireRole('admin', 'staff'), a
         spot.diffusion.echecs   = echecs;
         spot.diffusion.errorLog = errors.slice(0, 10).join(' | ');
         await spot.save();
+        console.log(`[SPOT] terminé — ${envoyes} ok, ${echecs} échecs`);
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
