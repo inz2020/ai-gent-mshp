@@ -758,7 +758,17 @@ async function processAudio(mediaId, userPhone, phoneNumId = null) {
         audioRes = await axios.get(mediaRes.data.url, { headers: metaHeaders, responseType: 'arraybuffer' });
     } catch (dlErr) {
         console.error('[AUDIO] Téléchargement Meta échoué:', dlErr.response?.status, dlErr.message);
-        await sendErrorAudio(userPhone, contact.langue === 'fr' ? 'quality_fr' : 'quality_ha');
+        const dlErrKey = contact.langue === 'fr' ? 'quality_fr' : 'quality_ha';
+        const dlErrLang = contact.langue === 'fr' ? 'fr' : 'ha';
+        await sendErrorAudio(userPhone, dlErrKey);
+        try {
+            await saveMessages(contact._id, dlErrLang, {
+                humanText: '[Audio non téléchargeable]',
+                aiText: ERROR_TEXTS[dlErrKey],
+            });
+        } catch (dbErr) {
+            console.error('[DB] Erreur persistance échec téléchargement:', dbErr.message);
+        }
         return;
     }
 
@@ -842,17 +852,20 @@ async function processAudio(mediaId, userPhone, phoneNumId = null) {
             temperature: 0,
         });
         const wLang = detect.language?.toLowerCase() ?? '';
+        // Cross-check avec le texte : les accents français (é/è/ê/à...) sont un signal
+        // fiable même quand Whisper retourne 'portuguese' ou autre pour un audio français
+        const textLang = detect.text ? detectTextLanguage(detect.text) : null;
 
-        if (wLang === 'french') {
+        if (wLang === 'french' || textLang === 'fr') {
             detectedLang = 'fr';
         } else {
             // Hausa, alias africain, script arabe → tout ça c'est du Hausa
             detectedLang = 'ha';
         }
         if (wLang !== 'french' && wLang !== 'hausa') {
-            console.log(`[3a/6] Whisper: "${wLang}" (alias Hausa probable — Whisper confond Hausa avec ${wLang}) → ha`);
+            console.log(`[3a/6] Whisper: "${wLang}" | Texte: "${textLang}" → ${detectedLang} (Whisper confond parfois Hausa avec ${wLang})`);
         } else {
-            console.log(`[3a/6] Détection langue — Whisper: "${wLang}" | → ${detectedLang}`);
+            console.log(`[3a/6] Détection langue — Whisper: "${wLang}" | Texte: "${textLang}" | → ${detectedLang}`);
         }
     } catch (detectErr) {
         // Fallback sur knownLang si disponible, sinon Hausa
@@ -921,7 +934,18 @@ async function processAudio(mediaId, userPhone, phoneNumId = null) {
     // Guard : si tous les STT ont échoué, transcription reste undefined
     if (!transcription) {
         console.error('[AUDIO] Toutes les tentatives de transcription ont échoué');
-        await sendErrorAudio(userPhone, contact.langue === 'fr' ? 'quality_fr' : 'quality_ha');
+        const sttErrKey = (detectedLang ?? contact.langue) === 'fr' ? 'quality_fr' : 'quality_ha';
+        const sttErrLang = (detectedLang ?? contact.langue) === 'fr' ? 'fr' : 'ha';
+        await sendErrorAudio(userPhone, sttErrKey);
+        try {
+            await saveMessages(contact._id, sttErrLang, {
+                humanText: '[Audio non transcrit — toutes tentatives STT échouées]',
+                aiText: ERROR_TEXTS[sttErrKey],
+                humanAudioUrl,
+            });
+        } catch (dbErr) {
+            console.error('[DB] Erreur persistance échec transcription:', dbErr.message);
+        }
         return;
     }
 
