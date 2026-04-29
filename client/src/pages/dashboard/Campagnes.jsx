@@ -5,7 +5,7 @@ import {
     getReunions, createReunion, updateReunion, deleteReunion,
     getMobilisationRelais, createMobilisationRelais, updateMobilisationRelais, deleteMobilisationRelais,
     uploadMobilisationAudio, uploadTemplateMedia,
-    getWhatsappTemplates, createWhatsappTemplate, updateWhatsappTemplate, deleteWhatsappTemplate,
+    getWhatsappTemplates, createWhatsappTemplate, updateWhatsappTemplate, deleteWhatsappTemplate, sendTemplateToRelais,
     getDistricts, getStructures,
     getSpots, createSpot, updateSpot, deleteSpot, diffuserSpot, uploadSpotAudio,
 } from '../../api/index.js';
@@ -117,6 +117,12 @@ export default function Campagnes() {
     const [searchTpl, setSearchTpl]           = useState('');
     const [uploadingTplMedia, setUploadingTplMedia] = useState(false);
     const tplMediaInputRef = useRef(null);
+    const [tplDetail, setTplDetail]               = useState(null);       // template à voir en détail
+    const [tplSendModal, setTplSendModal]         = useState(null);       // template à envoyer aux relais
+    const [selectedRelaisIds, setSelectedRelaisIds] = useState([]);
+    const [sendingToRelais, setSendingToRelais]   = useState(false);
+    const [sendRelaisResult, setSendRelaisResult] = useState(null);       // { ok, failed }
+    const [searchRelaisSend, setSearchRelaisSend] = useState('');
 
     // ── Init ─────────────────────────────────────────────────────
     useEffect(() => { fetchAll(); }, []);
@@ -274,6 +280,28 @@ export default function Campagnes() {
             setTemplates(prev => prev.filter(t => t._id !== tpl._id));
         } catch (e) { setError(e.message); }
         finally { setConfirmTpl(null); }
+    }
+
+    function openTplDetail(t) { setTplDetail(t); }
+
+    function openTplSend(t) {
+        setTplSendModal(t);
+        setSelectedRelaisIds([]);
+        setSendRelaisResult(null);
+        setSearchRelaisSend('');
+    }
+
+    async function handleSendToRelais() {
+        if (!selectedRelaisIds.length) return;
+        setSendingToRelais(true); setSendRelaisResult(null);
+        try {
+            const res = await sendTemplateToRelais(tplSendModal._id, selectedRelaisIds);
+            setSendRelaisResult(res);
+        } catch (e) {
+            setSendRelaisResult({ message: e.message, ok: [], failed: [e.message] });
+        } finally {
+            setSendingToRelais(false);
+        }
     }
 
     // ── Organisation : CRUD campagnes ─────────────────────────────
@@ -929,6 +957,12 @@ export default function Campagnes() {
                                                 </td>
                                                 <td>
                                                     <div style={{ display: 'flex', gap: 6 }}>
+                                                        <button className="dt-btn dt-btn-info" onClick={() => openTplDetail(t)} title="Voir le detail">
+                                                            <i className="bi bi-eye-fill"></i>
+                                                        </button>
+                                                        <button className="dt-btn dt-btn-success" onClick={() => openTplSend(t)} title="Envoyer aux relais" disabled={t.statut !== 'actif'}>
+                                                            <i className="bi bi-send-fill"></i>
+                                                        </button>
                                                         <button className="dt-btn dt-btn-edit" onClick={() => openEditTpl(t)} title="Modifier">
                                                             <i className="bi bi-pencil-fill"></i>
                                                         </button>
@@ -1959,6 +1993,150 @@ export default function Campagnes() {
                         <div className="modal-footer">
                             <button className="dt-btn" onClick={() => setConfirmTpl(null)}>Annuler</button>
                             <button className="dt-btn dt-btn-danger" onClick={() => handleDeleteTpl(confirmTpl)}>Supprimer</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Detail template ── */}
+            {tplDetail && (
+                <div className="modal-overlay" onClick={() => setTplDetail(null)}>
+                    <div className="modal" style={{ maxWidth: 500 }} onClick={e => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h2><i className="bi bi-file-earmark-text" style={{ marginRight: 8 }}></i>{tplDetail.nom}</h2>
+                            <button className="modal-close" onClick={() => setTplDetail(null)}><i className="bi bi-x-lg"></i></button>
+                        </div>
+                        <div className="modal-body" style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '8px 12px', fontSize: '0.88rem' }}>
+                                <span style={{ color: '#6b7280', fontWeight: 600 }}>Nom Meta (exact)</span>
+                                <code style={{ background: '#f1f5f9', padding: '2px 8px', borderRadius: 4 }}>{tplDetail.templateName}</code>
+                                <span style={{ color: '#6b7280', fontWeight: 600 }}>Langue</span>
+                                <span><span className="dt-badge dt-badge-lang">{tplDetail.langue}</span></span>
+                                <span style={{ color: '#6b7280', fontWeight: 600 }}>Type header</span>
+                                <span><TplTypeBadge type={tplDetail.typeContenu} /></span>
+                                <span style={{ color: '#6b7280', fontWeight: 600 }}>Variables corps</span>
+                                <span>{tplDetail.variablesCorps > 0 ? <span className="dt-badge dt-badge-code">{tplDetail.variablesCorps}</span> : '—'}</span>
+                                <span style={{ color: '#6b7280', fontWeight: 600 }}>Variables entete</span>
+                                <span>{tplDetail.variablesEntete > 0 ? <span className="dt-badge dt-badge-code">{tplDetail.variablesEntete}</span> : '—'}</span>
+                                <span style={{ color: '#6b7280', fontWeight: 600 }}>Statut</span>
+                                <span><span className={`dt-badge ${tplDetail.statut === 'actif' ? 'dt-badge-actif' : 'dt-badge-inactif'}`}>{tplDetail.statut === 'actif' ? 'Actif' : 'Inactif'}</span></span>
+                                {tplDetail.description && <>
+                                    <span style={{ color: '#6b7280', fontWeight: 600 }}>Description</span>
+                                    <span style={{ color: '#374151' }}>{tplDetail.description}</span>
+                                </>}
+                            </div>
+                            {tplDetail.urlMedia && (
+                                <div>
+                                    <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginBottom: 6 }}>Media</div>
+                                    {tplDetail.typeContenu === 'image'
+                                        ? <img src={tplDetail.urlMedia} alt="header" style={{ maxWidth: '100%', maxHeight: 180, borderRadius: 8, border: '1px solid #e5e7eb' }} />
+                                        : <a href={tplDetail.urlMedia} target="_blank" rel="noreferrer" className="dt-btn dt-btn-info" style={{ fontSize: '0.82rem' }}>
+                                            <i className="bi bi-file-earmark-arrow-down" style={{ marginRight: 4 }}></i>{tplDetail.nomFichier || 'Voir le fichier'}
+                                          </a>
+                                    }
+                                </div>
+                            )}
+                        </div>
+                        <div className="modal-footer">
+                            <button className="dt-btn" onClick={() => setTplDetail(null)}>Fermer</button>
+                            <button className="dt-btn dt-btn-edit" onClick={() => { setTplDetail(null); openEditTpl(tplDetail); }}>
+                                <i className="bi bi-pencil-fill" style={{ marginRight: 4 }}></i>Modifier
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Envoyer template aux relais ── */}
+            {tplSendModal && (
+                <div className="modal-overlay" onClick={() => { if (!sendingToRelais) setTplSendModal(null); }}>
+                    <div className="modal" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h2><i className="bi bi-send-fill" style={{ marginRight: 8 }}></i>Envoyer aux relais</h2>
+                            <button className="modal-close" onClick={() => setTplSendModal(null)} disabled={sendingToRelais}><i className="bi bi-x-lg"></i></button>
+                        </div>
+                        <div className="modal-body" style={{ padding: '12px 24px' }}>
+                            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: '0.85rem' }}>
+                                Template : <strong>{tplSendModal.nom}</strong>
+                                <span className="dt-badge dt-badge-lang" style={{ marginLeft: 8 }}>{tplSendModal.langue}</span>
+                            </div>
+
+                            {sendRelaisResult ? (
+                                <div>
+                                    <div style={{ fontWeight: 600, marginBottom: 8 }}>{sendRelaisResult.message}</div>
+                                    {sendRelaisResult.ok?.length > 0 && (
+                                        <div style={{ marginBottom: 8 }}>
+                                            <div style={{ color: '#16a34a', fontWeight: 600, fontSize: '0.82rem', marginBottom: 4 }}><i className="bi bi-check-circle-fill" style={{ marginRight: 4 }}></i>Envoyes ({sendRelaisResult.ok.length})</div>
+                                            {sendRelaisResult.ok.map((n, i) => <div key={i} style={{ fontSize: '0.82rem', padding: '2px 0', color: '#374151' }}>• {n}</div>)}
+                                        </div>
+                                    )}
+                                    {sendRelaisResult.failed?.length > 0 && (
+                                        <div>
+                                            <div style={{ color: '#dc2626', fontWeight: 600, fontSize: '0.82rem', marginBottom: 4 }}><i className="bi bi-x-circle-fill" style={{ marginRight: 4 }}></i>Echecs ({sendRelaisResult.failed.length})</div>
+                                            {sendRelaisResult.failed.map((n, i) => <div key={i} style={{ fontSize: '0.82rem', padding: '2px 0', color: '#374151' }}>• {n}</div>)}
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
+                                        <input
+                                            className="form-control"
+                                            placeholder="Rechercher un relais..."
+                                            value={searchRelaisSend}
+                                            onChange={e => setSearchRelaisSend(e.target.value)}
+                                            style={{ flex: 1, fontSize: '0.85rem' }}
+                                        />
+                                        <button className="dt-btn" style={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}
+                                            onClick={() => {
+                                                const filtered = relais.filter(r => !searchRelaisSend || r.nom.toLowerCase().includes(searchRelaisSend.toLowerCase()));
+                                                const allSelected = filtered.every(r => selectedRelaisIds.includes(r._id));
+                                                setSelectedRelaisIds(allSelected
+                                                    ? selectedRelaisIds.filter(id => !filtered.find(r => r._id === id))
+                                                    : [...new Set([...selectedRelaisIds, ...filtered.map(r => r._id)])]);
+                                            }}>
+                                            Tout selectionner
+                                        </button>
+                                    </div>
+                                    <div style={{ maxHeight: 300, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 8 }}>
+                                        {relais.filter(r => !searchRelaisSend || r.nom.toLowerCase().includes(searchRelaisSend.toLowerCase())).map(r => (
+                                            <label key={r._id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', background: selectedRelaisIds.includes(r._id) ? '#eff6ff' : 'white' }}>
+                                                <input type="checkbox"
+                                                    checked={selectedRelaisIds.includes(r._id)}
+                                                    onChange={e => setSelectedRelaisIds(prev => e.target.checked ? [...prev, r._id] : prev.filter(id => id !== r._id))}
+                                                />
+                                                <div style={{ flex: 1 }}>
+                                                    <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>{r.nom}</div>
+                                                    <div style={{ fontSize: '0.76rem', color: '#6b7280' }}>
+                                                        {r.district?.nom && <span style={{ marginRight: 8 }}><i className="bi bi-geo-alt" style={{ marginRight: 2 }}></i>{r.district.nom}</span>}
+                                                        {r.telephone && <span><i className="bi bi-phone" style={{ marginRight: 2 }}></i>{r.telephone}</span>}
+                                                    </div>
+                                                </div>
+                                                <span style={{ fontSize: '0.72rem', background: '#f1f5f9', padding: '2px 6px', borderRadius: 4, color: '#475569' }}>{r.typeRelais}</span>
+                                            </label>
+                                        ))}
+                                        {relais.length === 0 && <div style={{ textAlign: 'center', color: '#94a3b8', padding: 20, fontSize: '0.85rem' }}>Aucun relais disponible</div>}
+                                    </div>
+                                    <div style={{ marginTop: 8, fontSize: '0.8rem', color: '#6b7280' }}>
+                                        {selectedRelaisIds.length} relais selectionne(s) sur {relais.length}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                        <div className="modal-footer">
+                            {sendRelaisResult ? (
+                                <button className="dt-btn" onClick={() => setTplSendModal(null)}>Fermer</button>
+                            ) : (
+                                <>
+                                    <button className="dt-btn" onClick={() => setTplSendModal(null)} disabled={sendingToRelais}>Annuler</button>
+                                    <button className="dt-btn dt-btn-success" onClick={handleSendToRelais} disabled={!selectedRelaisIds.length || sendingToRelais}>
+                                        {sendingToRelais
+                                            ? <><i className="bi bi-arrow-repeat" style={{ marginRight: 4 }}></i>Envoi en cours...</>
+                                            : <><i className="bi bi-send-fill" style={{ marginRight: 4 }}></i>Envoyer ({selectedRelaisIds.length})</>
+                                        }
+                                    </button>
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>

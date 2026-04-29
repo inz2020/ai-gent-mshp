@@ -29,14 +29,14 @@ export default function Login() {
     setError('');
     try {
       const { token, nom, role } = await loginUser(form.login, form.password);
-      console.log('nom:', nom)
+     
       localStorage.setItem('token', token);
-      console.log('token:', token)
+    
       localStorage.setItem('user_nom', nom ?? '');
       localStorage.setItem('user_role', role ?? '');
       navigate('/dashboard');
     } catch (err) {
-      console.log("err:", err)
+      
       setError(err.message);
     } finally {
       setLoading(false);

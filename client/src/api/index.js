@@ -50,10 +50,11 @@ export const createReunion    = (data)       => request(`${Communication}/reunio
 export const updateReunion    = (id, d)      => request(`${Communication}/reunion-plaidoyer/${id}`, { method: 'PUT',    headers: authHeaders(), body: JSON.stringify(d) });
 export const deleteReunion    = (id)         => request(`${Communication}/reunion-plaidoyer/${id}`, { method: 'DELETE', headers: authHeaders() });
 
-export const getWhatsappTemplates     = ()       => request(`${Communication}/templates`,       { headers: authHeaders() });
-export const createWhatsappTemplate   = (data)   => request(`${Communication}/templates`,       { method: 'POST',   headers: authHeaders(), body: JSON.stringify(data) });
-export const updateWhatsappTemplate   = (id, d)  => request(`${Communication}/templates/${id}`, { method: 'PUT',    headers: authHeaders(), body: JSON.stringify(d) });
-export const deleteWhatsappTemplate   = (id)     => request(`${Communication}/templates/${id}`, { method: 'DELETE', headers: authHeaders() });
+export const getWhatsappTemplates     = ()            => request(`${Communication}/templates`,                        { headers: authHeaders() });
+export const createWhatsappTemplate   = (data)        => request(`${Communication}/templates`,                        { method: 'POST',   headers: authHeaders(), body: JSON.stringify(data) });
+export const updateWhatsappTemplate   = (id, d)       => request(`${Communication}/templates/${id}`,                 { method: 'PUT',    headers: authHeaders(), body: JSON.stringify(d) });
+export const deleteWhatsappTemplate   = (id)          => request(`${Communication}/templates/${id}`,                 { method: 'DELETE', headers: authHeaders() });
+export const sendTemplateToRelais     = (id, relaisIds) => request(`${Communication}/templates/${id}/send-to-relais`, { method: 'POST',   headers: authHeaders(), body: JSON.stringify({ relaisIds }) });
 
 export const getMobilisationRelais    = (campagneId) => request(`${Communication}/mobilisation-relais?campagne=${campagneId}`, { headers: authHeaders() });
 export const createMobilisationRelais = (data)       => request(`${Communication}/mobilisation-relais`,       { method: 'POST',   headers: authHeaders(), body: JSON.stringify(data) });

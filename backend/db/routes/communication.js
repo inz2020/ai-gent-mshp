@@ -461,6 +461,62 @@ router.delete('/templates/:id', async (req, res) => {
     } catch (e) { err(res, 500, e.message) }
 })
 
+// POST /templates/:id/send-to-relais — envoie le template aux relais sélectionnés
+router.post('/templates/:id/send-to-relais', requireAuth, requireAdmin, async (req, res) => {
+    const { relaisIds = [] } = req.body
+    if (!relaisIds.length) return err(res, 400, 'Sélectionnez au moins un relais')
+
+    const template = await WhatsappTemplate.findById(req.params.id)
+    if (!template) return err(res, 404, 'Template introuvable')
+
+    const relaisList = await Relais.find({ _id: { $in: relaisIds } }).populate('contact', 'whatsappId').lean()
+    if (!relaisList.length) return err(res, 404, 'Aucun relais trouvé')
+
+    const headers = {
+        Authorization: `Bearer ${process.env.META_TOKEN}`,
+        'Content-Type': 'application/json',
+    }
+
+    const components = []
+    if (template.urlMedia && template.typeContenu && ['image','document','video'].includes(template.typeContenu)) {
+        components.push({
+            type: 'header',
+            parameters: [{ type: template.typeContenu, [template.typeContenu]: { link: template.urlMedia } }],
+        })
+    }
+
+    const results = await Promise.allSettled(
+        relaisList.map(async (relais) => {
+            const to = relais.contact?.whatsappId || relais.telephone
+            if (!to) throw new Error(`Relais ${relais.nom} : aucun numéro WhatsApp`)
+            await axios.post(
+                `https://graph.facebook.com/v22.0/${process.env.PHONE_ID}/messages`,
+                {
+                    messaging_product: 'whatsapp',
+                    to,
+                    type: 'template',
+                    template: {
+                        name:     template.templateName,
+                        language: { code: template.langue },
+                        ...(components.length > 0 && { components }),
+                    },
+                },
+                { headers }
+            )
+            return relais.nom
+        })
+    )
+
+    const ok     = results.filter(r => r.status === 'fulfilled').map(r => r.value)
+    const failed = results.filter(r => r.status === 'rejected').map(r => r.reason?.message ?? 'Erreur')
+
+    res.json({
+        message: `${ok.length} relais atteints, ${failed.length} échec(s).`,
+        ok,
+        failed,
+    })
+})
+
 // GET /mobilisation-relais?campagne=:id
 router.get('/mobilisation-relais', async (req, res) => {
     const { campagne } = req.query
