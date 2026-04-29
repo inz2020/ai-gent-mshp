@@ -477,8 +477,10 @@ router.post('/templates/:id/send-to-relais', requireAuth, requireAdmin, async (r
         'Content-Type': 'application/json',
     }
 
+    // N'envoyer les components que si le template a des variables d'entête dynamiques ({{1}}).
+    // Si l'image est statique (intégrée lors de l'approbation Meta), aucun component ne doit être envoyé.
     const components = []
-    if (template.urlMedia && template.typeContenu && ['image','document','video'].includes(template.typeContenu)) {
+    if ((template.variablesEntete ?? 0) > 0 && template.urlMedia && ['image','document','video'].includes(template.typeContenu)) {
         components.push({
             type: 'header',
             parameters: [{ type: template.typeContenu, [template.typeContenu]: { link: template.urlMedia } }],
