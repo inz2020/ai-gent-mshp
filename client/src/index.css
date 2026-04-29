@@ -904,6 +904,11 @@ tr.row-active td { background: #f0fdf4; }
 .dt-btn-edit:hover { background: #dbeafe; }
 .dt-btn-danger { background: #fef2f2; color: #dc2626; border-color: #fecaca; font-size: 0.82rem; padding: 6px 12px; }
 .dt-btn-danger:hover { background: #fee2e2; }
+.dt-btn-info { background: #f0f9ff; color: #0369a1; border-color: #bae6fd; font-size: 0.82rem; padding: 6px 12px; }
+.dt-btn-info:hover { background: #e0f2fe; }
+.dt-btn-success { background: #f0fdf4; color: #16a34a; border-color: #bbf7d0; font-size: 0.82rem; padding: 6px 12px; }
+.dt-btn-success:hover:not(:disabled) { background: #dcfce7; }
+.dt-btn-success:disabled { opacity: 0.45; cursor: not-allowed; }
 .dt-btn-export { background: #f0fdf4; color: #16a34a; border-color: #bbf7d0; }
 .dt-btn-export:hover:not(:disabled) { background: #dcfce7; border-color: #86efac; }
 .dt-btn-export:disabled { opacity: 0.45; cursor: not-allowed; }

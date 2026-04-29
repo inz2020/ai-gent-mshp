@@ -485,11 +485,18 @@ router.post('/templates/:id/send-to-relais', requireAuth, requireAdmin, async (r
         })
     }
 
+    // Normalise le numéro WhatsApp : retire +, espaces, tirets — Meta exige uniquement les chiffres
+    function normalizePhone(raw) {
+        return (raw ?? '').replace(/[\s\-\(\)]/g, '').replace(/^\+/, '')
+    }
+
     const results = await Promise.allSettled(
         relaisList.map(async (relais) => {
-            const to = relais.contact?.whatsappId || relais.telephone
-            if (!to) throw new Error(`Relais ${relais.nom} : aucun numéro WhatsApp`)
-            await axios.post(
+            const raw = relais.contact?.whatsappId || relais.telephone
+            const to  = normalizePhone(raw)
+            if (!to) throw new Error(`${relais.nom} : aucun numéro WhatsApp configuré`)
+            console.log(`[TPL-RELAIS] Envoi à ${relais.nom} → ${to}`)
+            const metaRes = await axios.post(
                 `https://graph.facebook.com/v22.0/${process.env.PHONE_ID}/messages`,
                 {
                     messaging_product: 'whatsapp',
@@ -503,15 +510,21 @@ router.post('/templates/:id/send-to-relais', requireAuth, requireAdmin, async (r
                 },
                 { headers }
             )
+            const msgId = metaRes.data?.messages?.[0]?.id
+            console.log(`[TPL-RELAIS] ok ${relais.nom} → messageId: ${msgId}`)
             return relais.nom
         })
     )
 
     const ok     = results.filter(r => r.status === 'fulfilled').map(r => r.value)
-    const failed = results.filter(r => r.status === 'rejected').map(r => r.reason?.message ?? 'Erreur')
+    const failed = results.filter(r => r.status === 'rejected').map(r => {
+        const metaErr = r.reason?.response?.data?.error?.message
+        return metaErr ? `${r.reason.message ?? ''} — Meta: ${metaErr}` : (r.reason?.message ?? 'Erreur inconnue')
+    })
 
+    console.log(`[TPL-RELAIS] Résultat: ${ok.length} ok, ${failed.length} échec(s)`)
     res.json({
-        message: `${ok.length} relais atteints, ${failed.length} échec(s).`,
+        message: `${ok.length} relais atteint(s), ${failed.length} échec(s).`,
         ok,
         failed,
     })
