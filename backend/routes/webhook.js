@@ -859,20 +859,23 @@ async function processAudio(mediaId, userPhone, phoneNumId = null) {
             temperature: 0,
         });
         const wLang = detect.language?.toLowerCase() ?? '';
-        // Cross-check avec le texte : les accents français (é/è/ê/à...) sont un signal
-        // fiable même quand Whisper retourne 'portuguese' ou autre pour un audio français
-        const textLang = detect.text ? detectTextLanguage(detect.text) : null;
+        // Cross-check avec le texte : les accents français sont un signal fiable
+        // même quand Whisper retourne 'portuguese' ou autre pour un audio français.
+        // On n'utilise PAS detectTextLanguage ici car elle retourne 'fr' par défaut
+        // quand le Hausa n'est pas assez présent — ce qui ferait passer du Hausa pour du français.
+        const hasFrenchAccents = /[éèêëàâùûôîïç]/.test(detect.text ?? '');
+        const hasHausaChars    = /[ƙɗɓ]/.test(detect.text ?? '');
 
-        if (wLang === 'french' || textLang === 'fr') {
+        if (wLang === 'french' || hasFrenchAccents) {
             detectedLang = 'fr';
         } else {
-            // Hausa, alias africain, script arabe → tout ça c'est du Hausa
+            // Hausa, alias africain (amharic, swahili…), script arabe → Hausa
             detectedLang = 'ha';
         }
         if (wLang !== 'french' && wLang !== 'hausa') {
-            console.log(`[3a/6] Whisper: "${wLang}" | Texte: "${textLang}" → ${detectedLang} (Whisper confond parfois Hausa avec ${wLang})`);
+            console.log(`[3a/6] Whisper: "${wLang}" | accFR:${hasFrenchAccents} hausaChars:${hasHausaChars} → ${detectedLang} (Whisper confond parfois Hausa avec ${wLang})`);
         } else {
-            console.log(`[3a/6] Détection langue — Whisper: "${wLang}" | Texte: "${textLang}" | → ${detectedLang}`);
+            console.log(`[3a/6] Détection langue — Whisper: "${wLang}" | accFR:${hasFrenchAccents} → ${detectedLang}`);
         }
     } catch (detectErr) {
         // Fallback sur knownLang si disponible, sinon Hausa
