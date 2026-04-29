@@ -248,27 +248,6 @@ async function processStatuses(statuses) {
     }
 }
 
-// Phrases explicites de recherche de localisation — NE PAS ajouter des mots génériques
-// comme "vaccin", "santé", "lafiya" : trop de faux positifs sur des questions médicales normales
-const NEARBY_CENTER_KEYWORDS = [
-    // Français — intent localisation clair
-    'où vacciner', 'où se vacciner', 'où faire vacciner',
-    'centre le plus proche', 'csi le plus proche', 'plus proche de moi', 'plus proche de chez moi',
-    'centre de santé le plus proche', 'centre de santé proche', 'csi proche',
-    'centre de vaccination le plus proche', 'centre de vaccination proche',
-    'trouver un centre', 'trouver un csi', 'centre de vaccination près',
-    'adresse du centre', 'adresse csi', 'adresse du csi',
-    'où aller pour vacciner', 'où je peux aller',
-    'où est le csi', 'comment aller au csi',
-    // Hausa — formulations de recherche de lieu
-    'cibiyar kusa', 'ina cibiyar', 'ina ake rigakafi',
-    'nemo cibiyar', 'nemi cibiyar', 'cibiyar rigakafi kusa',
-];
-
-function wantsNearbyCenter(text) {
-    const lower = text.toLowerCase();
-    return NEARBY_CENTER_KEYWORDS.some(kw => lower.includes(kw));
-}
 
 
 // Cooldown anti-spam : évite de redemander la position plus d'une fois par heure
@@ -513,7 +492,7 @@ async function getRecentMessages(conversationId, limit = 12) {
 
 // ─── Traitement texte ────────────────────────────────────────
 
-// GPT retourne un JSON {lang, reply} — une seule requête pour détecter ET répondre.
+// GPT retourne un JSON {lang, reply, intent} — une seule requête pour détecter ET répondre.
 // Si un hint de langue est fourni (détection dictionnaire), il est injecté dans le contenu.
 const TEXT_LANG_DETECT_INSTRUCTION = `
 
@@ -522,12 +501,16 @@ INSTRUCTION DE RÉPONSE — FORMAT OBLIGATOIRE
 ═══════════════════════════════════════════
 
 Tu dois TOUJOURS répondre avec un objet JSON valide, sans aucun texte autour :
-{"lang":"fr","reply":"ta réponse ici"}
+{"lang":"fr","reply":"ta réponse ici","intent":""}
 
 Règles de détection de langue :
 - Message en français (quelle que soit l'orthographe ou les fautes) → lang="fr", reply en français, maximum 4 phrases
 - Message en Hausa (quelle que soit l'orthographe ou les fautes) → lang="ha", reply en Hausa pur, zéro mot français, 2-3 phrases orales courtes
-- Autre langue ou message totalement incompréhensible → lang="unknown", reply=""
+- Autre langue ou message totalement incompréhensible → lang="unknown", reply="", intent=""
+
+Détection d'intention — champ "intent" :
+- Si l'utilisateur demande à trouver un centre de santé, CSI, centre de vaccination, dispensaire proche de lui, ou demande où aller se faire vacciner (quelle que soit la formulation, ex: "quels sont les centres proches", "où vacciner mon enfant", "centre de santé le plus proche", "cibiyar kusa", "ina ake rigakafi") → intent="nearby_centers", reply=""
+- Sinon → intent=""
 
 RÈGLE CALENDRIER VACCINAL (s'applique dans LES DEUX LANGUES) :
 Si l'utilisateur mentionne des vaccins déjà reçus, tu DOIS indiquer la prochaine étape du calendrier PEV Niger avec le nom exact des vaccins et le délai. Ne dis pas juste "allez au CSI". Dis exactement quels vaccins viennent ensuite et à quel moment.
@@ -535,10 +518,11 @@ Si l'utilisateur mentionne des vaccins déjà reçus, tu DOIS indiquer la procha
 - En français : Donne les noms exacts des vaccins comme dans le calendrier.
 
 Exemples :
-{"lang":"fr","reply":"La rougeole se prévient par deux doses de vaccin..."}
-{"lang":"ha","reply":"Doussa allurar rigakafi biyu ne..."}
-{"lang":"ha","reply":"Watan mai zuwa, jaririnka zai karbi Pentavalent 1, VPO1, Pneumocoque 1 da Rotavirus 1. Waɗannan alluran suna kare daga cututtuka biyar, gudawa mai tsanani, da ciwon huhu. Ka je cibiyar lafiya lokacin da jariri ya kai mako shida."}
-{"lang":"unknown","reply":""}`;
+{"lang":"fr","reply":"La rougeole se prévient par deux doses de vaccin...","intent":""}
+{"lang":"fr","reply":"","intent":"nearby_centers"}
+{"lang":"ha","reply":"","intent":"nearby_centers"}
+{"lang":"ha","reply":"Watan mai zuwa, jaririnka zai karbi Pentavalent 1, VPO1, Pneumocoque 1 da Rotavirus 1.","intent":""}
+{"lang":"unknown","reply":"","intent":""}`;
 
 async function processText(userText, userPhone, phoneNumId = null) {
     console.log(`[TEXT] Message reçu: "${userText}"`);
@@ -614,22 +598,6 @@ async function processText(userText, userPhone, phoneNumId = null) {
         return;
     }
 
-    // Interception centre de santé proche — GPT ne peut pas répondre sans position GPS
-    // On demande directement la confirmation de géolocalisation, sans passer par GPT
-    if (wantsNearbyCenter(userText)) {
-        const nearLang = detectTextLanguage(userText) === 'ha' ? 'ha' : 'fr';
-        console.log(`[TEXT] Demande de centres proches détectée (${nearLang}) → géoloc directe`);
-        if (canOfferLocation(userPhone)) {
-            // Première demande ou > 2 min : poser la question de confirmation
-            await askLocationConfirmation(userPhone, nearLang, contact);
-        } else {
-            // Demande répétée dans les 2 min : bouton GPS direct (position peut avoir changé)
-            console.log(`[TEXT] Re-demande GPS (< 2 min) → bouton direct sans confirmation`);
-            await sendLocationRequest(userPhone, nearLang);
-            markLocationOffered(userPhone);
-        }
-        return;
-    }
 
     // Pré-détection rapide par dictionnaire (HAUSA_WORDS / HAUSA_PHRASES)
     // Si des mots Hausa sont trouvés → on confirme à GPT que c'est du Hausa
@@ -654,14 +622,32 @@ async function processText(userText, userPhone, phoneNumId = null) {
         ]
     });
 
-    let lang  = 'unknown';
-    let reply = '';
+    let lang   = 'unknown';
+    let reply  = '';
+    let intent = '';
     try {
         const parsed = JSON.parse(gptResponse.choices[0].message.content);
-        lang  = ['fr', 'ha'].includes(parsed.lang) ? parsed.lang : 'unknown';
-        reply = (parsed.reply ?? '').trim();
+        lang   = ['fr', 'ha'].includes(parsed.lang) ? parsed.lang : 'unknown';
+        reply  = (parsed.reply ?? '').trim();
+        intent = (parsed.intent ?? '').trim();
     } catch (parseErr) {
         console.error('[TEXT] Échec parsing JSON GPT:', parseErr.message);
+    }
+
+    // GPT a détecté une demande de centre proche → déclencher le flux GPS
+    if (intent === 'nearby_centers') {
+        const nearLang = lang === 'ha' ? 'ha' : 'fr';
+        console.log(`[TEXT] Intent nearby_centers détecté (${nearLang}) → géoloc`);
+        if (canOfferLocation(userPhone)) {
+            await askLocationConfirmation(userPhone, nearLang, contact);
+        } else {
+            await sendLocationRequest(userPhone, nearLang);
+            markLocationOffered(userPhone);
+        }
+        try {
+            await saveMessages(contact._id, nearLang, { humanText: userText, aiText: '[Demande géolocalisation]' });
+        } catch { /* non bloquant */ }
+        return;
     }
 
     // Si GPT retourne unknown → on utilise le dictionnaire comme source de vérité
@@ -1032,23 +1018,6 @@ async function processAudio(mediaId, userPhone, phoneNumId = null) {
     }
     console.log(`[AUDIO] Langue finale: ${finalLang} | Contact DB: ${knownLang}`);
 
-    // Interception centre de santé proche — GPT ne peut pas répondre sans GPS
-    if (wantsNearbyCenter(transcription.text)) {
-        console.log(`[AUDIO] Demande centres proches → géoloc directe (${finalLang})`);
-        if (canOfferLocation(userPhone)) {
-            // Première demande ou > 2 min : poser la question de confirmation
-            await askLocationConfirmation(userPhone, finalLang, contact, true);
-        } else {
-            // Re-demande dans les 2 min : bouton GPS direct (position peut avoir changé)
-            console.log(`[AUDIO] Re-demande GPS (< 2 min) → bouton direct sans confirmation`);
-            await sendLocationRequest(userPhone, finalLang);
-            markLocationOffered(userPhone);
-        }
-        try {
-            await saveMessages(contact._id, finalLang, { humanText: transcription.text, humanAudioUrl, aiText: '[Demande géolocalisation]' });
-        } catch { /* non bloquant */ }
-        return;
-    }
 
     // Contexte conversationnel (6 derniers échanges)
     const conv = await getOrCreateConversation(contact._id);
@@ -1069,7 +1038,11 @@ INSTRUCTION AUDIO — FRANÇAIS OBLIGATOIRE
 
 Réponds UNIQUEMENT en français. Langue de réponse : FRANÇAIS.
 Retourne un objet JSON valide :
-{"reply":"ta réponse en français ici"}
+{"reply":"ta réponse en français ici","intent":""}
+
+DÉTECTION D'INTENTION :
+- Si l'utilisateur demande à trouver un centre de santé, CSI ou centre de vaccination proche → intent="nearby_centers", reply=""
+- Sinon → intent=""
 
 RÈGLES ABSOLUES :
 - Réponse en français uniquement — zéro mot Hausa, zéro autre langue
@@ -1084,7 +1057,11 @@ INSTRUCTION AUDIO — HAUSA WAJIBI NE
 
 Ka amsa DA HAUSA KAWAI. Harshen amsa : HAUSA.
 Ka mayar da JSON mai inganci :
-{"reply":"amsar ka da Hausa a nan"}
+{"reply":"amsar ka da Hausa a nan","intent":""}
+
+GANO NIYYA :
+- Idan mai amfani yana neman cibiyar lafiya, CSI ko cibiyar rigakafi mafi kusa → intent="nearby_centers", reply=""
+- In ba haka ba → intent=""
 
 DOKOKI MASU WAJIBI :
 - Amsa da Hausa kawai — babu Faransanci, babu wata harshe
@@ -1103,16 +1080,36 @@ DOKOKI MASU WAJIBI :
         ]
     });
 
-    let replyText = '';
+    let replyText  = '';
+    let audioIntent = '';
     try {
         const parsed = JSON.parse(response.choices[0].message.content);
-        // On utilise parsed.reply — on ignore parsed.lang si présent (langue fixée)
-        replyText = (parsed.reply ?? '').trim();
+        replyText   = (parsed.reply  ?? '').trim();
+        audioIntent = (parsed.intent ?? '').trim();
     } catch (parseErr) {
         console.error('[AUDIO] Échec parsing JSON GPT:', parseErr.message);
         replyText = response.choices[0].message.content;
     }
-    console.log(`[4/6] Réponse GPT (${audioLang}): ${replyText}`);
+    console.log(`[4/6] Réponse GPT (${audioLang}): ${replyText} | intent: ${audioIntent}`);
+
+    // GPT a détecté une demande de centre proche → déclencher le flux GPS
+    if (audioIntent === 'nearby_centers') {
+        console.log(`[AUDIO] Intent nearby_centers → géoloc (${audioLang})`);
+        if (canOfferLocation(userPhone)) {
+            await askLocationConfirmation(userPhone, audioLang, contact, true);
+        } else {
+            await sendLocationRequest(userPhone, audioLang);
+            markLocationOffered(userPhone);
+        }
+        try {
+            await saveMessages(contact._id, audioLang, {
+                humanText: transcription.text,
+                humanAudioUrl,
+                aiText: '[Demande géolocalisation]'
+            });
+        } catch { /* non bloquant */ }
+        return;
+    }
 
     // Message entrant = audio → réponse TOUJOURS en audio (sendAudioReply gère le TTS
     // et ne tombe en fallback texte qu'en dernier recours si le TTS est indisponible).
