@@ -273,19 +273,22 @@ async function envoyerDiffusion(broadcast, contacts) {
 async function sendOne(broadcast, contact, headers, resolvedVars) {
     const components = buildComponents(resolvedVars);
 
+    const payload = {
+        messaging_product: 'whatsapp',
+        to:   contact.whatsappId,
+        type: 'template',
+        template: {
+            name:     broadcast.templateName,
+            language: { code: broadcast.langueTemplate },
+            ...(components.length > 0 && { components }),
+        },
+    };
+    console.log('[BROADCAST] payload envoyé à Meta:', JSON.stringify(payload, null, 2));
+
     // Étape 1 — Template image (ouvre la fenêtre 24h)
     const templateResponse = await axios.post(
         `https://graph.facebook.com/v22.0/${process.env.PHONE_ID}/messages`,
-        {
-            messaging_product: 'whatsapp',
-            to:   contact.whatsappId,
-            type: 'template',
-            template: {
-                name:     broadcast.templateName,
-                language: { code: broadcast.langueTemplate },
-                ...(components.length > 0 && { components }),
-            },
-        },
+        payload,
         { headers }
     );
 
