@@ -883,15 +883,22 @@ async function processAudio(mediaId, userPhone, phoneNumId = null) {
         // quand le Hausa n'est pas assez présent — ce qui ferait passer du Hausa pour du français.
         const hasFrenchAccents = /[éèêëàâùûôîïç]/.test(detect.text ?? '');
         const hasHausaChars    = /[ƙɗɓ]/.test(detect.text ?? '');
+        // Langues européennes que Whisper confond parfois avec le français
+        const EUROPEAN_LANGS   = new Set(['portuguese', 'spanish', 'italian', 'english', 'german', 'dutch', 'catalan', 'romanian']);
 
         if (wLang === 'french' || hasFrenchAccents) {
             detectedLang = 'fr';
+        } else if (hasHausaChars || wLang === 'hausa') {
+            detectedLang = 'ha';
+        } else if (EUROPEAN_LANGS.has(wLang)) {
+            // Whisper confond parfois le français avec ces langues européennes → traiter comme français
+            detectedLang = 'fr';
         } else {
-            // Hausa, alias africain (amharic, swahili…), script arabe → Hausa
+            // Langue africaine, arabe, ou inconnue → Hausa
             detectedLang = 'ha';
         }
         if (wLang !== 'french' && wLang !== 'hausa') {
-            console.log(`[3a/6] Whisper: "${wLang}" | accFR:${hasFrenchAccents} hausaChars:${hasHausaChars} → ${detectedLang} (Whisper confond parfois Hausa avec ${wLang})`);
+            console.log(`[3a/6] Whisper: "${wLang}" | accFR:${hasFrenchAccents} hausaChars:${hasHausaChars} europeen:${EUROPEAN_LANGS.has(wLang)} → ${detectedLang}`);
         } else {
             console.log(`[3a/6] Détection langue — Whisper: "${wLang}" | accFR:${hasFrenchAccents} → ${detectedLang}`);
         }
