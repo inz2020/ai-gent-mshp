@@ -25,11 +25,9 @@ const STATUT_COLOR = { planifie:'dt-badge-inactif', en_cours:'dt-badge-warning',
 const STATUT_LABEL = { planifie:'Planifie', en_cours:'En cours', termine:'Termine', erreur:'Erreur' };
 
 const LANG_CODES = [
-    { code:'fr',    label:'Francais (fr)'    },
-    { code:'ha',    label:'Hausa (ha)'       },
-    { code:'fr_FR', label:'Francais (fr_FR)' },
-    { code:'en',    label:'Anglais (en)'     },
-    { code:'en_US', label:'Anglais (en_US)'  },
+    { code:'fr', label:'Francais (fr)' },
+    { code:'ha', label:'Hausa (ha)'   },
+    { code:'en', label:'Anglais (en)' },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────

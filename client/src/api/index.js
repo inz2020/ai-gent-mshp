@@ -105,6 +105,13 @@ export function getMe() {
     });
 }
 
+export function refreshToken() {
+    return request('/api/refresh', {
+        method: 'POST',
+        headers: authHeaders(),
+    });
+}
+
 function authHeaders() {
     return { Authorization: `Bearer ${localStorage.getItem('token')}` };
 }

@@ -1,6 +1,8 @@
 import express from 'express';
 import axios from 'axios';
 import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import OpenAI from 'openai';
 import SYSTEM_PROMPT from '../prompt.js';
 import { VERIFY_TOKEN, GREETING_CONFIG } from '../constants/config.js';
@@ -254,6 +256,17 @@ async function processStatuses(statuses) {
 const locationOfferedAt    = new Map(); // phone → timestamp
 // Utilisateurs en attente de confirmation "voulez-vous les centres proches ?"
 const locationConfirmPending = new Map(); // phone → { lang, at }
+
+// Nettoyage toutes les heures — supprime les entrées expirées pour éviter la fuite mémoire
+setInterval(() => {
+    const now = Date.now();
+    for (const [phone, ts] of locationOfferedAt) {
+        if (now - ts > 2 * 60 * 60 * 1000) locationOfferedAt.delete(phone);
+    }
+    for (const [phone, p] of locationConfirmPending) {
+        if (now - p.at > 10 * 60 * 1000) locationConfirmPending.delete(phone);
+    }
+}, 60 * 60 * 1000);
 
 function canOfferLocation(userPhone) {
     const last = locationOfferedAt.get(userPhone);
@@ -538,22 +551,27 @@ async function processText(userText, userPhone, phoneNumId = null) {
     // ── Interception confirmation géoloc ────────────────────────
     if (locationConfirmPending.has(userPhone)) {
         const pending = locationConfirmPending.get(userPhone);
-        const { isYes, isNo } = detectLocationConfirm(userText);
-        if (isYes) {
+        const pendingExpired = Date.now() - pending.at > 5 * 60 * 1000; // 5 min TTL
+        if (pendingExpired) {
             locationConfirmPending.delete(userPhone);
-            console.log(`[LOC-CONFIRM] ${userPhone} a confirmé → envoi bouton GPS (position en temps réel)`);
-            await sendLocationRequest(userPhone, pending.lang);
-            return;
-        }
-        if (isNo) {
+        } else {
+            const { isYes, isNo } = detectLocationConfirm(userText);
+            if (isYes) {
+                locationConfirmPending.delete(userPhone);
+                console.log(`[LOC-CONFIRM] ${userPhone} a confirmé → envoi bouton GPS (position en temps réel)`);
+                await sendLocationRequest(userPhone, pending.lang);
+                return;
+            }
+            if (isNo) {
+                locationConfirmPending.delete(userPhone);
+                const refus = pending.lang === 'ha' ? 'To, lafiya. Idan kana bukata, tambaya ni.' : 'D\'accord, pas de problème. N\'hésitez pas si vous avez besoin.';
+                await sendWhatsAppText(userPhone, refus);
+                console.log(`[LOC-CONFIRM] ${userPhone} a refusé`);
+                return;
+            }
+            // Ni oui ni non → on laisse continuer le traitement normal
             locationConfirmPending.delete(userPhone);
-            const refus = pending.lang === 'ha' ? 'To, lafiya. Idan kana bukata, tambaya ni.' : 'D\'accord, pas de problème. N\'hésitez pas si vous avez besoin.';
-            await sendWhatsAppText(userPhone, refus);
-            console.log(`[LOC-CONFIRM] ${userPhone} a refusé`);
-            return;
         }
-        // Ni oui ni non → on laisse continuer le traitement normal
-        locationConfirmPending.delete(userPhone);
     }
 
     const conv    = await getOrCreateConversation(contact._id);
@@ -780,7 +798,7 @@ async function processAudio(mediaId, userPhone, phoneNumId = null) {
     }
 
     const tmpId = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
-    const inputFile = `input_${tmpId}.ogg`;
+    const inputFile = path.join(os.tmpdir(), `input_${tmpId}.ogg`);
 
     const audioBuffer = Buffer.from(audioRes.data);
     fs.writeFileSync(inputFile, audioBuffer);
@@ -988,21 +1006,26 @@ async function processAudio(mediaId, userPhone, phoneNumId = null) {
     // ── Confirmation géoloc par vocal ───────────────────────────
     if (locationConfirmPending.has(userPhone)) {
         const pending = locationConfirmPending.get(userPhone);
-        const { isYes, isNo } = detectLocationConfirm(transcription.text);
-        if (isYes) {
+        const pendingExpired = Date.now() - pending.at > 5 * 60 * 1000; // 5 min TTL
+        if (pendingExpired) {
             locationConfirmPending.delete(userPhone);
-            console.log(`[LOC-CONFIRM] ${userPhone} a confirmé par vocal → bouton GPS (position en temps réel)`);
-            await sendLocationRequest(userPhone, pending.lang);
-            return;
-        }
-        if (isNo) {
+        } else {
+            const { isYes, isNo } = detectLocationConfirm(transcription.text);
+            if (isYes) {
+                locationConfirmPending.delete(userPhone);
+                console.log(`[LOC-CONFIRM] ${userPhone} a confirmé par vocal → bouton GPS (position en temps réel)`);
+                await sendLocationRequest(userPhone, pending.lang);
+                return;
+            }
+            if (isNo) {
+                locationConfirmPending.delete(userPhone);
+                const refus = pending.lang === 'ha' ? 'To, lafiya. Idan kana bukata, tambaya ni.' : 'D\'accord, pas de problème.';
+                await sendAudioReply(userPhone, refus, pending.lang).catch(() => {});
+                console.log(`[LOC-CONFIRM] ${userPhone} a refusé par vocal`);
+                return;
+            }
             locationConfirmPending.delete(userPhone);
-            const refus = pending.lang === 'ha' ? 'To, lafiya. Idan kana bukata, tambaya ni.' : 'D\'accord, pas de problème.';
-            await sendAudioReply(userPhone, refus, pending.lang).catch(() => {});
-            console.log(`[LOC-CONFIRM] ${userPhone} a refusé par vocal`);
-            return;
         }
-        locationConfirmPending.delete(userPhone);
     }
 
     // La langue est celle détectée au Pass 1 (source de vérité).
@@ -1058,6 +1081,8 @@ RÈGLES ABSOLUES :
 INSTRUCTION AUDIO — HAUSA WAJIBI NE
 ═══════════════════════════════════════════
 
+⚠️ WANNAN UMARNI YA ƘETARE KOWA: ka DOLE bayar da amsa da Hausa — "reply" ba zai iya zama fanko ba. Dokokin "reply=''" ko "lang=unknown" na sama BA SU AIR ISHARA A WANNAN YANAYIN.
+
 Ka amsa DA HAUSA KAWAI. Harshen amsa : HAUSA.
 Ka mayar da JSON mai inganci :
 {"reply":"amsar ka da Hausa a nan","intent":""}
@@ -1070,7 +1095,8 @@ DOKOKI MASU WAJIBI :
 - Amsa da Hausa kawai — babu Faransanci, babu wata harshe
 - Jumla 2 zuwa 3 na gajere, salon magana (za a karanta da murya)
 - Babu alamu, babu jerin abubuwa, babu tauraro
-- HARAMUN : kada ka ce "ban fahimci" ko "wace harshe" — idan rubutun ba cikakke ba ne, yi amfani da mahallin lafiya/rigakafi ka amsa da Hausa kullum`;
+- HARAMUN GABA ƊAYA : "reply" fanko. Koda rubutu ya yi kuskure, yi amfani da mahallin lafiya/rigakafi ka ba da amsa mai ma'ana da Hausa.
+- Idan tambayar ba a gane ta ba, amsa gama-gari mai ma'ana game da rigakafi ko lafiyar jarirai da Hausa.`;
 
     const response = await openai.chat.completions.create({
         model: 'gpt-4o',
@@ -1085,15 +1111,24 @@ DOKOKI MASU WAJIBI :
 
     let replyText  = '';
     let audioIntent = '';
+    const rawGptContent = response.choices[0].message.content;
     try {
-        const parsed = JSON.parse(response.choices[0].message.content);
+        const parsed = JSON.parse(rawGptContent);
         replyText   = (parsed.reply  ?? '').trim();
         audioIntent = (parsed.intent ?? '').trim();
     } catch (parseErr) {
-        console.error('[AUDIO] Échec parsing JSON GPT:', parseErr.message);
-        replyText = response.choices[0].message.content;
+        console.error('[AUDIO] Échec parsing JSON GPT:', parseErr.message, '| contenu brut:', rawGptContent.slice(0, 200));
+        replyText = rawGptContent.trim();
     }
-    console.log(`[4/6] Réponse GPT (${audioLang}): ${replyText} | intent: ${audioIntent}`);
+    console.log(`[4/6] Réponse GPT (${audioLang}): ${replyText.slice(0, 120)} | intent: ${audioIntent}`);
+
+    // Garde-fou : GPT a retourné reply vide (conflit instructions ou question incomprise)
+    if (!replyText && audioIntent !== 'nearby_centers') {
+        console.warn('[AUDIO] replyText vide — GPT a retourné reply="" | contenu brut:', rawGptContent.slice(0, 200));
+        replyText = audioLang === 'ha'
+            ? 'Nagode da tambayarka. Don ƙarin bayani, alaqa da cibiyar lafiya mafi kusa da kai.'
+            : 'Je n\'ai pas bien compris votre question. Pouvez-vous la reformuler ou contacter le centre de santé le plus proche ?';
+    }
 
     // GPT a détecté une demande de centre proche → déclencher le flux GPS
     if (audioIntent === 'nearby_centers') {
@@ -1133,8 +1168,8 @@ DOKOKI MASU WAJIBI :
 
     } finally {
         // Nettoyage garanti des fichiers temporaires, même en cas d'exception
-        fs.unlink(inputFile, () => {});
-        if (sttFile !== inputFile) fs.unlink(sttFile, () => {});
+        fs.unlink(inputFile, err => { if (err) console.warn('[CLEANUP] inputFile:', err.message); });
+        if (sttFile !== inputFile) fs.unlink(sttFile, err => { if (err) console.warn('[CLEANUP] sttFile:', err.message); });
     }
 }
 
@@ -1260,6 +1295,16 @@ async function processLocation(lat, lng, userPhone, phoneNumId = null) {
         .map(s => ({ ...s, distance: haversine(lat, lng, s.coordonnees.latitude, s.coordonnees.longitude) }))
         .sort((a, b) => a.distance - b.distance)
         .slice(0, 3);
+
+    // Aucune structure n'a de coordonnées en base
+    if (nearest.length === 0) {
+        const noCoordText = contactLang === 'ha'
+            ? 'Ba a sami wata cibiyar rigakafi da wurin da aka sani ba a yankin ka. Ka tuntubi ma\'aikatar lafiya ta gari.'
+            : 'Aucune structure sanitaire avec coordonnées GPS trouvée. Contactez votre centre de santé local.';
+        await sendAudioReply(userPhone, noCoordText, contactLang);
+        await sendWhatsAppText(userPhone, noCoordText);
+        return;
+    }
 
     const audioLines = nearest.map((s, i) => {
         const km = s.distance.toFixed(1);

@@ -31,7 +31,7 @@ router.post('/login', async (req, res) => {
         const token = jwt.sign(
             { id: user._id, login: user.login, role: user.role },
             process.env.JWT_SECRET,
-            { expiresIn: '24h' }
+            {algorithm:'HS256', expiresIn: '1h' }
         );
 
         res.json({ token, nom: user.nom, role: user.role });
@@ -50,6 +50,25 @@ router.get('/me', (req, res) => {
     try {
         const payload = jwt.verify(auth.slice(7), process.env.JWT_SECRET);
         res.json({ id: payload.id, login: payload.login, role: payload.role });
+    } catch {
+        res.status(401).json({ message: 'Token invalide ou expiré.' });
+    }
+});
+
+// POST /api/refresh — émet un nouveau token si l'actuel est encore valide
+router.post('/refresh', (req, res) => {
+    const auth = req.headers.authorization;
+    if (!auth?.startsWith('Bearer ')) {
+        return res.status(401).json({ message: 'Non autorisé.' });
+    }
+    try {
+        const payload = jwt.verify(auth.slice(7), process.env.JWT_SECRET);
+        const token = jwt.sign(
+            { id: payload.id, login: payload.login, role: payload.role },
+            process.env.JWT_SECRET,
+            { expiresIn: '1h' }
+        );
+        res.json({ token });
     } catch {
         res.status(401).json({ message: 'Token invalide ou expiré.' });
     }

@@ -5,6 +5,8 @@
 import axios from 'axios';
 import FormData from 'form-data';
 import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { v2 as cloudinary } from 'cloudinary';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegPath from 'ffmpeg-static';
@@ -77,6 +79,7 @@ export function prepareVoiceText(text, lang = 'fr') {
 }
 
 export async function ttsElevenLabs(text) {
+    if (!text?.trim()) throw new Error('ttsElevenLabs: texte vide');
     const res = await axios.post(
         `https://api.elevenlabs.io/v1/text-to-speech/${process.env.VOICE_ID}`,
         {
@@ -91,7 +94,8 @@ export async function ttsElevenLabs(text) {
         },
         {
             headers: { 'xi-api-key': process.env.ELEVEN_KEY, 'Content-Type': 'application/json' },
-            responseType: 'arraybuffer'
+            responseType: 'arraybuffer',
+            timeout: 20000,
         }
     );
     return Buffer.from(res.data);
@@ -142,8 +146,8 @@ export async function ttsOpenAI(text) {
 export function convertToOggOpus(inputBuffer) {
     return new Promise((resolve, reject) => {
         const tmpId  = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
-        const inPath  = `tts_in_${tmpId}.mp3`;
-        const outPath = `tts_out_${tmpId}.ogg`;
+        const inPath  = path.join(os.tmpdir(), `tts_in_${tmpId}.mp3`);
+        const outPath = path.join(os.tmpdir(), `tts_out_${tmpId}.ogg`);
 
         fs.writeFileSync(inPath, inputBuffer);
 
@@ -154,12 +158,13 @@ export function convertToOggOpus(inputBuffer) {
             .format('ogg')
             .on('end', () => {
                 const result = fs.readFileSync(outPath);
-                fs.unlink(inPath,  () => {});
-                fs.unlink(outPath, () => {});
+                fs.unlink(inPath,  err => { if (err) console.warn('[CLEANUP] tts_in:', err.message); });
+                fs.unlink(outPath, err => { if (err) console.warn('[CLEANUP] tts_out:', err.message); });
                 resolve(result);
             })
             .on('error', (err) => {
                 fs.unlink(inPath,  () => {});
+                fs.unlink(outPath, () => {});
                 reject(new Error(`convertToOggOpus: ${err.message}`));
             })
             .save(outPath);

@@ -65,7 +65,6 @@ export default function App() {
           <Route path="communication/relais"          element={<RelaisPage />} />
           <Route path="communication/diffusions"      element={<Diffusions />} />
           <Route path="communication/sensibilisation" element={<Sensibilisation />} />
-          <Route path="diffusions"                    element={<Diffusions />} />
           <Route path="campagnes"                    element={<Campagnes />} />
           <Route path="metadonnees/regions"          element={<Regions />} />
           <Route path="metadonnees/districts"        element={<Districts />} />

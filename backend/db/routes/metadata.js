@@ -284,7 +284,7 @@ router.post('/vaccins/import', async (req, res) => {
             if (!code || !nom) { skipped++; continue; }
             const existe = await Vaccin.findOne({ code });
             if (existe) { skipped++; continue; }
-            await Vaccin.create({ code, nom, maladiesProtegees: row.maladiesProtegees, nbDoses: row.nbDoses || 1, voieAdministration: row.voieAdministration || 'injectable' });
+            await Vaccin.create({ code, nom, maladiesProtegees: row.maladiesProtegees, nbDoses: row.nbDoses ?? 1, voieAdministration: row.voieAdministration || 'injectable' });
             created++;
         }
         res.json({ message: `${created} vaccin(s) importé(s), ${skipped} ignoré(s).` });
