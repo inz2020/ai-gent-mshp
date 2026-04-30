@@ -20,7 +20,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const clientDist = path.join(__dirname, '..', 'client', 'dist');
 
 // Vérification des variables d'environnement critiques au démarrage
-const REQUIRED_ENV = ['JWT_SECRET', 'MONGO_URI', 'META_TOKEN', 'PHONE_ID', 'OPENAI_KEY'];
+const REQUIRED_ENV = ['JWT_SECRET', 'MONGODB_URI', 'META_TOKEN', 'PHONE_ID', 'OPENAI_KEY'];
 const missingEnv = REQUIRED_ENV.filter(k => !process.env[k]);
 if (missingEnv.length > 0) {
     console.error(`[FATAL] Variables d'environnement manquantes : ${missingEnv.join(', ')}`);
